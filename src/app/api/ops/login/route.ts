@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { queryOpsDb } from '@/lib/opsDb';
+import { queryOpsDb, logActivity } from '@/lib/opsDb';
 import { createSession } from '@/lib/auth';
 
 export async function POST(request: Request) {
