@@ -75,7 +75,7 @@ export default function OpsDashboard() {
   return (
     <>
     <style dangerouslySetInnerHTML={{__html: ".cb-tab-bar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; } .cb-tab-bar::-webkit-scrollbar { display: none; } .cb-customer-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); } .cb-customer-header-actions { display: flex; gap: 8px; flex-wrap: wrap; } .cb-sub-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; } .cb-network-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 12px; margin-bottom: 16px; } .cb-action-buttons { display: flex; gap: 8px; flex-wrap: wrap; } .cb-action-buttons > button { flex: 1; min-width: 120px; } @media (max-width: 768px) {  .cb-network-grid { grid-template-columns: 1fr 1fr; }  .cb-customer-header { flex-direction: column; align-items: flex-start; }  .cb-sub-header { flex-direction: column; }  .cb-action-buttons { flex-direction: column; }  .cb-action-buttons > button { width: 100%; min-width: unset; } } @media (max-width: 480px) { .cb-network-grid { grid-template-columns: 1fr; } }"}} />
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#0a0a0a', color: 'white', fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#0a0a0a', color: 'var(--ops-text)', fontFamily: 'system-ui, sans-serif' }}>
       {/* Global Header */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 40px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--ops-header-bg)', backdropFilter: 'blur(10px)', zIndex: 100 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -88,7 +88,7 @@ export default function OpsDashboard() {
              </div>
           </div>
           <div style={{ height: '20px', width: '1px', background: 'rgba(255,255,255,0.1)', margin: '0 12px' }} />
-          <h1 style={{ fontSize: '14px', margin: 0, fontWeight: 600, color: 'var(--text-secondary)' }}>NOC <span style={{ color: '#6b7280' }}>Ecosystem</span></h1>
+          <h1 style={{ fontSize: '14px', margin: 0, fontWeight: 600, color: 'var(--text-secondary)' }}>NOC <span style={{ color: 'var(--ops-text-muted)' }}>Ecosystem</span></h1>
         </div>
         
         {/* Tab Strip Navigation */}
@@ -111,12 +111,12 @@ export default function OpsDashboard() {
               <div style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '13px', color: activeTabId === tab.id ? 'white' : '#9ca3af', fontWeight: activeTabId === tab.id ? 600 : 400 }}>
                 {tab.title}
               </div>
-              <button onClick={(e) => handleCloseTab(e, tab.id)} style={{ background: 'transparent', border: 'none', color: '#9ca3af', padding: '2px', cursor: 'pointer', borderRadius: '4px', display: 'flex' }}>
+              <button onClick={(e) => handleCloseTab(e, tab.id)} style={{ background: 'transparent', border: 'none', color: 'var(--ops-text-muted)', padding: '2px', cursor: 'pointer', borderRadius: '4px', display: 'flex' }}>
                 <X size={12} />
               </button>
             </div>
           ))}
-          <button onClick={handleCreateTab} style={{ background: 'transparent', border: '1px dashed rgba(255,255,255,0.2)', color: '#9ca3af', borderRadius: '12px', padding: '0 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.2s' }}>
+          <button onClick={handleCreateTab} style={{ background: 'transparent', border: '1px dashed rgba(255,255,255,0.2)', color: 'var(--ops-text-muted)', borderRadius: '12px', padding: '0 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.2s' }}>
             +
           </button>
         </div>
@@ -485,6 +485,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
 
   return (
     <div 
+      id="ops-dashboard-root"
       suppressHydrationWarning
       style={{ 
       flex: 1, 
@@ -492,7 +493,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
       backgroundImage: mode === 'search' 
         ? 'radial-gradient(circle at 50% 50%, rgba(0, 178, 122, 0.08) 0%, transparent 60%)'
         : 'radial-gradient(circle at 50% 0%, rgba(0, 178, 122, 0.04) 0%, transparent 40%)',
-      color: 'white',
+      color: 'var(--ops-text)',
       fontFamily: 'system-ui, sans-serif',
       transition: 'background-image 1s ease',
       display: isVisible ? 'flex' : 'none',
@@ -524,14 +525,14 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
               </div>
               <div>
                 <div style={{ fontSize: 17, fontWeight: 700 }}>Escalate Meta Issue</div>
-                <div style={{ fontSize: 13, color: '#6b7280' }}>
+                <div style={{ fontSize: 13, color: 'var(--ops-text-muted)' }}>
                   {escalationModal.customer?.email}
                 </div>
               </div>
             </div>
 
-            <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 12, lineHeight: 1.6 }}>
-              No obvious meta issue was automatically detected. Please <strong style={{ color: 'white' }}>briefly describe the problem</strong> so the team knows what to investigate:
+            <div style={{ fontSize: 13, color: 'var(--ops-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+              No obvious meta issue was automatically detected. Please <strong style={{ color: 'var(--ops-text)' }}>briefly describe the problem</strong> so the team knows what to investigate:
             </div>
 
             <textarea
@@ -539,13 +540,13 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
               value={escalationNote}
               onChange={e => setEscalationNote(e.target.value)}
               placeholder="e.g. IMEI on Chargebee doesn't match the device. Customer says their SIM was never activated. Account shows duplicate ICCID..."
-              style={{ width: '100%', minHeight: 110, background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '12px 14px', borderRadius: 10, outline: 'none', fontSize: 14, resize: 'vertical', lineHeight: 1.6, boxSizing: 'border-box', fontFamily: 'system-ui, sans-serif' }}
+              style={{ width: '100%', minHeight: 110, background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--ops-text)', padding: '12px 14px', borderRadius: 10, outline: 'none', fontSize: 14, resize: 'vertical', lineHeight: 1.6, boxSizing: 'border-box', fontFamily: 'system-ui, sans-serif' }}
             />
 
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button
                 onClick={() => setEscalationModal(null)}
-                style={{ flex: 1, padding: '11px', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#9ca3af', borderRadius: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}
+                style={{ flex: 1, padding: '11px', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--ops-text-muted)', borderRadius: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}
               >
                 Cancel
               </button>
@@ -556,7 +557,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                   setEscalationModal(null);
                   fireEscalate(m.type, m.customer, m.subscription, m.network, escalationNote.trim(), m.knownIssue);
                 }}
-                style={{ flex: 2, padding: '11px', background: escalationNote.trim() ? 'rgba(59,130,246,0.9)' : 'rgba(59,130,246,0.3)', border: 'none', color: 'white', borderRadius: 10, cursor: escalationNote.trim() ? 'pointer' : 'not-allowed', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                style={{ flex: 2, padding: '11px', background: escalationNote.trim() ? 'rgba(59,130,246,0.9)' : 'rgba(59,130,246,0.3)', border: 'none', color: 'var(--ops-text)', borderRadius: 10, cursor: escalationNote.trim() ? 'pointer' : 'not-allowed', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
               >
                 <ShieldAlert size={15} /> Send Escalation to Slack
               </button>
@@ -580,7 +581,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                  <Activity color="#00b27a" size={32} />
               </div>
               <h2 style={{ fontSize: '48px', fontWeight: 800, marginBottom: '16px', textAlign: 'center', letterSpacing: '-1px' }}>System Omni-Search</h2>
-              <p style={{ color: '#9ca3af', fontSize: '18px', textAlign: 'center', marginBottom: '48px', lineHeight: 1.5 }}>
+              <p style={{ color: 'var(--ops-text-muted)', fontSize: '18px', textAlign: 'center', marginBottom: '48px', lineHeight: 1.5 }}>
                 Enter a customer email to instantly scan Chargebee, Shopify, ShipStation, and ThingSpace databanks.
               </p>
 
@@ -599,7 +600,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                       backgroundColor: 'rgba(20,20,20,0.8)', 
                       border: '1px solid rgba(255,255,255,0.1)', 
                       borderRadius: '24px', 
-                      color: 'white', 
+                      color: 'var(--ops-text)', 
                       fontSize: '20px', 
                       outline: 'none', 
                       boxShadow: '0 24px 48px rgba(0,0,0,0.5)',
@@ -620,7 +621,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                       right: '12px',
                       background: 'linear-gradient(90deg, #00b27a 0%, #00a26a 100%)', 
                       border: 'none', 
-                      color: 'white', 
+                      color: 'var(--ops-text)', 
                       padding: '14px 28px', 
                       borderRadius: '16px', 
                       fontSize: '16px', 
@@ -659,32 +660,32 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
               {/* Dynamic Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
                 <div>
-                  <button onClick={resetSearch} style={{ background: 'transparent', border: 'none', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: 0, marginBottom: '16px', fontSize: '14px' }}>
+                  <button onClick={resetSearch} style={{ background: 'transparent', border: 'none', color: 'var(--ops-text-muted)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: 0, marginBottom: '16px', fontSize: '14px' }}>
                     ← New Search
                   </button>
                   <h2 style={{ fontSize: '32px', margin: '0 0 8px 0', fontWeight: 800 }}>Ecosystem Payload</h2>
-                  <p style={{ color: '#9ca3af', margin: 0, fontSize: '16px' }}>Target: <span style={{ color: 'white', fontWeight: 500 }}>{email}</span></p>
+                  <p style={{ color: 'var(--ops-text-muted)', margin: 0, fontSize: '16px' }}>Target: <span style={{ color: 'var(--ops-text)', fontWeight: 500 }}>{email}</span></p>
                 </div>
                 
                 <div style={{ display: 'flex', gap: '16px' }}>
-                  <div style={{ padding: '12px 24px', background: 'rgba(20,20,20,0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ padding: '12px 24px', background: 'rgba(20,20,20,0.6)', border: '1px solid var(--border)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                      <CreditCard color="#a78bfa" size={20} />
                      <div>
-                       <div style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px' }}>Chargebee</div>
+                       <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Chargebee</div>
                        <div style={{ fontWeight: 600 }}>{chargebeeData.length} Profiles</div>
                      </div>
                   </div>
-                  <div style={{ padding: '12px 24px', background: 'rgba(20,20,20,0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ padding: '12px 24px', background: 'rgba(20,20,20,0.6)', border: '1px solid var(--border)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                      <Package color="#fbbf24" size={20} />
                      <div>
-                       <div style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px' }}>Commerce</div>
+                       <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Commerce</div>
                        <div style={{ fontWeight: 600 }}>{commerceData.length} Orders</div>
                      </div>
                   </div>
-                  <div style={{ padding: '12px 24px', background: 'rgba(20,20,20,0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ padding: '12px 24px', background: 'rgba(20,20,20,0.6)', border: '1px solid var(--border)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                      <Zap color="#f87171" size={20} />
                      <div>
-                       <div style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px' }}>ThingSpace</div>
+                       <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>ThingSpace</div>
                        <div style={{ fontWeight: 600 }}>{Object.keys(thingspaceData).length} ICIDs</div>
                      </div>
                   </div>
@@ -697,13 +698,13 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                   onClick={() => setActiveTab('chargebee')} 
                   style={{ background: activeTab === 'chargebee' ? 'rgba(167, 139, 250, 0.2)' : 'transparent', color: activeTab === 'chargebee' ? '#a78bfa' : '#9ca3af', border: `1px solid ${activeTab === 'chargebee' ? 'rgba(167, 139, 250, 0.4)' : 'transparent'}`, padding: '10px 20px', borderRadius: '100px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
-                  <CreditCard size={16} /> Chargebee Subscriptions {chargebeeData.length > 0 && <span style={{ background: '#a78bfa', color: 'white', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{chargebeeData.length}</span>}
+                  <CreditCard size={16} /> Chargebee Subscriptions {chargebeeData.length > 0 && <span style={{ background: '#a78bfa', color: 'var(--ops-text)', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{chargebeeData.length}</span>}
                 </button>
                 <button 
                   onClick={() => setActiveTab('stripe')} 
                   style={{ background: activeTab === 'stripe' ? 'rgba(99, 102, 241, 0.2)' : 'transparent', color: activeTab === 'stripe' ? '#818cf8' : '#9ca3af', border: `1px solid ${activeTab === 'stripe' ? 'rgba(99, 102, 241, 0.4)' : 'transparent'}`, padding: '10px 20px', borderRadius: '100px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
-                  <DollarSign size={16} /> Stripe Explorer {stripeCustomers.length > 0 && <span style={{ background: '#818cf8', color: 'white', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{stripeCustomers.length}</span>}
+                  <DollarSign size={16} /> Stripe Explorer {stripeCustomers.length > 0 && <span style={{ background: '#818cf8', color: 'var(--ops-text)', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{stripeCustomers.length}</span>}
                 </button>
                 <button 
                   onClick={() => setActiveTab('network')} 
@@ -715,13 +716,13 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                   onClick={() => setActiveTab('commerce')} 
                   style={{ background: activeTab === 'commerce' ? 'rgba(251, 191, 36, 0.2)' : 'transparent', color: activeTab === 'commerce' ? '#fbbf24' : '#9ca3af', border: `1px solid ${activeTab === 'commerce' ? 'rgba(251, 191, 36, 0.4)' : 'transparent'}`, padding: '10px 20px', borderRadius: '100px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
-                  <Package size={16} /> Commerce Orders {commerceData.length > 0 && <span style={{ background: '#fbbf24', color: 'white', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{commerceData.length}</span>}
+                  <Package size={16} /> Commerce Orders {commerceData.length > 0 && <span style={{ background: '#fbbf24', color: 'var(--ops-text)', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{commerceData.length}</span>}
                 </button>
                 <button 
                   onClick={() => setActiveTab('support')} 
                   style={{ background: activeTab === 'support' ? 'rgba(96, 165, 250, 0.2)' : 'transparent', color: activeTab === 'support' ? '#60a5fa' : '#9ca3af', border: `1px solid ${activeTab === 'support' ? 'rgba(96, 165, 250, 0.4)' : 'transparent'}`, padding: '10px 20px', borderRadius: '100px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
-                  <Activity size={16} /> Support Tickets {freescoutData.length > 0 && <span style={{ background: '#60a5fa', color: 'white', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{freescoutData.length}</span>}
+                  <Activity size={16} /> Support Tickets {freescoutData.length > 0 && <span style={{ background: '#60a5fa', color: 'var(--ops-text)', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{freescoutData.length}</span>}
                 </button>
               </div>
 
@@ -731,21 +732,21 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                 {/* Chargebee Column */}
                 {activeTab === 'chargebee' && (
                 <div id="section-chargebee" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  <h3 style={{ fontSize: '20px', color: '#e5e7eb', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '20px', color: 'var(--ops-text)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                      <CreditCard size={20} color="#a78bfa" /> Chargebee Subscriptions
                   </h3>
                   
                   {chargebeeData.length === 0 ? (
-                    <div style={{ padding: '40px', textAlign: 'center', background: 'rgba(20,20,20,0.4)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
-                      <span style={{ color: '#6b7280' }}>No Chargebee profiles found.</span>
+                    <div style={{ padding: '40px', textAlign: 'center', background: 'var(--surface-200)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                      <span style={{ color: 'var(--ops-text-muted)' }}>No Chargebee profiles found.</span>
                     </div>
                   ) : (
                     chargebeeData.map((c, i) => (
-                      <div key={i} style={{ padding: '24px', background: 'rgba(20,20,20,0.8)', border: '1px solid rgba(167, 139, 250, 0.2)', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+                      <div key={i} style={{ padding: '24px', background: 'var(--ops-card-bg)', border: '1px solid var(--ops-card-border)', borderRadius: '16px', boxShadow: 'var(--shadow-md)' }}>
                         <div className="cb-customer-header">
                           <div>
                             <div style={{ fontWeight: 600, fontSize: '18px' }}>{c.firstName} {c.lastName}</div>
-                            <div style={{ color: '#9ca3af', fontSize: '14px' }}>ID: {c.id}</div>
+                            <div style={{ color: 'var(--ops-text-muted)', fontSize: '14px' }}>ID: {c.id}</div>
                           </div>
                           <div className="cb-customer-header-actions">
                             {c.subscriptions?.length > 1 && (
@@ -801,7 +802,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                 <ShieldAlert size={16} /> Subscription Charge Overlap Engine
                               </h4>
                               {custTxs.length < 2 ? (
-                                <div style={{ fontSize: '13px', color: '#9ca3af' }}>Not enough successful historical transactions to compare.</div>
+                                <div style={{ fontSize: '13px', color: 'var(--ops-text-muted)' }}>Not enough successful historical transactions to compare.</div>
                               ) : anomalies.length === 0 ? (
                                 <div style={{ fontSize: '13px', color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                   <Check size={14} /> No mathematical double-charges detected in recent history. All payments are securely spaced &gt;= 25 days apart.
@@ -830,13 +831,13 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                         {c.subscriptions?.length > 0 ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {c.subscriptions.map((sub: any, idx: number) => (
-                              <div key={idx} style={{ padding: '16px', background: 'rgba(0,0,0,0.4)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                              <div key={idx} style={{ padding: '16px', background: 'var(--surface-200)', borderRadius: '12px', border: '1px solid var(--border)' }}>
                                 <div className="cb-sub-header">
                                   <div>
-                                    <span style={{ fontWeight: 600, color: '#e5e7eb', fontSize: '15px' }}>
+                                    <span style={{ fontWeight: 600, color: 'var(--ops-text)', fontSize: '15px' }}>
                                       {sub.subscription_items?.find((i: any) => i.item_type === 'plan')?.item_price_id || sub.plan_id || 'Unknown Plan'}
                                     </span>
-                                    <span style={{ color: '#9ca3af', fontSize: '13px', marginLeft: '8px' }}>
+                                    <span style={{ color: 'var(--ops-text-muted)', fontSize: '13px', marginLeft: '8px' }}>
                                       ${((sub.subscription_items?.find((i: any) => i.item_type === 'plan')?.amount || sub.plan_amount || 0) / 100).toFixed(2)}
                                     </span>
                                   </div>
@@ -852,14 +853,14 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                     {sub.status.toUpperCase()}
                                   </span>
                                 </div>
-                                <div style={{ fontSize: '13px', color: '#9ca3af', display: 'flex', justifyContent: 'space-between' }}>
+                                <div style={{ fontSize: '13px', color: 'var(--ops-text-muted)', display: 'flex', justifyContent: 'space-between' }}>
                                   <span>Sub ID: {sub.id}</span>
                                   {sub.total_dues > 0 && (
                                     <span style={{ color: '#f87171', fontWeight: 600 }}>Due: ${(sub.total_dues / 100).toFixed(2)}</span>
                                   )}
                                 </div>
                                 {sub.next_billing_at && (
-                                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px' }}>
+                                  <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', marginTop: '6px' }}>
                                     Next Bill: {new Date(sub.next_billing_at * 1000).toLocaleDateString()}
                                   </div>
                                 )}
@@ -874,16 +875,16 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                    const cbImeiVal  = sub.cf_IMEI || sub.cf_imei || sub.cf_Device_IMEI || sub.cf_device_imei;
                                    if (!cbIccidVal && !cbImeiVal) return null;
                                    return (
-                                     <div style={{ marginTop: '10px', padding: '8px 12px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                     <div style={{ marginTop: '10px', padding: '8px 12px', background: 'var(--surface-200)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                        {cbIccidVal && (
                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                                           <span style={{ color: '#6b7280' }}>ICCID</span>
+                                           <span style={{ color: 'var(--ops-text-muted)' }}>ICCID</span>
                                            <span style={{ color: '#f87171', fontFamily: 'monospace', fontSize: '11px' }}>{cbIccidVal}</span>
                                          </div>
                                        )}
                                        {cbImeiVal && (
                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                                           <span style={{ color: '#6b7280' }}>IMEI</span>
+                                           <span style={{ color: 'var(--ops-text-muted)' }}>IMEI</span>
                                            <span style={{ color: '#a78bfa', fontFamily: 'monospace', fontSize: '11px' }}>{cbImeiVal}</span>
                                          </div>
                                        )}
@@ -990,7 +991,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                             <div style={{ fontSize: '12px', color: '#fca5a5', lineHeight: 1.6 }}>
                                               ⚠ {iccidIssueReason}
                                             </div>
-                                            <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '6px' }}>
+                                            <div style={{ fontSize: '11px', color: 'var(--ops-text-muted)', marginTop: '6px' }}>
                                               A valid ICCID must be exactly 20 digits and start with <span style={{ color: '#f87171' }}>89148</span>.
                                             </div>
                                           </div>
@@ -1014,7 +1015,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                               }
                                             </button>
                                           ) : (
-                                            <div style={{ padding: '8px 12px', background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#9ca3af' }}>
+                                            <div style={{ padding: '8px 12px', background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--ops-text-muted)' }}>
                                               <AlertCircle size={13} color="#ef4444" />
                                               Escalation unavailable — account has billing constraints.
                                             </div>
@@ -1031,13 +1032,13 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <AlertCircle size={16} color="#ef4444" />
-                                            <span style={{ fontSize: '14px', color: '#e5e7eb', fontWeight: 600 }}>No Line Found on ThingSpace</span>
+                                            <span style={{ fontSize: '14px', color: 'var(--ops-text)', fontWeight: 600 }}>No Line Found on ThingSpace</span>
                                           </div>
                                           {syncButtonNode}
                                         </div>
 
                                         {/* Valid ICCID badge */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', background: 'rgba(0,0,0,0.3)', padding: '8px 12px', borderRadius: '8px', fontFamily: 'monospace' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', background: 'var(--surface-200)', padding: '8px 12px', borderRadius: '8px', fontFamily: 'monospace' }}>
                                           <span style={{ color: '#f87171', fontSize: '13px' }}>{iccid}</span>
                                           <span style={{ padding: '2px 8px', background: 'rgba(16,185,129,0.15)', color: '#10b981', borderRadius: '4px', fontSize: '10px', fontWeight: 700, letterSpacing: '1px' }}>ICCID VALID</span>
                                         </div>
@@ -1075,7 +1076,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                             </button>
                                           </div>
                                         ) : (
-                                          <div style={{ padding: '8px 12px', background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#9ca3af' }}>
+                                          <div style={{ padding: '8px 12px', background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--ops-text-muted)' }}>
                                             <AlertCircle size={13} color="#ef4444" />
                                             Escalation unavailable — account has billing constraints.
                                           </div>
@@ -1141,7 +1142,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                           <Zap size={16} color="#f87171" />
-                                          <span style={{ fontSize: '14px', color: '#e5e7eb', fontWeight: 600 }}>Verizon Network Core</span>
+                                          <span style={{ fontSize: '14px', color: 'var(--ops-text)', fontWeight: 600 }}>Verizon Network Core</span>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                           {syncButtonNode}
@@ -1167,25 +1168,25 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                             }}
                                           >
                                             <div>
-                                              <span style={{ color: '#9ca3af', display: 'block', marginBottom: '4px' }}>ICCID</span>
+                                              <span style={{ color: 'var(--ops-text-muted)', display: 'block', marginBottom: '4px' }}>ICCID</span>
                                               <span style={{ color: !isValidIccid ? '#ef4444' : '#f87171', fontFamily: 'monospace', fontWeight: !isValidIccid ? 700 : 400 }}>{iccid}</span>
                                             </div>
                                             {!isValidIccid && <AlertTriangle size={14} color="#ef4444" style={{ marginLeft: '8px' }} />}
                                           </div>
                                           <button 
                                             onClick={() => activeUsageIccid === iccid ? setActiveUsageIccid(null) : fetchUsage(iccid)}
-                                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#e5e7eb', padding: '6px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', marginTop: '4px' }}
+                                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--ops-text)', padding: '6px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', marginTop: '4px' }}
                                           >
                                             <BarChart2 size={12} /> Analyze Usage
                                           </button>
                                         </div>
                                         <div>
-                                          <span style={{ color: '#9ca3af', display: 'block', marginBottom: '4px' }}>IMEI</span>
+                                          <span style={{ color: 'var(--ops-text-muted)', display: 'block', marginBottom: '4px' }}>IMEI</span>
                                           <span style={{ color: '#a78bfa', fontFamily: 'monospace' }}>{tsDev.deviceIds?.find((d:any)=>d.kind==='imei')?.id || tsDev.extendedAttributes?.find((d:any)=>d.key==='PreIMEI')?.value || 'N/A'}</span>
                                         </div>
                                         <div>
-                                          <span style={{ color: '#9ca3af', display: 'block', marginBottom: '4px' }}>MDN / Number</span>
-                                          <span style={{ color: 'white' }}>{tsDev.deviceIds?.find((d:any)=>d.kind==='mdn')?.id || 'N/A'}</span>
+                                          <span style={{ color: 'var(--ops-text-muted)', display: 'block', marginBottom: '4px' }}>MDN / Number</span>
+                                          <span style={{ color: 'var(--ops-text)' }}>{tsDev.deviceIds?.find((d:any)=>d.kind==='mdn')?.id || 'N/A'}</span>
                                         </div>
                                         <div>
                                           <div
@@ -1202,7 +1203,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                               cursor: !isValidPlan ? 'help' : 'default'
                                             }}
                                           >
-                                            <span style={{ color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Active Plan SKU</span>
+                                            <span style={{ color: 'var(--ops-text-muted)', display: 'block', marginBottom: '4px' }}>Active Plan SKU</span>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                               <span style={{ color: !isValidPlan ? '#ef4444' : 'white', fontWeight: !isValidPlan ? 700 : 400 }}>{rawPlan}</span>
                                               {!isValidPlan && <AlertTriangle size={14} color="#ef4444" />}
@@ -1216,12 +1217,12 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                           </div>
                                         </div>
                                         <div>
-                                          <span style={{ color: '#9ca3af', display: 'block', marginBottom: '4px' }}>IP Address</span>
-                                          <span style={{ color: 'white', fontFamily: 'monospace' }}>{tsDev.ipAddress || 'Disconnected'}</span>
+                                          <span style={{ color: 'var(--ops-text-muted)', display: 'block', marginBottom: '4px' }}>IP Address</span>
+                                          <span style={{ color: 'var(--ops-text)', fontFamily: 'monospace' }}>{tsDev.ipAddress || 'Disconnected'}</span>
                                         </div>
                                         <div>
-                                          <span style={{ color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Last Connection</span>
-                                          <span style={{ color: 'white' }}>{tsDev.lastConnectionDate ? new Date(tsDev.lastConnectionDate).toLocaleDateString() : 'N/A'}</span>
+                                          <span style={{ color: 'var(--ops-text-muted)', display: 'block', marginBottom: '4px' }}>Last Connection</span>
+                                          <span style={{ color: 'var(--ops-text)' }}>{tsDev.lastConnectionDate ? new Date(tsDev.lastConnectionDate).toLocaleDateString() : 'N/A'}</span>
                                         </div>
                                       </div>
 
@@ -1241,7 +1242,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                       )}
 
 
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
                                         <div style={{ display: 'flex', gap: '8px' }}>
                                           {tsState === 'Active' && (
                                             <button onClick={() => handleNetworkAction(iccid, 'suspend')} style={{ flex: 1, padding: '8px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#f59e0b', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px', fontWeight: 500 }}>
@@ -1292,14 +1293,14 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                                       <button
                                                         disabled={busy}
                                                         onClick={() => { setEscalationDropdownOpen(null); handleEscalate('line_issue', c, sub, tsDev); }}
-                                                        style={{ width: '100%', padding: '11px 16px', background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.05)', color: '#ef4444', cursor: busy ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: 600, opacity: busy ? 0.6 : 1, textAlign: 'left' }}
+                                                        style={{ width: '100%', padding: '11px 16px', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', color: '#ef4444', cursor: busy ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: 600, opacity: busy ? 0.6 : 1, textAlign: 'left' }}
                                                         onMouseOver={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; }}
                                                         onMouseOut={e => { e.currentTarget.style.background = 'transparent'; }}
                                                       >
                                                         {busy ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <span style={{ fontSize: '16px' }}>🔴</span>}
                                                         <div>
                                                           <div>Escalate Line Issue</div>
-                                                          <div style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 400 }}>Line is active but not working properly</div>
+                                                          <div style={{ fontSize: '11px', color: 'var(--ops-text-muted)', fontWeight: 400 }}>Line is active but not working properly</div>
                                                         </div>
                                                       </button>
                                                     );
@@ -1313,14 +1314,14 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                                       <button
                                                         disabled={busy}
                                                         onClick={() => { setEscalationDropdownOpen(null); handleEscalate('plan_issue', c, sub, tsDev); }}
-                                                        style={{ width: '100%', padding: '11px 16px', background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.05)', color: '#f59e0b', cursor: busy ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: 600, opacity: busy ? 0.6 : 1, textAlign: 'left' }}
+                                                        style={{ width: '100%', padding: '11px 16px', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', color: '#f59e0b', cursor: busy ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: 600, opacity: busy ? 0.6 : 1, textAlign: 'left' }}
                                                         onMouseOver={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.12)'; }}
                                                         onMouseOut={e => { e.currentTarget.style.background = 'transparent'; }}
                                                       >
                                                         {busy ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <span style={{ fontSize: '16px' }}>🟡</span>}
                                                         <div>
                                                           <div>Escalate Plan Issue</div>
-                                                          <div style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 400 }}>Service plan is on the known problem list</div>
+                                                          <div style={{ fontSize: '11px', color: 'var(--ops-text-muted)', fontWeight: 400 }}>Service plan is on the known problem list</div>
                                                         </div>
                                                       </button>
                                                     );
@@ -1341,7 +1342,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                                         {busy ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <span style={{ fontSize: '16px' }}>🔵</span>}
                                                         <div>
                                                           <div>Escalate Meta Issue</div>
-                                                          <div style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 400 }}>Account config, IMEI, or metadata problem</div>
+                                                          <div style={{ fontSize: '11px', color: 'var(--ops-text-muted)', fontWeight: 400 }}>Account config, IMEI, or metadata problem</div>
                                                         </div>
                                                       </button>
                                                     );
@@ -1358,9 +1359,9 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
 
                                 {sub.subscription_items?.filter((i: any) => i.item_type === 'addon').length > 0 && (
                                   <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
-                                     <div style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', marginBottom: '6px' }}>Addons</div>
+                                     <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>Addons</div>
                                      {sub.subscription_items.filter((i: any) => i.item_type === 'addon').map((addon: any, aIdx: number) => (
-                                       <div key={aIdx} style={{ fontSize: '13px', color: '#e5e7eb', display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                       <div key={aIdx} style={{ fontSize: '13px', color: 'var(--ops-text)', display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                                          <span>{addon.item_price_id}</span>
                                          <span style={{ color: '#a78bfa' }}>${(addon.amount / 100).toFixed(2)}</span>
                                        </div>
@@ -1378,7 +1379,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                             ))}
                           </div>
                         ) : (
-                          <div style={{ fontSize: '14px', color: '#6b7280' }}>No active subscriptions.</div>
+                          <div style={{ fontSize: '14px', color: 'var(--ops-text-muted)' }}>No active subscriptions.</div>
                         )}
                       </div>
                     ))
@@ -1389,13 +1390,13 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                 {/* Stripe Explorer Column */}
                 {activeTab === 'stripe' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  <h3 style={{ fontSize: '20px', color: '#e5e7eb', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '20px', color: 'var(--ops-text)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                      <DollarSign size={20} color="#818cf8" /> Stripe Explorer
                   </h3>
                   
                   {stripeCustomers.length === 0 ? (
-                    <div style={{ padding: '40px', textAlign: 'center', background: 'rgba(20,20,20,0.4)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
-                      <span style={{ color: '#6b7280' }}>No Stripe records matched this email.</span>
+                    <div style={{ padding: '40px', textAlign: 'center', background: 'var(--surface-200)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                      <span style={{ color: 'var(--ops-text-muted)' }}>No Stripe records matched this email.</span>
                     </div>
                   ) : (
                     <>
@@ -1472,14 +1473,14 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                               <div>
-                                <div style={{ fontSize: '15px', fontWeight: 600, color: '#e5e7eb' }}>{sc.name || 'Unnamed Record'}</div>
-                                <div style={{ fontSize: '13px', color: '#9ca3af', fontFamily: 'monospace' }}>{sc.id}</div>
+                                <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ops-text)' }}>{sc.name || 'Unnamed Record'}</div>
+                                <div style={{ fontSize: '13px', color: 'var(--ops-text-muted)', fontFamily: 'monospace' }}>{sc.id}</div>
                               </div>
-                              <div style={{ padding: '4px 8px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '10px', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.1)' }}>
+                              <div style={{ padding: '4px 8px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '10px', color: 'var(--ops-text-muted)', border: '1px solid rgba(255,255,255,0.1)' }}>
                                 {sc.livemode ? 'LIVE' : 'TEST'}
                               </div>
                             </div>
-                            <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '12px' }}>
+                            <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', marginTop: '12px' }}>
                               Created {new Date(sc.created * 1000).toLocaleDateString()}
                             </div>
                           </div>
@@ -1488,14 +1489,14 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
 
                       {/* Transaction Table */}
                       {activeStripeId && (
-                        <div style={{ padding: '24px', background: 'rgba(20,20,20,0.8)', border: '1px solid rgba(99, 102, 241, 0.2)', borderRadius: '16px', marginTop: '16px' }}>
-                          <h4 style={{ fontSize: '16px', margin: '0 0 16px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ padding: '24px', background: 'var(--ops-card-bg)', border: '1px solid rgba(99, 102, 241, 0.2)', borderRadius: '16px', marginTop: '16px' }}>
+                          <h4 style={{ fontSize: '16px', margin: '0 0 16px 0', borderBottom: '1px solid var(--border)', paddingBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span>Unified Transaction Ledger</span>
                             <div style={{ display: 'flex', gap: '8px' }}>
                               <select 
                                 value={stripeFilterProps.status} 
                                 onChange={(e) => setStripeFilterProps({...stripeFilterProps, status: e.target.value})}
-                                style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '6px 12px', borderRadius: '8px', fontSize: '12px' }}
+                                style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--ops-text)', padding: '6px 12px', borderRadius: '8px', fontSize: '12px' }}
                               >
                                 <option value="all">All Statuses</option>
                                 <option value="ok">Success/Paid</option>
@@ -1512,7 +1513,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                           ) : (
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                               <thead>
-                                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#9ca3af', textAlign: 'left' }}>
+                                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'var(--ops-text-muted)', textAlign: 'left' }}>
                                   <th style={{ padding: '12px', fontWeight: 500 }}>Date</th>
                                   <th style={{ padding: '12px', fontWeight: 500 }}>Type</th>
                                   <th style={{ padding: '12px', fontWeight: 500 }}>Amount</th>
@@ -1526,17 +1527,17 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                   if (stripeFilterProps.status !== 'all') {
                                     filtered = filtered.filter(t => t.statusClass === stripeFilterProps.status);
                                   }
-                                  if (filtered.length === 0) return <tr><td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: '#6b7280' }}>No transactions match criteria.</td></tr>;
+                                  if (filtered.length === 0) return <tr><td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: 'var(--ops-text-muted)' }}>No transactions match criteria.</td></tr>;
                                   const vol = filtered.reduce((s, t) => s + (isNaN(t.amtM) ? 0 : t.amtM), 0);
                                   
                                   return (
                                     <>
                                       {filtered.map((t, idx) => (
-                                        <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'transparent', transition: 'background-color 0.2s' }}>
+                                        <tr key={idx} style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'transparent', transition: 'background-color 0.2s' }}>
                                           <td style={{ padding: '12px', color: '#d1d5db', whiteSpace: 'nowrap' }}>{t.dateTxt}</td>
-                                          <td style={{ padding: '12px', color: '#9ca3af', textTransform: 'uppercase', fontSize: '11px' }}>{t.type}</td>
-                                          <td style={{ padding: '12px', color: 'white', fontWeight: 600 }}>${t.amtM.toFixed(2)}</td>
-                                          <td style={{ padding: '12px', color: '#9ca3af' }}>{t.desc}</td>
+                                          <td style={{ padding: '12px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', fontSize: '11px' }}>{t.type}</td>
+                                          <td style={{ padding: '12px', color: 'var(--ops-text)', fontWeight: 600 }}>${t.amtM.toFixed(2)}</td>
+                                          <td style={{ padding: '12px', color: 'var(--ops-text-muted)' }}>{t.desc}</td>
                                           <td style={{ padding: '12px' }}>
                                             <span style={{ 
                                               padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600,
@@ -1549,7 +1550,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                         </tr>
                                       ))}
                                       <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
-                                        <td colSpan={2} style={{ padding: '16px', fontWeight: 600, color: '#e5e7eb' }}>Ledger Summary ({filtered.length})</td>
+                                        <td colSpan={2} style={{ padding: '16px', fontWeight: 600, color: 'var(--ops-text)' }}>Ledger Summary ({filtered.length})</td>
                                         <td colSpan={3} style={{ padding: '16px', fontWeight: 600, color: '#818cf8' }}>Total Implied Volume: ${vol.toFixed(2)}</td>
                                       </tr>
                                     </>
@@ -1568,21 +1569,21 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                 {/* Commerce Column (Shopify + Shipstation) */}
                 {activeTab === 'commerce' && (
                 <div id="section-commerce" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  <h3 style={{ fontSize: '20px', color: '#e5e7eb', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '20px', color: 'var(--ops-text)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                      <Package size={20} color="#fbbf24" /> Commerce Logs
                   </h3>
                   
                   {commerceData.length === 0 ? (
-                    <div style={{ padding: '40px', textAlign: 'center', background: 'rgba(20,20,20,0.4)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
-                      <span style={{ color: '#6b7280' }}>No Commerce orders found.</span>
+                    <div style={{ padding: '40px', textAlign: 'center', background: 'var(--surface-200)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                      <span style={{ color: 'var(--ops-text-muted)' }}>No Commerce orders found.</span>
                     </div>
                   ) : (
                     commerceData.map((order, i) => (
-                      <div key={i} style={{ padding: '24px', background: 'rgba(20,20,20,0.8)', border: '1px solid rgba(251, 191, 36, 0.2)', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+                      <div key={i} style={{ padding: '24px', background: 'var(--ops-card-bg)', border: '1px solid rgba(251, 191, 36, 0.2)', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
                           <div>
                             <div style={{ fontWeight: 600, fontSize: '16px' }}>Order #{order.orderNumber}</div>
-                            <div style={{ color: '#9ca3af', fontSize: '13px' }}>{new Date(order.orderDate).toLocaleDateString()}</div>
+                            <div style={{ color: 'var(--ops-text-muted)', fontSize: '13px' }}>{new Date(order.orderDate).toLocaleDateString()}</div>
                           </div>
                           <div>
                             <span style={{ 
@@ -1590,7 +1591,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                 borderRadius: '100px', 
                                 fontSize: '12px', 
                                 background: 'rgba(255,255,255,0.05)',
-                                color: '#e5e7eb',
+                                color: 'var(--ops-text)',
                                 border: '1px solid rgba(255,255,255,0.1)'
                               }}>
                                 {order.source.toUpperCase()}
@@ -1598,29 +1599,29 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                           </div>
                         </div>
 
-                        <div style={{ padding: '16px', background: 'rgba(0,0,0,0.4)', borderRadius: '12px', marginBottom: '16px' }}>
+                        <div style={{ padding: '16px', background: 'var(--surface-200)', borderRadius: '12px', marginBottom: '16px' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
                             <div>
-                               <span style={{ color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Payment</span>
+                               <span style={{ color: 'var(--ops-text-muted)', display: 'block', marginBottom: '4px' }}>Payment</span>
                                <span style={{ color: order.paymentStatus === 'paid' ? '#10b981' : '#fbbf24' }}>{order.paymentStatus}</span>
                             </div>
                             <div>
-                               <span style={{ color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Fulfillment</span>
-                               <span style={{ color: 'white' }}>{order.fulfillmentStatus || 'unfulfilled'}</span>
+                               <span style={{ color: 'var(--ops-text-muted)', display: 'block', marginBottom: '4px' }}>Fulfillment</span>
+                               <span style={{ color: 'var(--ops-text)' }}>{order.fulfillmentStatus || 'unfulfilled'}</span>
                             </div>
                           </div>
                         </div>
 
                         {order.tracking && order.tracking.length > 0 && (
                           <div>
-                            <span style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', display: 'block' }}>Shipments</span>
+                            <span style={{ fontSize: '12px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', display: 'block' }}>Shipments</span>
                             {order.tracking.map((t: any, idx: number) => (
-                              <div key={idx} style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                              <div key={idx} style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)' }}>
                                 <span style={{ color: '#fbbf24' }}>{t.carrier}</span>
                                 {t.trackingUrl ? (
                                   <a href={t.trackingUrl} target="_blank" style={{ color: '#60a5fa', textDecoration: 'none' }}>{t.trackingNumber}</a>
                                 ) : (
-                                  <span style={{ color: 'white' }}>{t.trackingNumber}</span>
+                                  <span style={{ color: 'var(--ops-text)' }}>{t.trackingNumber}</span>
                                 )}
                               </div>
                             ))}
@@ -1657,7 +1658,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                     </div>
                                     <button 
                                       onClick={() => activeUsageIccid === iccid ? setActiveUsageIccid(null) : fetchUsage(iccid)}
-                                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#e5e7eb', padding: '6px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', marginTop: '4px' }}
+                                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--ops-text)', padding: '6px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', marginTop: '4px' }}
                                     >
                                       <BarChart2 size={12} /> Analyze Usage
                                     </button>
@@ -1667,7 +1668,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                               {order.imei && (
                                 <div>
                                   <div style={{ fontSize: '12px', color: '#f87171', marginBottom: '4px' }}>ACTIVATED IMEI</div>
-                                  <div style={{ fontFamily: 'monospace', color: 'white', fontSize: '13px' }}>{order.imei}</div>
+                                  <div style={{ fontFamily: 'monospace', color: 'var(--ops-text)', fontSize: '13px' }}>{order.imei}</div>
                                 </div>
                               )}
                             </div>
@@ -1682,25 +1683,25 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                 {/* Support Column */}
                 {activeTab === 'support' && (
                 <div id="section-support" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  <h3 style={{ fontSize: '20px', color: '#e5e7eb', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '20px', color: 'var(--ops-text)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                      <Activity size={20} color="#60a5fa" /> Support Communications
                   </h3>
                   
                   {freescoutData.length === 0 ? (
-                    <div style={{ padding: '40px', textAlign: 'center', background: 'rgba(20,20,20,0.4)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
-                      <span style={{ color: '#6b7280' }}>No active tickets linked.</span>
+                    <div style={{ padding: '40px', textAlign: 'center', background: 'var(--surface-200)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                      <span style={{ color: 'var(--ops-text-muted)' }}>No active tickets linked.</span>
                     </div>
                   ) : (
                     freescoutData.map((ticket, i) => (
                       <div 
                         key={i} 
                         onClick={() => handleViewTicket(ticket)}
-                        style={{ padding: '24px', background: 'rgba(20,20,20,0.8)', border: '1px solid rgba(96, 165, 250, 0.2)', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', cursor: 'pointer', transition: 'all 0.2s', ...({ ':hover': { borderColor: 'rgba(96, 165, 250, 0.5)' } } as any) }}
+                        style={{ padding: '24px', background: 'var(--ops-card-bg)', border: '1px solid rgba(96, 165, 250, 0.2)', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', cursor: 'pointer', transition: 'all 0.2s', ...({ ':hover': { borderColor: 'rgba(96, 165, 250, 0.5)' } } as any) }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                           <div>
-                            <div style={{ color: '#9ca3af', fontSize: '13px', marginBottom: '4px' }}>Ticket #{ticket.number}</div>
-                            <div style={{ color: '#e5e7eb', fontSize: '15px', fontWeight: 600, lineHeight: 1.4, wordBreak: 'break-word' }}>{ticket.subject}</div>
+                            <div style={{ color: 'var(--ops-text-muted)', fontSize: '13px', marginBottom: '4px' }}>Ticket #{ticket.number}</div>
+                            <div style={{ color: 'var(--ops-text)', fontSize: '15px', fontWeight: 600, lineHeight: 1.4, wordBreak: 'break-word' }}>{ticket.subject}</div>
                           </div>
                           <span style={{ 
                             padding: '4px 10px', 
@@ -1716,10 +1717,10 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                             {String(ticket.status === 1 ? 'ACTIVE' : ticket.status === 2 ? 'PENDING' : ticket.status === 3 ? 'CLOSED' : ticket.status === 4 ? 'SPAM' : ticket.status).toUpperCase()}
                           </span>
                         </div>
-                        <div style={{ color: '#9ca3af', fontSize: '13px', lineHeight: 1.6, marginBottom: '16px', fontStyle: 'italic', background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '8px' }}>
+                        <div style={{ color: 'var(--ops-text-muted)', fontSize: '13px', lineHeight: 1.6, marginBottom: '16px', fontStyle: 'italic', background: 'var(--surface-200)', padding: '12px', borderRadius: '8px' }}>
                           "{ticket.preview}"
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#6b7280' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--ops-text-muted)' }}>
                           <span>Updated: {new Date(ticket.updatedAt).toLocaleDateString()}</span>
                           <span>Assignee: {ticket.assignee ? `${ticket.assignee.firstName} ${ticket.assignee.lastName}` : 'Unassigned'}</span>
                         </div>
@@ -1732,12 +1733,12 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                 {/* Network / ThingSpace Isolated View */}
                 {activeTab === 'network' && (
                 <div id="section-network" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  <h3 style={{ fontSize: '20px', color: '#e5e7eb', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '20px', color: 'var(--ops-text)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                      <Zap size={20} color="#f87171" /> Verizon Network Lines
                   </h3>
                   {Object.keys(thingspaceData).length === 0 ? (
-                    <div style={{ padding: '40px', textAlign: 'center', background: 'rgba(20,20,20,0.4)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
-                      <span style={{ color: '#6b7280' }}>No network lines found for this profile.</span>
+                    <div style={{ padding: '40px', textAlign: 'center', background: 'var(--surface-200)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                      <span style={{ color: 'var(--ops-text-muted)' }}>No network lines found for this profile.</span>
                     </div>
                   ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
@@ -1758,7 +1759,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <Zap size={16} color="#f87171" />
-                                <span style={{ fontSize: '14px', color: '#e5e7eb', fontWeight: 600 }}>Verizon Line</span>
+                                <span style={{ fontSize: '14px', color: 'var(--ops-text)', fontWeight: 600 }}>Verizon Line</span>
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: tsState.toLowerCase() === 'active' ? '#10b981' : tsState.toLowerCase().startsWith('pending') ? '#f59e0b' : '#ef4444' }} />
@@ -1781,13 +1782,13 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                    cursor: !isValidIccid ? 'help' : 'default'
                                  }}
                                >
-                                 <span style={{ color: '#9ca3af', width: !isValidIccid ? 'auto' : '80px', marginRight: !isValidIccid ? '8px' : '0', display: 'inline-block' }}>ICCID:</span> 
+                                 <span style={{ color: 'var(--ops-text-muted)', width: !isValidIccid ? 'auto' : '80px', marginRight: !isValidIccid ? '8px' : '0', display: 'inline-block' }}>ICCID:</span> 
                                  <span style={{ color: !isValidIccid ? '#ef4444' : '#f87171', fontFamily: 'monospace', fontWeight: !isValidIccid ? 700 : 400 }}>{iccid}</span>
                                  {!isValidIccid && <AlertTriangle size={14} color="#ef4444" style={{ marginLeft: '8px' }} />}
                                </div>
 
-                               <div><span style={{ color: '#9ca3af', width: '80px', display: 'inline-block' }}>IMEI:</span> <span style={{ color: '#a78bfa', fontFamily: 'monospace' }}>{imei}</span></div>
-                               <div><span style={{ color: '#9ca3af', width: '80px', display: 'inline-block' }}>NUMBER:</span> <span style={{ color: 'white' }}>{mdn}</span></div>
+                               <div><span style={{ color: 'var(--ops-text-muted)', width: '80px', display: 'inline-block' }}>IMEI:</span> <span style={{ color: '#a78bfa', fontFamily: 'monospace' }}>{imei}</span></div>
+                               <div><span style={{ color: 'var(--ops-text-muted)', width: '80px', display: 'inline-block' }}>NUMBER:</span> <span style={{ color: 'var(--ops-text)' }}>{mdn}</span></div>
 
                                <div
                                  title={!isValidPlan ? "Incorrect Service Plan get it updated" : undefined}
@@ -1803,16 +1804,16 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                    cursor: !isValidPlan ? 'help' : 'default'
                                  }}
                                >
-                                 <span style={{ color: '#9ca3af', width: !isValidPlan ? 'auto' : '80px', marginRight: !isValidPlan ? '8px' : '0', display: 'inline-block' }}>PLAN:</span> 
+                                 <span style={{ color: 'var(--ops-text-muted)', width: !isValidPlan ? 'auto' : '80px', marginRight: !isValidPlan ? '8px' : '0', display: 'inline-block' }}>PLAN:</span> 
                                  <span style={{ color: !isValidPlan ? '#ef4444' : 'white', fontWeight: !isValidPlan ? 700 : 400 }}>{rawPlan}</span>
                                  {!isValidPlan && <AlertTriangle size={14} color="#ef4444" style={{ marginLeft: '8px' }} />}
                                </div>
-                               <div><span style={{ color: '#9ca3af', width: '80px', display: 'inline-block' }}>IP ADDR:</span> <span style={{ color: 'white', fontFamily: 'monospace' }}>{ip}</span></div>
+                               <div><span style={{ color: 'var(--ops-text-muted)', width: '80px', display: 'inline-block' }}>IP ADDR:</span> <span style={{ color: 'var(--ops-text)', fontFamily: 'monospace' }}>{ip}</span></div>
                             </div>
 
                             <button 
                               onClick={() => activeUsageIccid === iccid ? setActiveUsageIccid(null) : fetchUsage(iccid)}
-                              style={{ width: '100%', marginTop: '16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#e5e7eb', padding: '10px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+                              style={{ width: '100%', marginTop: '16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--ops-text)', padding: '10px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
                             >
                               <BarChart2 size={16} /> {activeUsageIccid === iccid ? 'Close Analytics' : 'Analyze Usage'}
                             </button>
@@ -1852,12 +1853,12 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                   display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.5)'
                 }}
               >
-                <div style={{ padding: '24px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(20,20,20,0.9)' }}>
+                <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(20,20,20,0.9)' }}>
                   <div>
                     <div style={{ color: '#60a5fa', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>TICKET #{activeTicket.number}</div>
-                    <div style={{ color: 'white', fontSize: '18px', fontWeight: 600 }}>{activeTicket.subject}</div>
+                    <div style={{ color: 'var(--ops-text)', fontSize: '18px', fontWeight: 600 }}>{activeTicket.subject}</div>
                   </div>
-                  <button onClick={() => { setActiveTicket(null); setActiveThreads([]); }} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '8px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <button onClick={() => { setActiveTicket(null); setActiveThreads([]); }} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'var(--ops-text)', padding: '8px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <X size={20} />
                   </button>
                 </div>
@@ -1868,21 +1869,21 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                       <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
                     </div>
                   ) : activeThreads.length === 0 ? (
-                    <div style={{ color: '#6b7280', textAlign: 'center', padding: '40px' }}>No conversation history found.</div>
+                    <div style={{ color: 'var(--ops-text-muted)', textAlign: 'center', padding: '40px' }}>No conversation history found.</div>
                   ) : (
                     activeThreads.map((thread: any, idx: number) => {
                       const isCustomer = thread.createdBy?.type === 'customer' || thread.type === 'customer';
                       return (
                         <div key={idx} style={{ alignSelf: isCustomer ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', justifyContent: isCustomer ? 'flex-end' : 'flex-start' }}>
-                            <div style={{ fontSize: '12px', color: '#9ca3af', fontWeight: 500 }}>{thread.createdBy?.firstName} {thread.createdBy?.lastName}</div>
-                            <div style={{ fontSize: '11px', color: '#6b7280' }}>{new Date(thread.createdAt).toLocaleString()}</div>
+                            <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', fontWeight: 500 }}>{thread.createdBy?.firstName} {thread.createdBy?.lastName}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--ops-text-muted)' }}>{new Date(thread.createdAt).toLocaleString()}</div>
                           </div>
                           <div style={{
                             background: isCustomer ? 'rgba(96, 165, 250, 0.15)' : 'rgba(255,255,255,0.05)',
                             border: `1px solid ${isCustomer ? 'rgba(96, 165, 250, 0.3)' : 'rgba(255,255,255,0.1)'}`,
                             padding: '16px 20px', borderRadius: isCustomer ? '24px 24px 4px 24px' : '24px 24px 24px 4px',
-                            color: '#e5e7eb', fontSize: '14px', lineHeight: 1.6,
+                            color: 'var(--ops-text)', fontSize: '14px', lineHeight: 1.6,
                             whiteSpace: 'pre-wrap'
                           }}>
                             {/* Strip basic HTML from thread body since it's raw from FreeScout */}
@@ -1922,18 +1923,18 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                 }}
               >
                 {/* Modal Header */}
-                <div style={{ padding: '24px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(20,20,20,0.9)' }}>
+                <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(20,20,20,0.9)' }}>
                   <div>
                     <div style={{ color: '#a78bfa', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>SUBSCRIPTION #{activeCbSub.id}</div>
-                    <div style={{ color: 'white', fontSize: '18px', fontWeight: 600 }}>{activeCbCustomer?.firstName} {activeCbCustomer?.lastName}</div>
+                    <div style={{ color: 'var(--ops-text)', fontSize: '18px', fontWeight: 600 }}>{activeCbCustomer?.firstName} {activeCbCustomer?.lastName}</div>
                   </div>
-                  <button onClick={() => { setActiveCbSub(null); setCbFinancials(null); }} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '8px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <button onClick={() => { setActiveCbSub(null); setCbFinancials(null); }} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'var(--ops-text)', padding: '8px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <X size={20} />
                   </button>
                 </div>
 
                 {/* Tab Navigation */}
-                <div style={{ display: 'flex', padding: '0 24px', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(15,15,15,1)' }}>
+                <div style={{ display: 'flex', padding: '0 24px', borderBottom: '1px solid var(--border)', background: 'rgba(15,15,15,1)' }}>
                   {[
                     { id: 'comments', label: 'Comments' },
                     { id: 'invoices', label: 'Invoices' },
@@ -1967,20 +1968,20 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                       <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
                     </div>
                   ) : !cbFinancials ? (
-                    <div style={{ color: '#6b7280', textAlign: 'center', padding: '40px' }}>Failed to retrieve connection logic.</div>
+                    <div style={{ color: 'var(--ops-text-muted)', textAlign: 'center', padding: '40px' }}>Failed to retrieve connection logic.</div>
                   ) : (
                     <>
                       {/* Comments View */}
                       {cbTab === 'comments' && (
                         <>
-                          {cbFinancials.comments?.length === 0 && <div style={{ color: '#6b7280', textAlign: 'center', padding: '40px' }}>No comments recorded on this subscription.</div>}
+                          {cbFinancials.comments?.length === 0 && <div style={{ color: 'var(--ops-text-muted)', textAlign: 'center', padding: '40px' }}>No comments recorded on this subscription.</div>}
                           {cbFinancials.comments.map((comment: any, idx: number) => (
                             <div key={idx} style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                                 <span style={{ color: '#a78bfa', fontSize: '13px', fontWeight: 600 }}>{comment.added_by}</span>
-                                <span style={{ color: '#6b7280', fontSize: '12px' }}>{new Date(comment.created_at * 1000).toLocaleString()}</span>
+                                <span style={{ color: 'var(--ops-text-muted)', fontSize: '12px' }}>{new Date(comment.created_at * 1000).toLocaleString()}</span>
                               </div>
-                              <div style={{ color: '#e5e7eb', fontSize: '14px', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{comment.notes}</div>
+                              <div style={{ color: 'var(--ops-text)', fontSize: '14px', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{comment.notes}</div>
                             </div>
                           ))}
                         </>
@@ -1989,12 +1990,12 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                       {/* Invoices View */}
                       {cbTab === 'invoices' && (
                         <>
-                          {cbFinancials.invoices?.length === 0 && <div style={{ color: '#6b7280', textAlign: 'center', padding: '40px' }}>No invoices linked to this subscription.</div>}
+                          {cbFinancials.invoices?.length === 0 && <div style={{ color: 'var(--ops-text-muted)', textAlign: 'center', padding: '40px' }}>No invoices linked to this subscription.</div>}
                           {cbFinancials.invoices.map((inv: any, idx: number) => (
                             <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', alignItems: 'center' }}>
                               <div>
-                                <div style={{ color: 'white', fontWeight: 600, fontSize: '15px' }}>${(inv.total / 100).toFixed(2)}</div>
-                                <div style={{ color: '#9ca3af', fontSize: '12px', marginTop: '4px' }}>{inv.id} • {new Date(inv.date * 1000).toLocaleDateString()}</div>
+                                <div style={{ color: 'var(--ops-text)', fontWeight: 600, fontSize: '15px' }}>${(inv.total / 100).toFixed(2)}</div>
+                                <div style={{ color: 'var(--ops-text-muted)', fontSize: '12px', marginTop: '4px' }}>{inv.id} • {new Date(inv.date * 1000).toLocaleDateString()}</div>
                               </div>
                               <span style={{ padding: '4px 10px', borderRadius: '100px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', background: inv.status === 'paid' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: inv.status === 'paid' ? '#10b981' : '#ef4444' }}>
                                 {inv.status}
@@ -2007,13 +2008,13 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                       {/* Transactions View */}
                       {cbTab === 'transactions' && (
                         <>
-                          {cbFinancials.transactions?.length === 0 && <div style={{ color: '#6b7280', textAlign: 'center', padding: '40px' }}>No transactions recorded for this customer core.</div>}
+                          {cbFinancials.transactions?.length === 0 && <div style={{ color: 'var(--ops-text-muted)', textAlign: 'center', padding: '40px' }}>No transactions recorded for this customer core.</div>}
                           {cbFinancials.transactions.map((tx: any, idx: number) => (
                             <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', alignItems: 'center' }}>
                               <div>
-                                <div style={{ color: 'white', fontWeight: 600, fontSize: '15px' }}>${(tx.amount / 100).toFixed(2)}</div>
-                                <div style={{ color: '#9ca3af', fontSize: '12px', marginTop: '4px' }}>{tx.id} • {new Date(tx.date * 1000).toLocaleDateString()}</div>
-                                {tx.payment_method && <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>Method: {tx.payment_method.toUpperCase()}</div>}
+                                <div style={{ color: 'var(--ops-text)', fontWeight: 600, fontSize: '15px' }}>${(tx.amount / 100).toFixed(2)}</div>
+                                <div style={{ color: 'var(--ops-text-muted)', fontSize: '12px', marginTop: '4px' }}>{tx.id} • {new Date(tx.date * 1000).toLocaleDateString()}</div>
+                                {tx.payment_method && <div style={{ color: 'var(--ops-text-muted)', fontSize: '11px', marginTop: '2px' }}>Method: {tx.payment_method.toUpperCase()}</div>}
                               </div>
                               <span style={{ padding: '4px 10px', borderRadius: '100px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', background: tx.status === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: tx.status === 'success' ? '#10b981' : '#ef4444' }}>
                                 {tx.status}
@@ -2026,12 +2027,12 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                       {/* Credit Notes View */}
                       {cbTab === 'creditNotes' && (
                         <>
-                          {cbFinancials.creditNotes?.length === 0 && <div style={{ color: '#6b7280', textAlign: 'center', padding: '40px' }}>No credit notes logged against this customer core.</div>}
+                          {cbFinancials.creditNotes?.length === 0 && <div style={{ color: 'var(--ops-text-muted)', textAlign: 'center', padding: '40px' }}>No credit notes logged against this customer core.</div>}
                           {cbFinancials.creditNotes.map((cn: any, idx: number) => (
                             <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', alignItems: 'flex-start' }}>
                               <div>
-                                <div style={{ color: 'white', fontWeight: 600, fontSize: '15px' }}>${(cn.total / 100).toFixed(2)} Refund/Note</div>
-                                <div style={{ color: '#9ca3af', fontSize: '12px', marginTop: '4px' }}>{cn.id} • {new Date(cn.date * 1000).toLocaleDateString()}</div>
+                                <div style={{ color: 'var(--ops-text)', fontWeight: 600, fontSize: '15px' }}>${(cn.total / 100).toFixed(2)} Refund/Note</div>
+                                <div style={{ color: 'var(--ops-text-muted)', fontSize: '12px', marginTop: '4px' }}>{cn.id} • {new Date(cn.date * 1000).toLocaleDateString()}</div>
                                 {cn.reason_code && <div style={{ color: '#f59e0b', fontSize: '11px', marginTop: '6px' }}>Reason: {cn.reason_code.toUpperCase()}</div>}
                               </div>
                               <span style={{ padding: '4px 10px', borderRadius: '100px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', background: cn.status === 'refunded' ? 'rgba(16,185,129,0.1)' : 'rgba(107,114,128,0.1)', color: cn.status === 'refunded' ? '#10b981' : '#d1d5db' }}>
@@ -2079,10 +2080,10 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                   <BarChart2 size={24} color="#f87171" />
                   <div>
                     <div style={{ color: '#f87171', fontSize: '12px', fontWeight: 600, marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '1px' }}>Network Telemetry</div>
-                    <div style={{ color: 'white', fontSize: '18px', fontWeight: 600, fontFamily: 'monospace' }}>{activeUsageIccid}</div>
+                    <div style={{ color: 'var(--ops-text)', fontSize: '18px', fontWeight: 600, fontFamily: 'monospace' }}>{activeUsageIccid}</div>
                   </div>
                 </div>
-                <button onClick={() => setActiveUsageIccid(null)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '8px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <button onClick={() => setActiveUsageIccid(null)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'var(--ops-text)', padding: '8px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <X size={20} />
                 </button>
               </div>
@@ -2090,14 +2091,14 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
               <div style={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', gap: '24px', background: '#0a0a0a' }}>
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end' }}>
                   <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', fontSize: '11px', color: '#9ca3af', marginBottom: '6px', fontWeight: 500, letterSpacing: '0.5px' }}>EARLIEST SCAN RANGE</label>
-                    <input type="date" value={usageEarliest} onChange={e => setUsageEarliest(e.target.value)} style={{ width: '100%', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '12px', borderRadius: '8px', outline: 'none', colorScheme: 'dark', fontSize: '14px' }} />
+                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--ops-text-muted)', marginBottom: '6px', fontWeight: 500, letterSpacing: '0.5px' }}>EARLIEST SCAN RANGE</label>
+                    <input type="date" value={usageEarliest} onChange={e => setUsageEarliest(e.target.value)} style={{ width: '100%', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--ops-text)', padding: '12px', borderRadius: '8px', outline: 'none', colorScheme: 'dark', fontSize: '14px' }} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', fontSize: '11px', color: '#9ca3af', marginBottom: '6px', fontWeight: 500, letterSpacing: '0.5px' }}>LATEST SCAN RANGE</label>
-                    <input type="date" value={usageLatest} onChange={e => setUsageLatest(e.target.value)} style={{ width: '100%', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '12px', borderRadius: '8px', outline: 'none', colorScheme: 'dark', fontSize: '14px' }} />
+                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--ops-text-muted)', marginBottom: '6px', fontWeight: 500, letterSpacing: '0.5px' }}>LATEST SCAN RANGE</label>
+                    <input type="date" value={usageLatest} onChange={e => setUsageLatest(e.target.value)} style={{ width: '100%', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--ops-text)', padding: '12px', borderRadius: '8px', outline: 'none', colorScheme: 'dark', fontSize: '14px' }} />
                   </div>
-                  <button onClick={() => fetchUsage(activeUsageIccid!)} disabled={usageLoading} style={{ height: '43px', background: '#f87171', color: 'white', border: 'none', padding: '0 24px', borderRadius: '8px', cursor: usageLoading ? 'not-allowed' : 'pointer', opacity: usageLoading ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                  <button onClick={() => fetchUsage(activeUsageIccid!)} disabled={usageLoading} style={{ height: '43px', background: '#f87171', color: 'var(--ops-text)', border: 'none', padding: '0 24px', borderRadius: '8px', cursor: usageLoading ? 'not-allowed' : 'pointer', opacity: usageLoading ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
                     {usageLoading ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />} PULL
                   </button>
                 </div>
@@ -2105,18 +2106,18 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                 {usageLoading ? (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: '16px' }}>
                     <Loader2 className="animate-spin" color="#f87171" size={32} />
-                    <span style={{ color: '#9ca3af', fontSize: '14px', animation: 'pulse 2s infinite' }}>Querying ThingSpace Matrix...</span>
+                    <span style={{ color: 'var(--ops-text-muted)', fontSize: '14px', animation: 'pulse 2s infinite' }}>Querying ThingSpace Matrix...</span>
                   </div>
                 ) : usageError ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#ef4444', fontSize: '14px', padding: '24px', background: 'rgba(239,68,68,0.1)', borderRadius: '12px', border: '1px solid rgba(239,68,68,0.2)' }}>
                     <AlertTriangle size={24} /> {usageError}
                   </div>
                 ) : usageData.length === 0 ? (
-                  <div style={{ color: '#9ca3af', fontSize: '15px', textAlign: 'center', padding: '40px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                  <div style={{ color: 'var(--ops-text-muted)', fontSize: '15px', textAlign: 'center', padding: '40px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px dashed rgba(255,255,255,0.1)' }}>
                     No raw telemetry emitted natively by this network tower during this phase frame.
                   </div>
                 ) : (
-                  <div style={{ height: '300px', width: '100%', background: 'rgba(0,0,0,0.3)', padding: '24px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ height: '300px', width: '100%', background: 'var(--surface-200)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border)' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={usageData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
                         <defs>
@@ -2134,8 +2135,8 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                   </div>
                 )}
 
-                <div style={{ fontSize: '12px', color: '#6b7280', lineHeight: 1.6, background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#9ca3af', marginBottom: '8px', fontWeight: 600 }}>
+                <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', lineHeight: 1.6, background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--ops-text-muted)', marginBottom: '8px', fontWeight: 600 }}>
                     <Info size={14} /> Data Policy Disclaimer
                   </div>
                   No usage displayed here does not mean the customer didn't use the service; this is a billing-based service, not usage-based. Although rare, all cellular networks occasionally have localized tower outages which result in service disruptions. In the event this happens, downtime credit will be issued for all downtime experienced, if applicable. Credit will be issued from the first point of contact about a technical issue affecting the account. During this time, Customer dues are still owed, and credits will be applied once the issue is resolved. You must contact Nomad for any and all downtime credit requests.<br/>

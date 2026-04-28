@@ -306,13 +306,144 @@ button {
 }
 
 /* ── OPS Dashboard Light Theme Overrides ───────────────────────────────────── */
-[data-theme="light"] .ops-card {
-  background: rgba(255,255,255,0.95) !important;
-  border-color: rgba(0,0,0,0.08) !important;
+/*
+ * Because the OPS dashboard uses many hardcoded rgba dark colors as inline styles,
+ * we override them here via CSS custom properties and aggressive selectors.
+ * The #ops-dashboard-root wrapper is added to the dashboard page's outer div.
+ */
+
+/* All text inside the OPS dashboard should be readable in light mode */
+[data-theme="light"] #ops-dashboard-root {
+  color: #111827;
+}
+
+/* Main card containers (customer profile cards) */
+[data-theme="light"] #ops-dashboard-root [style*="rgba(20,20,20"],
+[data-theme="light"] #ops-dashboard-root [style*="rgba(20, 20, 20"] {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
   color: #111827 !important;
 }
 
-[data-theme="light"] .ops-header {
-  background: rgba(255,255,255,0.9) !important;
-  border-color: rgba(0,0,0,0.08) !important;
+/* Inner subscription cards (double-dark bg) */
+[data-theme="light"] #ops-dashboard-root [style*="rgba(0,0,0,0.4"],
+[data-theme="light"] #ops-dashboard-root [style*="rgba(0, 0, 0, 0.4"] {
+  background: rgba(243, 244, 246, 0.9) !important;
+  color: #111827 !important;
 }
+
+/* Semi-opaque black panels used as sub-sections */
+[data-theme="light"] #ops-dashboard-root [style*="rgba(0,0,0,0.5"],
+[data-theme="light"] #ops-dashboard-root [style*="rgba(0, 0, 0, 0.5"] {
+  background: rgba(249, 250, 251, 0.95) !important;
+  color: #111827 !important;
+}
+
+/* Near-black dark surface overlays */
+[data-theme="light"] #ops-dashboard-root [style*="background: '#111"],
+[data-theme="light"] #ops-dashboard-root [style*="background-color: '#111"] {
+  background: #ffffff !important;
+}
+
+/* White-on-dark borders → light borders */
+[data-theme="light"] #ops-dashboard-root [style*="rgba(255,255,255,0.05)"],
+[data-theme="light"] #ops-dashboard-root [style*="rgba(255, 255, 255, 0.05)"] {
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+[data-theme="light"] #ops-dashboard-root [style*="rgba(255,255,255,0.1)"],
+[data-theme="light"] #ops-dashboard-root [style*="rgba(255, 255, 255, 0.1)"] {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+/* White text → dark in light mode for all OPS divs/spans/h* */
+[data-theme="light"] #ops-dashboard-root [style*="color: 'white'"],
+[data-theme="light"] #ops-dashboard-root [style*='color: "white"'] {
+  color: #111827 !important;
+}
+[data-theme="light"] #ops-dashboard-root [style*="color: '#e5e7eb'"],
+[data-theme="light"] #ops-dashboard-root [style*='color: "#e5e7eb"'] {
+  color: #1f2937 !important;
+}
+[data-theme="light"] #ops-dashboard-root [style*="color: '#f3f4f6'"],
+[data-theme="light"] #ops-dashboard-root [style*='color: "#f3f4f6"'] {
+  color: #374151 !important;
+}
+[data-theme="light"] #ops-dashboard-root [style*="color: '#9ca3af'"],
+[data-theme="light"] #ops-dashboard-root [style*='color: "#9ca3af"'] {
+  color: #6b7280 !important;
+}
+[data-theme="light"] #ops-dashboard-root [style*="color: '#6b7280'"],
+[data-theme="light"] #ops-dashboard-root [style*='color: "#6b7280"'] {
+  color: #4b5563 !important;
+}
+
+/* Header bar */
+[data-theme="light"] #ops-dashboard-root header {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Search omni-box area */
+[data-theme="light"] #ops-dashboard-root input,
+[data-theme="light"] #ops-dashboard-root textarea,
+[data-theme="light"] #ops-dashboard-root select {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+}
+[data-theme="light"] #ops-dashboard-root input::placeholder,
+[data-theme="light"] #ops-dashboard-root textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Stats badges at top */
+[data-theme="light"] #ops-dashboard-root [style*="rgba(20,20,20"] {
+  background: rgba(255,255,255,0.95) !important;
+}
+
+/* Tab navigation buttons */
+[data-theme="light"] #ops-dashboard-root button[style*="rgba(255,255,255,0.03)"] {
+  background: rgba(0,0,0,0.04) !important;
+  border-color: rgba(0,0,0,0.08) !important;
+  color: #374151 !important;
+}
+
+/* Dividers */
+[data-theme="light"] #ops-dashboard-root [style*="background: 'rgba(255,255,255,0.1)'"],
+[data-theme="light"] #ops-dashboard-root [style*="background: rgba(255,255,255,0.1)"] {
+  background: rgba(0,0,0,0.08) !important;
+}
+
+/* Metric/stat value text that uses 'white' */
+[data-theme="light"] #ops-dashboard-root span[style*="color: 'white'"],
+[data-theme="light"] #ops-dashboard-root div[style*="color: 'white'"] {
+  color: #111827 !important;
+}
+
+/* Section headings */
+[data-theme="light"] #ops-dashboard-root h1,
+[data-theme="light"] #ops-dashboard-root h2,
+[data-theme="light"] #ops-dashboard-root h3 {
+  color: #111827 !important;
+  -webkit-text-fill-color: unset !important;
+}
+
+/* Chargebee module specific: customer name, plan name rows */
+[data-theme="light"] #ops-dashboard-root .cb-customer-header span,
+[data-theme="light"] #ops-dashboard-root .cb-customer-header div {
+  color: #111827;
+}
+
+/* Chargebee inner borders */
+[data-theme="light"] #ops-dashboard-root .cb-sub-header {
+  border-bottom-color: rgba(0,0,0,0.08) !important;
+}
+
+/* Recharts / area chart background compatibility */
+[data-theme="light"] #ops-dashboard-root .recharts-cartesian-axis-tick-value {
+  fill: #4b5563 !important;
+}
+[data-theme="light"] #ops-dashboard-root .recharts-cartesian-grid line {
+  stroke: rgba(0,0,0,0.08) !important;
+}
+
