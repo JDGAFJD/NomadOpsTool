@@ -1,8 +1,8 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 
-// Encrypted secret key derived from a static string for MVP. In production, place inside .env
-const secretKey = 'nomad_super_secret_auth_key_v2_operational_system';
+// Secret key from environment variable — set JWT_SECRET in Vercel dashboard
+const secretKey = process.env.JWT_SECRET || 'nomad_super_secret_auth_key_v2_operational_system';
 const key = new TextEncoder().encode(secretKey);
 
 export async function encrypt(payload: any, expirationString: string) {
@@ -21,13 +21,11 @@ export async function decrypt(input: string): Promise<any> {
 }
 
 export async function createSession(userId: number, email: string, role: string, rememberMe: boolean) {
-  // If rememberMe is checked, token lives for 30 Days. Else, 24 Hours.
   const expirationString = rememberMe ? '30 d' : '24 h';
   const expires = new Date(Date.now() + (rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000));
   
   const token = await encrypt({ userId, email, role, expires }, expirationString);
 
-  // Set the HTTPOnly Secure cookie natively.
   (await cookies()).set('ops_v2_session', token, {
     expires,
     httpOnly: true,

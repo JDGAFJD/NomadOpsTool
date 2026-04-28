@@ -1,9 +1,11 @@
-import path from 'path';
-import fs from 'fs';
+// ─── Settings / db.ts ────────────────────────────────────────────────────────
+// On Vercel (serverless), there is no persistent filesystem, so better-sqlite3
+// cannot be used at runtime. ALL settings are sourced from environment variables.
+// Locally, SQLite is used as a fallback so the Admin UI still works.
+
+import type { Database as BetterSqlite3Database } from 'better-sqlite3';
 
 // ─── ENV → Settings key map ───────────────────────────────────────────────────
-// When running on Vercel (no persistent filesystem), we fall back to process.env.
-// The key names here match exactly what the admin UI stores in the SQLite DB.
 const ENV_FALLBACKS: Record<string, string> = {
   chargebee_site:           'CHARGEBEE_SITE',
   chargebee_api_key:        'CHARGEBEE_API_KEY',
@@ -29,62 +31,70 @@ export interface Setting {
 }
 
 // ─── SQLite (local dev only) ──────────────────────────────────────────────────
-// On Vercel the filesystem is read-only, so we skip SQLite and rely solely on
-// process.env via the ENV_FALLBACKS map above.
-let db: import('better-sqlite3').Database | null = null;
+let _db: BetterSqlite3Database | null = null;
+let _dbInitialized = false;
 
-function getDb() {
-  if (db) return db;
+function getLocalDb(): BetterSqlite3Database | null {
+  if (_dbInitialized) return _db;
+  _dbInitialized = true;
+
+  // Skip SQLite entirely on Vercel / read-only environments
+  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    return null;
+  }
+
   try {
     const Database = require('better-sqlite3');
+    const path = require('path');
+    const fs = require('fs');
+
     const dataDir = path.join(process.cwd(), '.data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
     const dbPath = path.join(dataDir, 'settings.db');
-    db = new Database(dbPath);
-    db!.pragma('journal_mode = WAL');
-    db!.exec(`
+    _db = new Database(dbPath) as BetterSqlite3Database;
+    _db.pragma('journal_mode = WAL');
+    _db.exec(`
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       )
     `);
-    return db;
+    return _db;
   } catch {
-    // Vercel / read-only filesystem — SQLite not available, use env vars only
+    // Native module unavailable (Vercel build) — env vars only
     return null;
   }
 }
 
-export function getSetting(key: string): string | null {
-  // 1. Try SQLite (works locally)
-  const database = getDb();
-  if (database) {
-    try {
-      const row = database.prepare('SELECT value FROM settings WHERE key = ?').get(key) as Setting | undefined;
-      if (row) return row.value;
-    } catch {
-      // fall through
-    }
-  }
+// ─── Public API ───────────────────────────────────────────────────────────────
 
-  // 2. Fall back to environment variable (works on Vercel)
+export function getSetting(key: string): string | null {
+  // 1. Environment variable (highest priority — always works on Vercel)
   const envKey = ENV_FALLBACKS[key];
   if (envKey && process.env[envKey]) {
     return process.env[envKey]!;
+  }
+
+  // 2. Local SQLite DB (only available in local dev)
+  const db = getLocalDb();
+  if (db) {
+    try {
+      const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as Setting | undefined;
+      if (row) return row.value;
+    } catch { /* ignore */ }
   }
 
   return null;
 }
 
 export function setSetting(key: string, value: string): void {
-  const database = getDb();
-  if (!database) {
-    console.warn(`[db] Cannot persist setting "${key}" — SQLite unavailable (Vercel?). Use environment variables.`);
+  const db = getLocalDb();
+  if (!db) {
+    console.warn(`[db] Cannot persist setting "${key}" on Vercel — use environment variables.`);
     return;
   }
-  database.prepare(`
+  db.prepare(`
     INSERT INTO settings (key, value)
     VALUES (?, ?)
     ON CONFLICT(key) DO UPDATE SET value=excluded.value
@@ -94,21 +104,19 @@ export function setSetting(key: string, value: string): void {
 export function getAllSettings(): Record<string, string> {
   const result: Record<string, string> = {};
 
-  // Merge env var fallbacks first (lower priority)
+  // Start with local DB values (if available)
+  const db = getLocalDb();
+  if (db) {
+    try {
+      const rows = db.prepare('SELECT key, value FROM settings').all() as Setting[];
+      rows.forEach(row => { result[row.key] = row.value; });
+    } catch { /* ignore */ }
+  }
+
+  // Overlay env vars (higher priority — Vercel always wins)
   for (const [settingKey, envKey] of Object.entries(ENV_FALLBACKS)) {
     if (process.env[envKey]) {
       result[settingKey] = process.env[envKey]!;
-    }
-  }
-
-  // Overlay with any DB-saved values (higher priority — user overrides via admin UI)
-  const database = getDb();
-  if (database) {
-    try {
-      const rows = database.prepare('SELECT key, value FROM settings').all() as Setting[];
-      rows.forEach(row => { result[row.key] = row.value; });
-    } catch {
-      // ignore
     }
   }
 
