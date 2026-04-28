@@ -21,7 +21,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Email parameter required' }, { status: 400 });
     }
 
-    await queryOpsDb('INSERT INTO ops_activity_logs (agent_email, action_type, target) VALUES ($1, $2, $3)', [session.email, 'search_unique_customer', email]);
+    await logActivity(session.email, 'search_unique_customer', email, request);
 
     // Initialize Services
     const chargebee = new ChargebeeService();

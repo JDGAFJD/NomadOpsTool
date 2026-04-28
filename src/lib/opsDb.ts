@@ -24,3 +24,24 @@ export async function queryOpsDb(text: string, params?: any[]) {
     client.release();
   }
 }
+
+export async function logActivity(agentEmail: string, actionType: string, target?: string | null, req?: Request) {
+  let location = 'Unknown';
+  if (req) {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'Local';
+    if (ip && ip !== '::1' && !ip.startsWith('127.') && !ip.startsWith('192.168.')) {
+      try {
+        const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,country`, { signal: AbortSignal.timeout(2000) });
+        const d = await res.json();
+        if (d.status === 'success') {
+          location = `${d.city}, ${d.country}`;
+        }
+      } catch {}
+    }
+  }
+
+  return queryOpsDb(
+    'INSERT INTO ops_activity_logs (agent_email, action_type, target, location) VALUES ($1, $2, $3, $4)',
+    [agentEmail, actionType, target || null, location]
+  );
+}

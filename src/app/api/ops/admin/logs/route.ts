@@ -11,9 +11,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized. Admin role required.' }, { status: 403 });
     }
 
+    // Ensure column exists
+    await queryOpsDb(`ALTER TABLE ops_activity_logs ADD COLUMN IF NOT EXISTS location TEXT`);
+
     // Fetch the raw log history for the last 30 days
     const res = await queryOpsDb(`
-      SELECT id, agent_email, action_type, target, timestamp 
+      SELECT id, agent_email, action_type, target, location, timestamp 
       FROM ops_activity_logs 
       WHERE timestamp >= NOW() - INTERVAL '30 days'
       ORDER BY timestamp DESC

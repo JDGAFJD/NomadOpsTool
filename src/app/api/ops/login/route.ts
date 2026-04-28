@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     await createSession(user.id, user.email, user.role, Boolean(rememberMe));
 
     // Inject Telemetry trace
-    await queryOpsDb('INSERT INTO ops_activity_logs (agent_email, action_type) VALUES ($1, $2)', [user.email, 'signin']);
+    await logActivity(user.email, 'signin', null, request);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

@@ -10,7 +10,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 type OpsUser = { id: number; email: string; role: string; created_at: string };
-type ActivityLog = { id: number; agent_email: string; action_type: string; target: string | null; timestamp: string };
+type ActivityLog = { id: number; agent_email: string; action_type: string; target: string | null; location: string | null; timestamp: string };
 type Analytics = Record<string, Record<string, { searches: number; restores: string[]; suspends: string[]; signins: number }>>;
 type EscalationRecord = {
   id: number; agent_email: string; escalation_type: string;
@@ -441,12 +441,19 @@ export default function AdminControlPanel() {
                                               {/* Label */}
                                               <div style={{ color, fontWeight: 600, fontSize: 13, width: 150, flexShrink: 0 }}>{label}</div>
                                               {/* Target */}
-                                              {log.target && (
-                                                <div style={{ color: '#9ca3af', fontSize: 12, flex: 1 }}>
-                                                  <span style={{ color: '#6b7280' }}>Target: </span>
-                                                  <span style={{ fontFamily: 'monospace', color: 'white' }}>{log.target}</span>
-                                                </div>
-                                              )}
+                                              <div style={{ color: '#9ca3af', fontSize: 12, flex: 1, display: 'flex', gap: 12, overflow: 'hidden' }}>
+                                                {log.target && (
+                                                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    <span style={{ color: '#6b7280' }}>Target: </span>
+                                                    <span style={{ fontFamily: 'monospace', color: 'white' }}>{log.target}</span>
+                                                  </span>
+                                                )}
+                                                {log.location && (
+                                                  <span style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>
+                                                    <span style={{ fontSize: '10px', verticalAlign: 'middle' }}>📍</span> {log.location}
+                                                  </span>
+                                                )}
+                                              </div>
                                             </div>
                                           );
                                         })}
@@ -600,6 +607,9 @@ export default function AdminControlPanel() {
                               <td style={{ padding: '16px 24px' }}>
                                 <div style={{ fontWeight: 700, color: log.geo_proxy ? '#ef4444' : 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
                                   {log.ip} {log.geo_proxy && <AlertCircle size={14} />}
+                                  {log.client_lat && (
+                                    <span style={{ background: '#10b981', color: 'white', fontSize: '9px', padding: '1px 4px', borderRadius: '4px', fontWeight: 900 }}>GPS</span>
+                                  )}
                                 </div>
                                 <div style={{ fontSize: 12, color: '#6b7280' }}>
                                   {log.geo_city}, {log.geo_region}, {log.geo_country}
