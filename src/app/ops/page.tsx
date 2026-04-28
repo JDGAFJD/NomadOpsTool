@@ -74,7 +74,7 @@ export default function OpsLandingPage() {
         </h1>
 
         <p style={{ color: '#9ca3af', fontSize: '20px', maxWidth: '600px', marginBottom: '48px', lineHeight: 1.6 }}>
-          The fully autonomous, high-performance operational portal. Powered by Agentic UI and robust Postgres databanks.
+          Internal support tool for the Nomad Internet team to help customers faster.
         </p>
 
         {/* Floating Animated Get Started Button */}
