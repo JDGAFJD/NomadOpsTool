@@ -40,6 +40,7 @@ type VisitorLog = {
   canvas_hash: string | null; webrtc_ips: string | null;
   connection_effective: string | null; battery_level: number | null;
   referrer: string | null; page_url: string | null; source_label: string | null;
+  client_lat: number | null; client_lon: number | null;
   captured_at: string;
 };
 type VisitorStats = { total: string; unique_ips: string; countries: string; vpn_count: string };
@@ -650,6 +651,23 @@ export default function AdminControlPanel() {
                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Language</span> <span style={{ color: '#9ca3af' }}>{log.browser_language}</span></div>
                                       </div>
                                     </div>
+                                    {log.client_lat && (
+                                      <div>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', marginBottom: 12, textTransform: 'uppercase' }}>GPS LOCATION (PRECISE)</div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Latitude</span> <span style={{ color: 'white' }}>{log.client_lat}</span></div>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Longitude</span> <span style={{ color: 'white' }}>{log.client_lon}</span></div>
+                                          <a 
+                                            href={`https://www.google.com/maps?q=${log.client_lat},${log.client_lon}`} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            style={{ color: '#3b82f6', textDecoration: 'none', fontSize: 12, fontWeight: 600, marginTop: 8, display: 'block' }}
+                                          >
+                                            View on Google Maps →
+                                          </a>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 </td>
                               </tr>

