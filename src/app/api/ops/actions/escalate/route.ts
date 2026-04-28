@@ -1,6 +1,28 @@
 import { NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { getSetting } from '@/lib/db';
+import { queryOpsDb } from '@/lib/opsDb';
+
+// Ensure the escalations table exists on first use
+async function ensureEscalationsTable() {
+  await queryOpsDb(`
+    CREATE TABLE IF NOT EXISTS ops_escalations (
+      id            SERIAL PRIMARY KEY,
+      agent_email   TEXT NOT NULL,
+      escalation_type TEXT NOT NULL,
+      customer_email TEXT,
+      customer_id   TEXT,
+      subscription_id TEXT,
+      plan_id       TEXT,
+      iccid         TEXT,
+      network_state TEXT,
+      agent_note    TEXT,
+      known_issue   TEXT,
+      slack_ts      TEXT,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+}
 
 const SLACK_NAME_MAP: Record<string, string> = {
   'jessica.garza':    'U03V2LF24H0',
@@ -238,6 +260,33 @@ export async function POST(request: Request) {
     if (!result.ok) {
       console.error('Slack error:', result);
       return NextResponse.json({ error: result.error || 'Slack post failed' }, { status: 500 });
+    }
+
+    // ── Persist to DB ─────────────────────────────────────────────────────────
+    try {
+      await ensureEscalationsTable();
+      await queryOpsDb(
+        `INSERT INTO ops_escalations
+           (agent_email, escalation_type, customer_email, customer_id, subscription_id,
+            plan_id, iccid, network_state, agent_note, known_issue, slack_ts)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [
+          agentEmail,
+          type,
+          customerEmail,
+          String(customerId),
+          String(subId),
+          planId,
+          cbIccid,
+          tsState,
+          agentNote || null,
+          knownIssue || null,
+          result.ts || null,
+        ]
+      );
+    } catch (dbErr) {
+      // Log but don't fail — Slack succeeded, DB is best-effort
+      console.error('Failed to log escalation to DB:', dbErr);
     }
 
     return NextResponse.json({ success: true, ts: result.ts });

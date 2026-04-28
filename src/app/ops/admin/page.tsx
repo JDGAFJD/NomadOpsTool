@@ -5,13 +5,43 @@ import { useRouter } from 'next/navigation';
 import {
   ShieldAlert, Server, UserPlus, Activity, Database,
   Loader2, ArrowLeft, Shield, User, Trash2, ChevronDown,
-  ChevronUp, RefreshCw, Check, X as XIcon
+  ChevronUp, RefreshCw, Check, X as XIcon, TrendingUp, AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 type OpsUser = { id: number; email: string; role: string; created_at: string };
 type ActivityLog = { id: number; agent_email: string; action_type: string; target: string | null; timestamp: string };
 type Analytics = Record<string, Record<string, { searches: number; restores: string[]; suspends: string[]; signins: number }>>;
+type EscalationRecord = {
+  id: number; agent_email: string; escalation_type: string;
+  customer_email: string | null; subscription_id: string | null;
+  plan_id: string | null; iccid: string | null; network_state: string | null;
+  agent_note: string | null; known_issue: string | null;
+  created_at: string;
+};
+type EscalationStats = {
+  byType: { escalation_type: string; count: string }[];
+  byAgent: { agent_email: string; count: string }[];
+  byDay: { day: string; escalation_type: string; count: string }[];
+  total: string;
+};
+type VisitorLog = {
+  id: number;
+  ip: string | null; ip_forwarded: string | null; cf_ip: string | null; real_ip: string | null;
+  geo_country: string | null; geo_region: string | null; geo_city: string | null;
+  geo_isp: string | null; geo_org: string | null; geo_timezone: string | null;
+  geo_mobile: boolean | null; geo_proxy: boolean | null; geo_hosting: boolean | null;
+  geo_lat: number | null; geo_lon: number | null;
+  user_agent: string | null; platform: string | null; browser_language: string | null;
+  screen_width: number | null; screen_height: number | null;
+  cpu_cores: number | null; device_memory: number | null; max_touch_points: number | null;
+  timezone: string | null; webgl_vendor: string | null; webgl_renderer: string | null;
+  canvas_hash: string | null; webrtc_ips: string | null;
+  connection_effective: string | null; battery_level: number | null;
+  referrer: string | null; page_url: string | null; source_label: string | null;
+  captured_at: string;
+};
+type VisitorStats = { total: string; unique_ips: string; countries: string; vpn_count: string };
 
 const ACTION_COLOR: Record<string, string> = {
   signin: '#3b82f6',
@@ -63,12 +93,21 @@ export default function AdminControlPanel() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   // Active section tab
-  const [activeSection, setActiveSection] = useState<'analytics' | 'users'>('analytics');
+  const [activeSection, setActiveSection] = useState<'analytics' | 'users' | 'escalations' | 'visitors'>('analytics');
 
   // Analytics
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [rawLogs, setRawLogs] = useState<ActivityLog[]>([]);
   const [expandedLog, setExpandedLog] = useState<{ date: string; agent: string } | null>(null);
+
+  // Escalations
+  const [escalations, setEscalations] = useState<EscalationRecord[]>([]);
+  const [escalationStats, setEscalationStats] = useState<EscalationStats | null>(null);
+
+  // Visitor logs
+  const [visitorLogs, setVisitorLogs] = useState<VisitorLog[]>([]);
+  const [visitorStats, setVisitorStats] = useState<VisitorStats | null>(null);
+  const [expandedVisitor, setExpandedVisitor] = useState<number | null>(null);
 
   // Users
   const [users, setUsers] = useState<OpsUser[]>([]);
@@ -93,9 +132,11 @@ export default function AdminControlPanel() {
   const bootstrap = async () => {
     setLoading(true);
     try {
-      const [logsRes, usersRes] = await Promise.all([
+      const [logsRes, usersRes, escalationsRes, visitorsRes] = await Promise.all([
         fetch('/api/ops/admin/logs'),
         fetch('/api/ops/admin/users'),
+        fetch('/api/ops/admin/escalations'),
+        fetch('/api/ops/visitor-log'),
       ]);
 
       if (logsRes.status === 403 || logsRes.status === 401) {
@@ -106,6 +147,7 @@ export default function AdminControlPanel() {
 
       const logsData = await logsRes.json();
       const usersData = await usersRes.json();
+      const escalationsData = await escalationsRes.json();
 
       if (logsData.success) {
         setAnalytics(logsData.analytics);
@@ -113,6 +155,15 @@ export default function AdminControlPanel() {
       }
       if (usersData.success) {
         setUsers(usersData.users || []);
+      }
+      if (!escalationsData.error) {
+        setEscalations(escalationsData.escalations || []);
+        setEscalationStats(escalationsData.stats || null);
+      }
+      const visitorsData = await visitorsRes.json().catch(() => ({}));
+      if (!visitorsData.error) {
+        setVisitorLogs(visitorsData.logs || []);
+        setVisitorStats(visitorsData.stats || null);
       }
     } catch (err: any) {
       showToast(err.message || 'Bootstrap failure', 'error');
@@ -232,7 +283,7 @@ export default function AdminControlPanel() {
 
       {/* Section Nav */}
       <div style={{ display: 'flex', gap: 0, padding: '0 40px', borderBottom: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(0,0,0,0.3)' }}>
-        {(['analytics', 'users'] as const).map(s => (
+        {(['analytics', 'escalations', 'visitors', 'users'] as const).map(s => (
           <button
             key={s}
             onClick={() => setActiveSection(s)}
@@ -244,8 +295,8 @@ export default function AdminControlPanel() {
               transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 8,
             }}
           >
-            {s === 'analytics' ? <Activity size={14} /> : <User size={14} />}
-            {s === 'analytics' ? 'Activity Logs' : 'Manage Users'}
+            {s === 'analytics' ? <Activity size={14} /> : s === 'escalations' ? <ShieldAlert size={14} /> : s === 'visitors' ? <Database size={14} /> : <User size={14} />}
+            {s === 'analytics' ? 'Activity Logs' : s === 'escalations' ? 'Escalations' : s === 'visitors' ? 'Visitor Logs' : 'Manage Users'}
           </button>
         ))}
       </div>
@@ -420,7 +471,200 @@ export default function AdminControlPanel() {
             </motion.div>
           )}
 
+          {/* ── ESCALATIONS TAB ── */}
+          {activeSection === 'escalations' && (
+            <motion.div key="escalations" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 1fr) 2fr', gap: 32 }}>
+                
+                {/* Stats Summary */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, padding: 24 }}>
+                    <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 16, fontWeight: 600, letterSpacing: '0.5px' }}>TOTAL ESCALATIONS</div>
+                    <div style={{ fontSize: 48, fontWeight: 800 }}>{escalationStats?.total || 0}</div>
+                  </div>
+
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, padding: 24 }}>
+                    <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 16, fontWeight: 600, letterSpacing: '0.5px' }}>BY ISSUE TYPE</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {escalationStats?.byType.map(t => (
+                        <div key={t.escalation_type} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 14, color: '#e5e7eb', textTransform: 'capitalize' }}>{t.escalation_type.replace(/_/g, ' ')}</span>
+                          <span style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>{t.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, padding: 24 }}>
+                    <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 16, fontWeight: 600, letterSpacing: '0.5px' }}>TOP AGENTS</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {escalationStats?.byAgent.map(a => (
+                        <div key={a.agent_email} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 14, color: '#e5e7eb', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '160px' }}>{a.agent_email}</span>
+                          <span style={{ background: '#3b82f633', color: '#3b82f6', padding: '2px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>{a.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Log Table */}
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, padding: 0, overflow: 'hidden' }}>
+                  <div style={{ padding: '24px 32px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Recent Escalations</h3>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <th style={{ padding: '16px 32px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>AGENT</th>
+                          <th style={{ padding: '16px 32px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>TYPE</th>
+                          <th style={{ padding: '16px 32px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>CUSTOMER</th>
+                          <th style={{ padding: '16px 32px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>DATE</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {escalations.map(e => (
+                          <tr key={e.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                            <td style={{ padding: '16px 32px', fontSize: 14, fontWeight: 500 }}>{e.agent_email}</td>
+                            <td style={{ padding: '16px 32px' }}>
+                              <span style={{ 
+                                padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                                background: e.escalation_type === 'line_issue' ? '#ef444422' : '#3b82f622',
+                                color: e.escalation_type === 'line_issue' ? '#ef4444' : '#3b82f6'
+                              }}>
+                                {e.escalation_type.replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                            <td style={{ padding: '16px 32px', fontSize: 14, color: '#9ca3af' }}>{e.customer_email || '—'}</td>
+                            <td style={{ padding: '16px 32px', fontSize: 13, color: '#6b7280' }}>
+                              {new Date(e.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── VISITORS TAB ── */}
+          {activeSection === 'visitors' && (
+            <motion.div key="visitors" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                
+                {/* Visitor Stats */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 24 }}>
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, padding: 24 }}>
+                    <div style={{ color: '#9ca3af', fontSize: 12, fontWeight: 600, letterSpacing: '0.5px', marginBottom: 8 }}>TOTAL CAPTURES</div>
+                    <div style={{ fontSize: 32, fontWeight: 800 }}>{visitorStats?.total || 0}</div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, padding: 24 }}>
+                    <div style={{ color: '#9ca3af', fontSize: 12, fontWeight: 600, letterSpacing: '0.5px', marginBottom: 8 }}>UNIQUE IPs</div>
+                    <div style={{ fontSize: 32, fontWeight: 800 }}>{visitorStats?.unique_ips || 0}</div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, padding: 24 }}>
+                    <div style={{ color: '#9ca3af', fontSize: 12, fontWeight: 600, letterSpacing: '0.5px', marginBottom: 8 }}>COUNTRIES</div>
+                    <div style={{ fontSize: 32, fontWeight: 800 }}>{visitorStats?.countries || 0}</div>
+                  </div>
+                  <div style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.1)', borderRadius: 20, padding: 24 }}>
+                    <div style={{ color: '#ef4444', fontSize: 12, fontWeight: 600, letterSpacing: '0.5px', marginBottom: 8 }}>VPN / PROXY DETECTED</div>
+                    <div style={{ fontSize: 32, fontWeight: 800, color: '#ef4444' }}>{visitorStats?.vpn_count || 0}</div>
+                  </div>
+                </div>
+
+                {/* Visitor Log Table */}
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, overflow: 'hidden' }}>
+                  <div style={{ padding: '24px 32px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Fingerprint Forensics</h3>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.01)' }}>
+                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af' }}>IP / LOCATION</th>
+                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af' }}>ISP / ORG</th>
+                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af' }}>DEVICE / OS</th>
+                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af' }}>TIME</th>
+                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af' }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visitorLogs.map(log => (
+                          <React.Fragment key={log.id}>
+                            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer' }} onClick={() => setExpandedVisitor(expandedVisitor === log.id ? null : log.id)}>
+                              <td style={{ padding: '16px 24px' }}>
+                                <div style={{ fontWeight: 700, color: log.geo_proxy ? '#ef4444' : 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  {log.ip} {log.geo_proxy && <AlertCircle size={14} />}
+                                </div>
+                                <div style={{ fontSize: 12, color: '#6b7280' }}>
+                                  {log.geo_city}, {log.geo_region}, {log.geo_country}
+                                </div>
+                              </td>
+                              <td style={{ padding: '16px 24px' }}>
+                                <div style={{ fontSize: 13, fontWeight: 500 }}>{log.geo_isp}</div>
+                                <div style={{ fontSize: 11, color: '#6b7280' }}>{log.geo_org}</div>
+                              </td>
+                              <td style={{ padding: '16px 24px' }}>
+                                <div style={{ fontSize: 13 }}>{log.platform}</div>
+                                <div style={{ fontSize: 11, color: '#6b7280', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {log.user_agent}
+                                </div>
+                              </td>
+                              <td style={{ padding: '16px 24px', fontSize: 13, color: '#6b7280' }}>
+                                {new Date(log.captured_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </td>
+                              <td style={{ padding: '16px 24px', textAlign: 'right' }}>
+                                {expandedVisitor === log.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                              </td>
+                            </tr>
+                            {expandedVisitor === log.id && (
+                              <tr>
+                                <td colSpan={5} style={{ background: 'rgba(0,0,0,0.3)', padding: '24px 32px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 24 }}>
+                                    <div>
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: '#3b82f6', marginBottom: 12, textTransform: 'uppercase' }}>HARDWARE & SCREEN</div>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Resolution</span> <span style={{ color: '#9ca3af' }}>{log.screen_width}x{log.screen_height} (@{log.device_pixel_ratio}x)</span></div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>CPU Cores</span> <span style={{ color: '#9ca3af' }}>{log.cpu_cores}</span></div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Memory</span> <span style={{ color: '#9ca3af' }}>{log.device_memory} GB</span></div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Battery</span> <span style={{ color: '#9ca3af' }}>{log.battery_level ? Math.round(log.battery_level * 100) + '%' : 'N/A'}</span></div>
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: '#10b981', marginBottom: 12, textTransform: 'uppercase' }}>FINGERPRINTING</div>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Canvas Hash</span> <span style={{ color: '#9ca3af', fontFamily: 'monospace' }}>{log.canvas_hash}</span></div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>WebGL Vendor</span> <span style={{ color: '#9ca3af', fontSize: 11 }}>{log.webgl_vendor}</span></div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><span>WebRTC IPs</span> <span style={{ color: '#9ca3af', fontSize: 11, textAlign: 'right' }}>{log.webrtc_ips}</span></div>
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', marginBottom: 12, textTransform: 'uppercase' }}>CONTEXT</div>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Referrer</span> <span style={{ color: '#9ca3af', fontSize: 11, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.referrer || 'None'}</span></div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Timezone</span> <span style={{ color: '#9ca3af' }}>{log.timezone}</span></div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Language</span> <span style={{ color: '#9ca3af' }}>{log.browser_language}</span></div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {/* ── USERS TAB ── */}
+
           {activeSection === 'users' && (
             <motion.div key="users" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 1fr) 2fr', gap: 32 }}>
