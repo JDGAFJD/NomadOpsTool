@@ -66,6 +66,9 @@ async function ensureTable() {
       captured_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  // Ensure precise location columns exist (Migration)
+  await queryOpsDb(`ALTER TABLE ops_visitor_logs ADD COLUMN IF NOT EXISTS client_lat NUMERIC`);
+  await queryOpsDb(`ALTER TABLE ops_visitor_logs ADD COLUMN IF NOT EXISTS client_lon NUMERIC`);
 }
 
 function extractIp(req: NextRequest): { ip: string | null; forwarded: string | null; cfIp: string | null; realIp: string | null } {
