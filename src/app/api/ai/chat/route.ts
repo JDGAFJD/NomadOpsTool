@@ -161,10 +161,10 @@ Only execute a tool if the human request explicitly asks for an action. Otherwis
               result = await cbService.updateSubscriptionPlan(args.subscriptionId, args.planId);
            }
            else if (toolCall.function.name === 'suspendSim') {
-              result = await tsService.suspendDevice(args.iccid);
+              result = await tsService.performAction(args.iccid, 'suspend');
            }
            else if (toolCall.function.name === 'restoreSim') {
-              result = await tsService.restoreDevice(args.iccid);
+              result = await tsService.performAction(args.iccid, 'restore');
            }
            else if (toolCall.function.name === 'addProfileNote') {
               await fsService.addNote(args.ticketId || ticketId, args.text);

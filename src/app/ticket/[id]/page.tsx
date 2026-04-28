@@ -881,7 +881,7 @@ export default function TicketFocusView({ params }: { params: Promise<{ id: stri
                     {/* FreeScout returns HTML body, but for safety in MVP we might just dangerouslySetInnerHTML */}
                     <div 
                       style={{ fontSize: '14px', lineHeight: 1.6, color: 'var(--text-primary)' }}
-                      dangerouslySetInnerHTML={{ __html: thread.body }} 
+                      dangerouslySetInnerHTML={{ __html: thread.body ?? '' }} 
                     />
                   </div>
                 );

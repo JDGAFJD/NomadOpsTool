@@ -53,7 +53,7 @@ Use the provided Billing, Network, and Shipping JSON to deduce the issue immedia
     const sortedThreads = [...(context.threads || [])].reverse();
     for (const t of sortedThreads) {
       if (t.type === 'message' || t.type === 'customer') {
-        const role = t.createdBy?.id === t.customer?.id ? 'user' : 'user'; 
+        const role = t.createdBy?.id ? 'user' : 'user'; 
         // FreeScout threads might not easily distinguish user vs agent without id maps, 
         // but 'customer' type usually indicates customer reply.
         const isAgent = t.type !== 'customer' && !t.createdBy?.email?.includes('@thefurman'); 
