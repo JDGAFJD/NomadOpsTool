@@ -71,6 +71,8 @@ export default function OpsDashboard() {
   };
 
   return (
+    <>
+    <style dangerouslySetInnerHTML={{__html: ".cb-tab-bar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; } .cb-tab-bar::-webkit-scrollbar { display: none; } .cb-customer-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); } .cb-customer-header-actions { display: flex; gap: 8px; flex-wrap: wrap; } .cb-sub-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; } .cb-network-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 12px; margin-bottom: 16px; } .cb-action-buttons { display: flex; gap: 8px; flex-wrap: wrap; } .cb-action-buttons > button { flex: 1; min-width: 120px; } @media (max-width: 768px) {  .cb-network-grid { grid-template-columns: 1fr 1fr; }  .cb-customer-header { flex-direction: column; align-items: flex-start; }  .cb-sub-header { flex-direction: column; }  .cb-action-buttons { flex-direction: column; }  .cb-action-buttons > button { width: 100%; min-width: unset; } } @media (max-width: 480px) { .cb-network-grid { grid-template-columns: 1fr; } }"}} />
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#0a0a0a', color: 'white', fontFamily: 'system-ui, sans-serif' }}>
       {/* Global Header */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 40px', borderBottom: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', zIndex: 100 }}>
@@ -138,6 +140,7 @@ export default function OpsDashboard() {
         ))}
       </div>
     </div>
+    </>
   );
 }
 
@@ -676,7 +679,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
               </div>
 
               {/* Stateful Tabs Navigation */}
-              <div style={{ padding: '0 0 24px 0', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '32px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <div className="cb-tab-bar" style={{ padding: '0 0 24px 0', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '32px', alignItems: 'center' }}>
                 <button 
                   onClick={() => setActiveTab('chargebee')} 
                   style={{ background: activeTab === 'chargebee' ? 'rgba(167, 139, 250, 0.2)' : 'transparent', color: activeTab === 'chargebee' ? '#a78bfa' : '#9ca3af', border: `1px solid ${activeTab === 'chargebee' ? 'rgba(167, 139, 250, 0.4)' : 'transparent'}`, padding: '10px 20px', borderRadius: '100px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}
@@ -726,12 +729,12 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                   ) : (
                     chargebeeData.map((c, i) => (
                       <div key={i} style={{ padding: '24px', background: 'rgba(20,20,20,0.8)', border: '1px solid rgba(167, 139, 250, 0.2)', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
-                        <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div className="cb-customer-header">
                           <div>
                             <div style={{ fontWeight: 600, fontSize: '18px' }}>{c.firstName} {c.lastName}</div>
                             <div style={{ color: '#9ca3af', fontSize: '14px' }}>ID: {c.id}</div>
                           </div>
-                          <div style={{ display: 'flex', gap: '8px' }}>
+                          <div className="cb-customer-header-actions">
                             {c.subscriptions?.length > 1 && (
                               <button 
                                 onClick={() => setActiveDoubleChargeTarget(activeDoubleChargeTarget === c.id ? null : c.id)}
@@ -815,7 +818,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {c.subscriptions.map((sub: any, idx: number) => (
                               <div key={idx} style={{ padding: '16px', background: 'rgba(0,0,0,0.4)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                                <div className="cb-sub-header">
                                   <div>
                                     <span style={{ fontWeight: 600, color: '#e5e7eb', fontSize: '15px' }}>
                                       {sub.subscription_items?.find((i: any) => i.item_type === 'plan')?.item_price_id || sub.plan_id || 'Unknown Plan'}
@@ -1134,7 +1137,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                         </div>
                                       </div>
 
-                                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', fontSize: '12px', marginBottom: '16px' }}>
+                                      <div className="cb-network-grid">
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                           <div
                                             title={!isValidIccid ? "Incorrect ICCID get it updated" : undefined}
@@ -2133,4 +2136,3 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
     </div>
   );
 }
-
