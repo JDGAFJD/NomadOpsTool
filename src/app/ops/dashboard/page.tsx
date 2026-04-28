@@ -88,7 +88,10 @@ export default function OpsDashboard() {
              </div>
           </div>
           <div style={{ height: '20px', width: '1px', background: 'rgba(255,255,255,0.1)', margin: '0 12px' }} />
-          <h1 style={{ fontSize: '14px', margin: 0, fontWeight: 600, color: 'var(--text-secondary)' }}>NOC <span style={{ color: 'var(--ops-text-muted)' }}>Ecosystem</span></h1>
+          <div>
+            <h1 style={{ fontSize: '14px', margin: 0, fontWeight: 600, color: 'var(--text-secondary)' }}>NOC <span style={{ color: 'var(--ops-text-muted)' }}>Ecosystem</span></h1>
+            <div style={{ fontSize: '10px', color: 'var(--ops-text-muted)', opacity: 0.6, marginTop: '1px', letterSpacing: '0.5px' }}>Created by Bryan</div>
+          </div>
         </div>
         
         {/* Tab Strip Navigation */}

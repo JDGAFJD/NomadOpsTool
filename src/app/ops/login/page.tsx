@@ -258,6 +258,11 @@ export default function OpsLogin() {
           </>
         )}
       </motion.form>
+
+      {/* Credit */}
+      <div style={{ position: 'absolute', bottom: '24px', left: '50%', transform: 'translateX(-50%)', color: 'rgba(255,255,255,0.25)', fontSize: '12px', letterSpacing: '1px', whiteSpace: 'nowrap' }}>
+        Created by Bryan
+      </div>
     </div>
   );
 }
