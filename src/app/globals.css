@@ -1,38 +1,106 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700&display=swap');
 
+/* ── Dark Theme (default for :root fallback) ───────────────────────────────── */
 :root {
-  --background: #0f1115;
-  --surface-100: #16181d;
-  --surface-200: #1e2128;
-  --surface-300: #292d36;
-  
+  --background: #f0f2f5;
+  --surface-100: #ffffff;
+  --surface-200: #f5f7fa;
+  --surface-300: #e8ecf0;
+
   --primary: #6366f1;
   --primary-hover: #4f46e5;
-  --primary-light: rgba(99, 102, 241, 0.15);
-  
+  --primary-light: rgba(99, 102, 241, 0.12);
+
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
-  
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  
-  --border: rgba(255, 255, 255, 0.08);
+
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+
+  --border: rgba(0, 0, 0, 0.08);
   --border-focus: rgba(99, 102, 241, 0.5);
-  
+
   --radius-sm: 6px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-full: 9999px;
-  
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.12);
+  --shadow-glow: 0 0 15px rgba(99, 102, 241, 0.25);
+
+  --transition-fast: 0.15s ease-out;
+  --transition-normal: 0.25s ease-out;
+
+  /* OPS dashboard specific */
+  --ops-bg: #f0f2f5;
+  --ops-card-bg: rgba(255,255,255,0.9);
+  --ops-card-border: rgba(0,0,0,0.06);
+  --ops-header-bg: rgba(255,255,255,0.85);
+  --ops-text: #111827;
+  --ops-text-muted: #6b7280;
+  --ops-accent: #6366f1;
+}
+
+/* ── Light theme (same as default above, explicitly declared) ──────────────── */
+[data-theme="light"] {
+  --background: #f0f2f5;
+  --surface-100: #ffffff;
+  --surface-200: #f5f7fa;
+  --surface-300: #e8ecf0;
+
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+
+  --border: rgba(0, 0, 0, 0.08);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.12);
+
+  --ops-bg: #f0f2f5;
+  --ops-card-bg: rgba(255,255,255,0.9);
+  --ops-card-border: rgba(0,0,0,0.06);
+  --ops-header-bg: rgba(255,255,255,0.85);
+  --ops-text: #111827;
+  --ops-text-muted: #6b7280;
+  --ops-accent: #6366f1;
+}
+
+/* ── Dark Theme ────────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --background: #0f1115;
+  --surface-100: #16181d;
+  --surface-200: #1e2128;
+  --surface-300: #292d36;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  --border: rgba(255, 255, 255, 0.08);
+
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 15px rgba(99, 102, 241, 0.3);
-  
-  --transition-fast: 0.15s ease-out;
-  --transition-normal: 0.25s ease-out;
+
+  --ops-bg: #050505;
+  --ops-card-bg: rgba(20,20,20,0.8);
+  --ops-card-border: rgba(255,255,255,0.08);
+  --ops-header-bg: rgba(5,5,5,0.9);
+  --ops-text: #e5e7eb;
+  --ops-text-muted: #9ca3af;
+  --ops-accent: #a78bfa;
+}
+
+/* ── Theme transition ──────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease;
 }
 
 * {
@@ -73,12 +141,16 @@ button {
 }
 
 .glass-panel {
-  background: rgba(22, 24, 29, 0.7);
+  background: var(--surface-100);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
   border-radius: var(--radius-lg);
+}
+
+[data-theme="dark"] .glass-panel {
+  background: rgba(22, 24, 29, 0.7);
 }
 
 .btn {
@@ -203,12 +275,16 @@ button {
 
 .page-header {
   padding: 32px 40px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border);
 }
 
 .page-title {
   font-size: 28px;
   margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .page-title {
   background: linear-gradient(to right, #fff, #94a3b8);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -227,4 +303,16 @@ button {
 
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out forwards;
+}
+
+/* ── OPS Dashboard Light Theme Overrides ───────────────────────────────────── */
+[data-theme="light"] .ops-card {
+  background: rgba(255,255,255,0.95) !important;
+  border-color: rgba(0,0,0,0.08) !important;
+  color: #111827 !important;
+}
+
+[data-theme="light"] .ops-header {
+  background: rgba(255,255,255,0.9) !important;
+  border-color: rgba(0,0,0,0.08) !important;
 }

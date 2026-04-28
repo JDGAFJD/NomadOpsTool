@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LogOut, ShieldCheck, Loader2, Search, Package, Zap, CreditCard, Activity, ArrowRight, DollarSign, Calendar, Play, Pause, AlertCircle, Copy, RefreshCw, X, AlertTriangle, ShieldAlert, Check, Info, BarChart2 } from 'lucide-react';
+import { LogOut, ShieldCheck, Loader2, Search, Package, Zap, CreditCard, Activity, ArrowRight, DollarSign, Calendar, Play, Pause, AlertCircle, Copy, RefreshCw, X, AlertTriangle, ShieldAlert, Check, Info, BarChart2, Sun, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { useTheme } from '@/components/ThemeProvider';
 
 const PROBLEM_SKUS = [
   '52904x48526x54307x73578x76193',
@@ -36,6 +37,7 @@ const GOOD_SKUS = [
 
 export default function OpsDashboard() {
   const router = useRouter();
+  const { theme, toggle: toggleTheme } = useTheme();
   const [loggingOut, setLoggingOut] = useState(false);
   const [tabs, setTabs] = useState<{ id: string; title: string, isError: boolean }[]>([{ id: '1', title: 'New Search', isError: false }]);
   const [activeTabId, setActiveTabId] = useState('1');
@@ -75,10 +77,10 @@ export default function OpsDashboard() {
     <style dangerouslySetInnerHTML={{__html: ".cb-tab-bar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; } .cb-tab-bar::-webkit-scrollbar { display: none; } .cb-customer-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); } .cb-customer-header-actions { display: flex; gap: 8px; flex-wrap: wrap; } .cb-sub-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; } .cb-network-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 12px; margin-bottom: 16px; } .cb-action-buttons { display: flex; gap: 8px; flex-wrap: wrap; } .cb-action-buttons > button { flex: 1; min-width: 120px; } @media (max-width: 768px) {  .cb-network-grid { grid-template-columns: 1fr 1fr; }  .cb-customer-header { flex-direction: column; align-items: flex-start; }  .cb-sub-header { flex-direction: column; }  .cb-action-buttons { flex-direction: column; }  .cb-action-buttons > button { width: 100%; min-width: unset; } } @media (max-width: 480px) { .cb-network-grid { grid-template-columns: 1fr; } }"}} />
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#0a0a0a', color: 'white', fontFamily: 'system-ui, sans-serif' }}>
       {/* Global Header */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 40px', borderBottom: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', zIndex: 100 }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 40px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--ops-header-bg)', backdropFilter: 'blur(10px)', zIndex: 100 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
-             <div style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-1px', color: 'white', display: 'flex', alignItems: 'center', gap: '4px' }}>
+             <div style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-1px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 n<span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ color: '#00b27a' }}>ō</span></span>mad
              </div>
              <div style={{ fontSize: '9px', fontWeight: 500, letterSpacing: '4px', color: '#00b27a', marginLeft: '2px', marginTop: '2px' }}>
@@ -86,7 +88,7 @@ export default function OpsDashboard() {
              </div>
           </div>
           <div style={{ height: '20px', width: '1px', background: 'rgba(255,255,255,0.1)', margin: '0 12px' }} />
-          <h1 style={{ fontSize: '14px', margin: 0, fontWeight: 600, color: '#9ca3af' }}>NOC <span style={{ color: '#6b7280' }}>Ecosystem</span></h1>
+          <h1 style={{ fontSize: '14px', margin: 0, fontWeight: 600, color: 'var(--text-secondary)' }}>NOC <span style={{ color: '#6b7280' }}>Ecosystem</span></h1>
         </div>
         
         {/* Tab Strip Navigation */}
@@ -119,13 +121,24 @@ export default function OpsDashboard() {
           </button>
         </div>
 
-        <button 
-          onClick={handleLogout}
-          disabled={loggingOut}
-          style={{ background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.2)', color: '#e5e7eb', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}
-        >
-          {loggingOut ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />} Disconnect
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+            style={{ background: 'var(--surface-200)', border: '1px solid var(--border)', color: 'var(--text-secondary)', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, transition: 'all 0.2s' }}
+          >
+            {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
+            {theme === 'light' ? 'Dark' : 'Light'}
+          </button>
+          <button 
+            onClick={handleLogout}
+            disabled={loggingOut}
+            style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}
+          >
+            {loggingOut ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />} Disconnect
+          </button>
+        </div>
       </header>
       
       {/* Workspace Containers Layered securely using shadow DOM principles */}
@@ -475,10 +488,10 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
       suppressHydrationWarning
       style={{ 
       flex: 1, 
-      backgroundColor: '#050505', 
+      backgroundColor: 'var(--ops-bg)', 
       backgroundImage: mode === 'search' 
-        ? 'radial-gradient(circle at 50% 50%, rgba(0, 178, 122, 0.1) 0%, transparent 60%)'
-        : 'radial-gradient(circle at 50% 0%, rgba(0, 178, 122, 0.05) 0%, transparent 40%)',
+        ? 'radial-gradient(circle at 50% 50%, rgba(0, 178, 122, 0.08) 0%, transparent 60%)'
+        : 'radial-gradient(circle at 50% 0%, rgba(0, 178, 122, 0.04) 0%, transparent 40%)',
       color: 'white',
       fontFamily: 'system-ui, sans-serif',
       transition: 'background-image 1s ease',

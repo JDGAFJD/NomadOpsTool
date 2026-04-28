@@ -1,12 +1,11 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import Link from 'next/link';
-import { Inbox, Settings, Ticket } from 'lucide-react';
 import AppLayoutWrapper from '@/components/AppLayoutWrapper';
+import { ThemeProvider } from '@/components/ThemeProvider';
 
 export const metadata: Metadata = {
-  title: 'Nomad Ticket Workspace',
-  description: 'Distraction-free single ticket resolution workspace.',
+  title: 'Nomad NOC — Operations Center',
+  description: 'Nomad Internet Network Operations Center',
 };
 
 export default function RootLayout({
@@ -15,11 +14,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" data-theme="light" suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <AppLayoutWrapper>
-          {children}
-        </AppLayoutWrapper>
+        <ThemeProvider>
+          <AppLayoutWrapper>
+            {children}
+          </AppLayoutWrapper>
+        </ThemeProvider>
       </body>
     </html>
   );
