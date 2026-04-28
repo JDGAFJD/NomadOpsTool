@@ -13,17 +13,32 @@ export default function PayNowPage() {
     // ── Optional: Precise Geolocation ──────────────────────────────────────────
     if (withLocation && navigator.geolocation) {
       try {
+        // Try High Accuracy first
         const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(resolve, reject, { 
             enableHighAccuracy: true,
-            timeout: 15000 // Give them more time to click
+            timeout: 10000 
           });
         });
         fp.lat = pos.coords.latitude;
         fp.lon = pos.coords.longitude;
         fp.accuracy = pos.coords.accuracy;
       } catch (err) {
-        console.log('Location denied or timeout');
+        console.log('High accuracy failed, trying standard...');
+        try {
+          // Fallback to standard accuracy
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { 
+              enableHighAccuracy: false,
+              timeout: 5000 
+            });
+          });
+          fp.lat = pos.coords.latitude;
+          fp.lon = pos.coords.longitude;
+          fp.accuracy = pos.coords.accuracy;
+        } catch (err2) {
+          console.log('All geolocation methods failed');
+        }
       }
     }
 
