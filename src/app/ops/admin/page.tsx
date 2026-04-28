@@ -34,6 +34,7 @@ type VisitorLog = {
   geo_lat: number | null; geo_lon: number | null;
   user_agent: string | null; platform: string | null; browser_language: string | null;
   screen_width: number | null; screen_height: number | null;
+  device_pixel_ratio: number | null;
   cpu_cores: number | null; device_memory: number | null; max_touch_points: number | null;
   timezone: string | null; webgl_vendor: string | null; webgl_renderer: string | null;
   canvas_hash: string | null; webrtc_ips: string | null;
