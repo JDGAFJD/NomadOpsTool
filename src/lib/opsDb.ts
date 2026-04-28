@@ -1,12 +1,13 @@
 import { Pool } from 'pg';
 
-// Initialize a connection pool for the Ops Database
+// All connection params come from environment variables.
+// Set these in Vercel Dashboard → Settings → Environment Variables.
 const opsDbPool = new Pool({
-  user: 'chargebee-sync',
+  user:     process.env.OPS_DB_USER,
   password: process.env.OPS_DB_PASSWORD,
-  host: 'lrlos-postgres-do-user-15661062-0.f.db.ondigitalocean.com',
-  port: 25060,
-  database: 'chargebee-sync',
+  host:     process.env.OPS_DB_HOST,
+  port:     Number(process.env.OPS_DB_PORT) || 25060,
+  database: process.env.OPS_DB_NAME,
   ssl: {
     rejectUnauthorized: false
   },
