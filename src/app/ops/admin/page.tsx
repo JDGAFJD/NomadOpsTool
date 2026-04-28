@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ShieldAlert, Server, UserPlus, Activity, Database,
@@ -593,7 +593,7 @@ export default function AdminControlPanel() {
                       </thead>
                       <tbody>
                         {visitorLogs.map(log => (
-                          <React.Fragment key={log.id}>
+                          <Fragment key={log.id}>
                             <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer' }} onClick={() => setExpandedVisitor(expandedVisitor === log.id ? null : log.id)}>
                               <td style={{ padding: '16px 24px' }}>
                                 <div style={{ fontWeight: 700, color: log.geo_proxy ? '#ef4444' : 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
