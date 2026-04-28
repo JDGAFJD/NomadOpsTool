@@ -4,7 +4,7 @@ import { CommerceService } from '@/lib/services/CommerceService';
 import { ThingSpaceService } from '@/lib/services/ThingSpaceService';
 import { FreeScoutService } from '@/lib/services/FreeScoutService';
 import { verifyAuth } from '@/lib/auth';
-import { queryOpsDb } from '@/lib/opsDb';
+import { queryOpsDb, logActivity } from '@/lib/opsDb';
 
 export async function GET(request: Request) {
   try {
