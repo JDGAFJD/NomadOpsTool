@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, ShieldCheck, Loader2, Search, Package, Zap, CreditCard, Activity, ArrowRight, DollarSign, Calendar, Play, Pause, AlertCircle, Copy, RefreshCw, X, AlertTriangle, ShieldAlert, Check, Info, BarChart2, Sun, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -167,6 +167,8 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [lastRefresh, setLastRefresh] = useState<number | null>(null);
+  const [cooldownSecs, setCooldownSecs] = useState(0);
 
   // Results State
   const [chargebeeData, setChargebeeData] = useState<any[]>([]);
@@ -261,7 +263,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
     }
   };
 
-  // Public handler — for meta_issue with no knownIssue, opens note modal first
+  // Public handler — line_issue and meta_issue (without knownIssue) require an agent note first
   const handleEscalate = (
     type: 'line_issue' | 'plan_issue' | 'meta_issue',
     customer: any,
@@ -269,8 +271,8 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
     network?: any,
     knownIssue?: string
   ) => {
-    if (type === 'meta_issue' && !knownIssue) {
-      // Prompt agent for a description
+    if (type === 'line_issue' || (type === 'meta_issue' && !knownIssue)) {
+      // Always prompt agent to describe why they are escalating
       setEscalationNote('');
       setEscalationModal({ type, customer, subscription, network, knownIssue });
     } else {
@@ -435,21 +437,13 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
     }
   };
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) return;
-
+  // Core data fetch — can be called from form submit OR refresh button
+  const runSearch = async (targetEmail: string) => {
     setError('');
     setLoading(true);
-
     try {
-      setMode('search');
-    onUpdateTitle('New Search');
-
-      setActiveTab('chargebee');
-      const res = await fetch(`/api/ops/aggregate?email=${encodeURIComponent(email)}`);
+      const res = await fetch(`/api/ops/aggregate?email=${encodeURIComponent(targetEmail)}`);
       const data = await res.json();
-
       if (res.ok && data.success) {
         setChargebeeData(data.data.chargebee || []);
         setInvoicesData(data.data.invoices || {});
@@ -459,11 +453,11 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
         setFreescoutData(data.data.freescout || []);
         setStripeCustomers(data.data.stripeCustomers || []);
         setMode('results');
-        onUpdateTitle(email);
-
-        
-        // Contextual Default Tab
+        onUpdateTitle(targetEmail);
         if (data.data.chargebee?.length === 0 && data.data.stripeCustomers?.length > 0) setActiveTab('stripe');
+        // Start 60-second cooldown
+        setLastRefresh(Date.now());
+        setCooldownSecs(60);
       } else {
         setError(data.error || 'Failed to scan ecosystem.');
       }
@@ -473,6 +467,33 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
       setLoading(false);
     }
   };
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+    setMode('search');
+    onUpdateTitle('New Search');
+    setActiveTab('chargebee');
+    await runSearch(email);
+  };
+
+  // Cooldown ticker
+  const handleRefresh = () => {
+    if (cooldownSecs > 0 || loading) return;
+    runSearch(email);
+  };
+
+  // Tick down cooldown every second
+  if (typeof window !== 'undefined' && cooldownSecs > 0) {
+    // Safe: this pattern is fine since the component won't re-render every second unless cooldownSecs changes.
+  }
+
+  // Tick the cooldown counter down every second
+  useEffect(() => {
+    if (cooldownSecs <= 0) return;
+    const timer = setTimeout(() => setCooldownSecs(s => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldownSecs]);
 
   const resetSearch = () => {
     setMode('search');
@@ -521,13 +542,15 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
       {/* Escalation Agent-Note Modal */}
       {escalationModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div style={{ background: '#111', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 20, padding: 32, width: '100%', maxWidth: 500, boxShadow: '0 24px 80px rgba(0,0,0,0.8)' }}>
+          <div style={{ background: 'var(--surface-100)', border: `1px solid ${escalationModal.type === 'line_issue' ? 'rgba(239,68,68,0.4)' : 'rgba(59,130,246,0.4)'}`, borderRadius: 20, padding: 32, width: '100%', maxWidth: 500, boxShadow: '0 24px 80px rgba(0,0,0,0.8)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-              <div style={{ background: 'rgba(59,130,246,0.12)', padding: 10, borderRadius: 12 }}>
-                <ShieldAlert size={20} color="#3b82f6" />
+              <div style={{ background: escalationModal.type === 'line_issue' ? 'rgba(239,68,68,0.12)' : 'rgba(59,130,246,0.12)', padding: 10, borderRadius: 12 }}>
+                <ShieldAlert size={20} color={escalationModal.type === 'line_issue' ? '#ef4444' : '#3b82f6'} />
               </div>
               <div>
-                <div style={{ fontSize: 17, fontWeight: 700 }}>Escalate Meta Issue</div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--ops-text)' }}>
+                  {escalationModal.type === 'line_issue' ? '🔴 Escalate Line Issue' : '🔵 Escalate Meta Issue'}
+                </div>
                 <div style={{ fontSize: 13, color: 'var(--ops-text-muted)' }}>
                   {escalationModal.customer?.email}
                 </div>
@@ -535,15 +558,21 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
             </div>
 
             <div style={{ fontSize: 13, color: 'var(--ops-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
-              No obvious meta issue was automatically detected. Please <strong style={{ color: 'var(--ops-text)' }}>briefly describe the problem</strong> so the team knows what to investigate:
+              {escalationModal.type === 'line_issue'
+                ? <>Please <strong style={{ color: 'var(--ops-text)' }}>describe the customer's internet issue</strong> before escalating to the team:</>  
+                : <>No obvious meta issue was detected. Please <strong style={{ color: 'var(--ops-text)' }}>briefly describe the problem</strong> so the team knows what to investigate:</> 
+              }
             </div>
 
             <textarea
               autoFocus
               value={escalationNote}
               onChange={e => setEscalationNote(e.target.value)}
-              placeholder="e.g. IMEI on Chargebee doesn't match the device. Customer says their SIM was never activated. Account shows duplicate ICCID..."
-              style={{ width: '100%', minHeight: 110, background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--ops-text)', padding: '12px 14px', borderRadius: 10, outline: 'none', fontSize: 14, resize: 'vertical', lineHeight: 1.6, boxSizing: 'border-box', fontFamily: 'system-ui, sans-serif' }}
+              placeholder={escalationModal.type === 'line_issue'
+                ? 'e.g. Customer reports slow speeds, device not connecting, no signal. Include any troubleshooting steps already taken...'
+                : 'e.g. IMEI on Chargebee doesn\'t match the device. Customer says their SIM was never activated...'
+              }
+              style={{ width: '100%', minHeight: 110, background: 'var(--surface-200)', border: '1px solid var(--border)', color: 'var(--ops-text)', padding: '12px 14px', borderRadius: 10, outline: 'none', fontSize: 14, resize: 'vertical', lineHeight: 1.6, boxSizing: 'border-box', fontFamily: 'system-ui, sans-serif' }}
             />
 
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
@@ -560,9 +589,9 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                   setEscalationModal(null);
                   fireEscalate(m.type, m.customer, m.subscription, m.network, escalationNote.trim(), m.knownIssue);
                 }}
-                style={{ flex: 2, padding: '11px', background: escalationNote.trim() ? 'rgba(59,130,246,0.9)' : 'rgba(59,130,246,0.3)', border: 'none', color: 'var(--ops-text)', borderRadius: 10, cursor: escalationNote.trim() ? 'pointer' : 'not-allowed', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                style={{ flex: 2, padding: '11px', background: escalationNote.trim() ? (escalationModal.type === 'line_issue' ? 'rgba(239,68,68,0.85)' : 'rgba(59,130,246,0.9)') : 'rgba(100,100,100,0.3)', border: 'none', color: 'white', borderRadius: 10, cursor: escalationNote.trim() ? 'pointer' : 'not-allowed', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
               >
-                <ShieldAlert size={15} /> Send Escalation to Slack
+                <ShieldAlert size={15} /> {escalationModal.type === 'line_issue' ? 'Send Line Issue Escalation' : 'Send Meta Escalation'}
               </button>
             </div>
           </div>
@@ -670,8 +699,47 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                   <p style={{ color: 'var(--ops-text-muted)', margin: 0, fontSize: '16px' }}>Target: <span style={{ color: 'var(--ops-text)', fontWeight: 500 }}>{email}</span></p>
                 </div>
                 
-                <div style={{ display: 'flex', gap: '16px' }}>
-                  <div style={{ padding: '12px 24px', background: 'rgba(20,20,20,0.6)', border: '1px solid var(--border)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+
+                   {/* ── Big Refresh Button ── */}
+                   <button
+                     onClick={handleRefresh}
+                     disabled={cooldownSecs > 0 || loading}
+                     title={cooldownSecs > 0 ? `Available in ${cooldownSecs}s` : 'Refresh all data for this customer'}
+                     style={{
+                       display: 'flex', alignItems: 'center', gap: '10px',
+                       padding: '14px 22px', borderRadius: '14px', cursor: cooldownSecs > 0 || loading ? 'not-allowed' : 'pointer',
+                       fontWeight: 700, fontSize: '14px', border: 'none',
+                       background: cooldownSecs > 0
+                         ? 'var(--surface-300)'
+                         : loading
+                           ? 'rgba(0,178,122,0.2)'
+                           : 'linear-gradient(135deg, #00b27a, #009a69)',
+                       color: cooldownSecs > 0 ? 'var(--ops-text-muted)' : 'white',
+                       boxShadow: cooldownSecs > 0 || loading ? 'none' : '0 4px 20px rgba(0,178,122,0.35)',
+                       transition: 'all 0.3s ease',
+                       position: 'relative', overflow: 'hidden',
+                       opacity: loading ? 0.8 : 1,
+                       minWidth: '170px', justifyContent: 'center',
+                     }}
+                   >
+                     {loading
+                       ? <><Loader2 size={17} style={{ animation: 'spin 1s linear infinite' }} /> Refreshing...</>
+                       : cooldownSecs > 0
+                         ? <><RefreshCw size={17} /> Refresh in {cooldownSecs}s</>
+                         : <><RefreshCw size={17} /> Refresh All Data</>
+                     }
+                     {cooldownSecs > 0 && (
+                       <div style={{
+                         position: 'absolute', bottom: 0, left: 0,
+                         height: '3px', background: '#00b27a',
+                         width: `${((60 - cooldownSecs) / 60) * 100}%`,
+                         transition: 'width 1s linear',
+                       }} />
+                     )}
+                   </button>
+
+                   <div style={{ padding: '12px 24px', background: 'rgba(20,20,20,0.6)', border: '1px solid var(--border)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                      <CreditCard color="#a78bfa" size={20} />
                      <div>
                        <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Chargebee</div>
