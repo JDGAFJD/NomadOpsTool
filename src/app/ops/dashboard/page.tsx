@@ -1572,108 +1572,181 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                   <h3 style={{ fontSize: '20px', color: 'var(--ops-text)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                      <Package size={20} color="#fbbf24" /> Commerce Logs
                   </h3>
-                  
+
                   {commerceData.length === 0 ? (
                     <div style={{ padding: '40px', textAlign: 'center', background: 'var(--surface-200)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
                       <span style={{ color: 'var(--ops-text-muted)' }}>No Commerce orders found.</span>
                     </div>
                   ) : (
                     commerceData.map((order, i) => (
-                      <div key={i} style={{ padding: '24px', background: 'var(--ops-card-bg)', border: '1px solid rgba(251, 191, 36, 0.2)', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                      <div key={i} style={{ background: 'var(--ops-card-bg)', border: '1px solid rgba(251, 191, 36, 0.2)', borderRadius: '16px', boxShadow: 'var(--shadow-md)', overflow: 'hidden' }}>
+
+                        {/* ── Order Header ── */}
+                        <div style={{ padding: '20px 24px', background: 'rgba(251,191,36,0.06)', borderBottom: '1px solid rgba(251,191,36,0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
                           <div>
-                            <div style={{ fontWeight: 600, fontSize: '16px' }}>Order #{order.orderNumber}</div>
-                            <div style={{ color: 'var(--ops-text-muted)', fontSize: '13px' }}>{new Date(order.orderDate).toLocaleDateString()}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                              <span style={{ fontWeight: 700, fontSize: '18px', color: 'var(--ops-text)' }}>Order {order.orderNumber}</span>
+                              <span style={{ padding: '2px 8px', borderRadius: '100px', fontSize: '11px', fontWeight: 600, background: order.paymentStatus === 'paid' ? 'rgba(16,185,129,0.12)' : 'rgba(251,191,36,0.15)', color: order.paymentStatus === 'paid' ? '#10b981' : '#f59e0b', border: `1px solid ${order.paymentStatus === 'paid' ? 'rgba(16,185,129,0.3)' : 'rgba(251,191,36,0.3)'}`, textTransform: 'uppercase' }}>{order.paymentStatus}</span>
+                              {order.refunded && <span style={{ padding: '2px 8px', borderRadius: '100px', fontSize: '11px', fontWeight: 600, background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>REFUNDED</span>}
+                              <span style={{ padding: '2px 8px', borderRadius: '100px', fontSize: '11px', background: 'var(--surface-300)', color: 'var(--ops-text-muted)', border: '1px solid var(--border)' }}>{order.source === 'both' ? 'Shopify + ShipStation' : order.source}</span>
+                            </div>
+                            <div style={{ fontSize: '13px', color: 'var(--ops-text-muted)' }}>
+                              {new Date(order.orderDate).toLocaleString()} · ID: {order.orderId}
+                              {order.tags && <span style={{ marginLeft: '12px', color: '#a78bfa' }}>🏷 {order.tags}</span>}
+                            </div>
                           </div>
-                          <div>
-                            <span style={{ 
-                                padding: '4px 10px', 
-                                borderRadius: '100px', 
-                                fontSize: '12px', 
-                                background: 'rgba(255,255,255,0.05)',
-                                color: 'var(--ops-text)',
-                                border: '1px solid rgba(255,255,255,0.1)'
-                              }}>
-                                {order.source.toUpperCase()}
-                              </span>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--ops-text)' }}>${order.total.toFixed(2)} <span style={{ fontSize: '13px', color: 'var(--ops-text-muted)', fontWeight: 400 }}>{order.currency}</span></div>
+                            {order.fulfillmentStatus && <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', marginTop: '2px' }}>Fulfillment: <span style={{ color: order.fulfillmentStatus === 'fulfilled' ? '#10b981' : '#f59e0b' }}>{order.fulfillmentStatus}</span></div>}
                           </div>
                         </div>
 
-                        <div style={{ padding: '16px', background: 'var(--surface-200)', borderRadius: '12px', marginBottom: '16px' }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
-                            <div>
-                               <span style={{ color: 'var(--ops-text-muted)', display: 'block', marginBottom: '4px' }}>Payment</span>
-                               <span style={{ color: order.paymentStatus === 'paid' ? '#10b981' : '#fbbf24' }}>{order.paymentStatus}</span>
-                            </div>
-                            <div>
-                               <span style={{ color: 'var(--ops-text-muted)', display: 'block', marginBottom: '4px' }}>Fulfillment</span>
-                               <span style={{ color: 'var(--ops-text)' }}>{order.fulfillmentStatus || 'unfulfilled'}</span>
-                            </div>
-                          </div>
-                        </div>
+                        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-                        {order.tracking && order.tracking.length > 0 && (
-                          <div>
-                            <span style={{ fontSize: '12px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', display: 'block' }}>Shipments</span>
-                            {order.tracking.map((t: any, idx: number) => (
-                              <div key={idx} style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                                <span style={{ color: '#fbbf24' }}>{t.carrier}</span>
-                                {t.trackingUrl ? (
-                                  <a href={t.trackingUrl} target="_blank" style={{ color: '#60a5fa', textDecoration: 'none' }}>{t.trackingNumber}</a>
-                                ) : (
-                                  <span style={{ color: 'var(--ops-text)' }}>{t.trackingNumber}</span>
-                                )}
+                          {/* ── Financial Breakdown ── */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px' }}>
+                            {[
+                              { label: 'Subtotal', value: `$${order.subtotal.toFixed(2)}` },
+                              { label: 'Shipping', value: `$${order.totalShippingPrice.toFixed(2)}`, sub: order.shippingMethod },
+                              { label: 'Tax', value: `$${order.totalTax.toFixed(2)}` },
+                              { label: 'Discounts', value: order.totalDiscounts > 0 ? `-$${order.totalDiscounts.toFixed(2)}` : '$0.00', highlight: order.totalDiscounts > 0 },
+                              { label: 'Total', value: `$${order.total.toFixed(2)}`, bold: true },
+                              ...(order.totalRefunded > 0 ? [{ label: 'Refunded', value: `-$${order.totalRefunded.toFixed(2)}`, danger: true }] : []),
+                            ].map((f: any) => (
+                              <div key={f.label} style={{ padding: '10px 14px', background: 'var(--surface-200)', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                                <div style={{ fontSize: '11px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>{f.label}</div>
+                                <div style={{ fontSize: '15px', fontWeight: f.bold ? 700 : 500, color: f.danger ? '#ef4444' : f.highlight ? '#10b981' : 'var(--ops-text)' }}>{f.value}</div>
+                                {f.sub && <div style={{ fontSize: '10px', color: 'var(--ops-text-muted)', marginTop: '2px' }}>{f.sub}</div>}
                               </div>
                             ))}
                           </div>
-                        )}
-                        
-                        {(order.iccid || order.imei) && (
-                          <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(248, 113, 113, 0.1)', borderRadius: '8px', border: '1px solid rgba(248, 113, 113, 0.2)' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                              {order.iccid && (() => {
-                                const iccid = order.iccid;
-                                const isValidIccid = iccid && iccid.length === 20 && iccid.startsWith('89148');
-                                return (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                    <div
-                                      title={!isValidIccid ? "Incorrect ICCID get it updated" : undefined}
-                                      style={{ 
-                                        display: 'flex', 
-                                        alignItems: 'center',
-                                        background: !isValidIccid ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
-                                        boxShadow: !isValidIccid ? '0 0 8px rgba(239, 68, 68, 0.6)' : 'none',
-                                        border: !isValidIccid ? '1px solid #ef4444' : 'none',
-                                        padding: !isValidIccid ? '4px 8px' : '0',
-                                        borderRadius: '4px',
-                                        transition: 'all 0.3s ease',
-                                        cursor: !isValidIccid ? 'help' : 'default'
-                                      }}
-                                    >
-                                      <div>
-                                        <div style={{ fontSize: '12px', color: '#f87171', marginBottom: '4px' }}>ACTIVATED ICCID</div>
-                                        <div style={{ fontFamily: 'monospace', color: !isValidIccid ? '#ef4444' : 'white', fontSize: '13px', fontWeight: !isValidIccid ? 700 : 400 }}>{iccid}</div>
-                                      </div>
-                                      {!isValidIccid && <AlertTriangle size={14} color="#ef4444" style={{ marginLeft: '8px' }} />}
+
+                          {/* ── Discount Codes ── */}
+                          {order.discountCodes && order.discountCodes.length > 0 && (
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                              <span style={{ fontSize: '12px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Coupons:</span>
+                              {order.discountCodes.map((d: any, idx: number) => (
+                                <span key={idx} style={{ padding: '3px 10px', background: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '100px', fontSize: '12px', fontFamily: 'monospace', fontWeight: 600 }}>
+                                  {d.code} (−${d.amount})
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* ── Payment & Gateway ── */}
+                          {order.paymentGateway && (
+                            <div style={{ fontSize: '13px', color: 'var(--ops-text-muted)' }}>
+                              Payment via: <span style={{ color: 'var(--ops-text)', fontWeight: 500 }}>{order.paymentGateway}</span>
+                            </div>
+                          )}
+
+                          {/* ── Addresses ── */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
+                            {[
+                              { title: '📦 Ship To', addr: order.shippingAddress },
+                              ...(order.billingAddress ? [{ title: '💳 Bill To', addr: order.billingAddress }] : []),
+                            ].map(({ title, addr }: any) => (
+                              <div key={title} style={{ padding: '14px 16px', background: 'var(--surface-200)', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                                <div style={{ fontSize: '11px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>{title}</div>
+                                {addr.name && <div style={{ fontWeight: 600, color: 'var(--ops-text)', marginBottom: '4px' }}>{addr.name}</div>}
+                                {addr.company && <div style={{ fontSize: '13px', color: 'var(--ops-text-muted)' }}>{addr.company}</div>}
+                                {addr.address1 && <div style={{ fontSize: '13px', color: 'var(--ops-text)' }}>{addr.address1}</div>}
+                                {addr.address2 && <div style={{ fontSize: '13px', color: 'var(--ops-text)' }}>{addr.address2}</div>}
+                                {addr.city && <div style={{ fontSize: '13px', color: 'var(--ops-text)' }}>{addr.city}, {addr.state} {addr.zip}</div>}
+                                {addr.country && <div style={{ fontSize: '13px', color: 'var(--ops-text-muted)' }}>{addr.country}</div>}
+                                {addr.phone && <div style={{ fontSize: '12px', color: 'var(--primary)', marginTop: '6px' }}>📞 {addr.phone}</div>}
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* ── Line Items ── */}
+                          <div>
+                            <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>Line Items ({order.items.length})</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {order.items.map((item: any, idx: number) => (
+                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', padding: '12px 14px', background: 'var(--surface-200)', borderRadius: '10px', border: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 600, color: 'var(--ops-text)', marginBottom: '4px' }}>{item.name}</div>
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', fontSize: '12px', color: 'var(--ops-text-muted)' }}>
+                                      {item.sku && <span>SKU: <span style={{ fontFamily: 'monospace', color: 'var(--ops-text)' }}>{item.sku}</span></span>}
+                                      {item.vendor && <span>· {item.vendor}</span>}
+                                      {item.variantTitle && <span>· {item.variantTitle}</span>}
+                                      {item.fulfillmentStatus && <span>· <span style={{ color: item.fulfillmentStatus === 'fulfilled' ? '#10b981' : '#f59e0b' }}>{item.fulfillmentStatus}</span></span>}
                                     </div>
-                                    <button 
-                                      onClick={() => activeUsageIccid === iccid ? setActiveUsageIccid(null) : fetchUsage(iccid)}
-                                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--ops-text)', padding: '6px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', marginTop: '4px' }}
-                                    >
-                                      <BarChart2 size={12} /> Analyze Usage
-                                    </button>
+                                    {item.totalDiscount > 0 && <div style={{ fontSize: '12px', color: '#10b981', marginTop: '2px' }}>Discount: −${item.totalDiscount.toFixed(2)}</div>}
                                   </div>
-                                );
-                              })()}
-                              {order.imei && (
-                                <div>
-                                  <div style={{ fontSize: '12px', color: '#f87171', marginBottom: '4px' }}>ACTIVATED IMEI</div>
-                                  <div style={{ fontFamily: 'monospace', color: 'var(--ops-text)', fontSize: '13px' }}>{order.imei}</div>
+                                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                    <div style={{ fontWeight: 600, color: 'var(--ops-text)' }}>${(item.price * item.quantity).toFixed(2)}</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)' }}>${item.price.toFixed(2)} × {item.quantity}</div>
+                                    {item.compareAtPrice && item.compareAtPrice > item.price && (
+                                      <div style={{ fontSize: '11px', color: '#9ca3af', textDecoration: 'line-through' }}>${item.compareAtPrice.toFixed(2)}</div>
+                                    )}
+                                  </div>
                                 </div>
-                              )}
+                              ))}
                             </div>
                           </div>
-                        )}
+
+                          {/* ── Tracking Shipments ── */}
+                          {order.tracking && order.tracking.length > 0 && (
+                            <div>
+                              <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Shipments</div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {order.tracking.map((t: any, idx: number) => (
+                                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'var(--surface-200)', borderRadius: '10px', border: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                                    <span style={{ padding: '2px 8px', background: 'rgba(251,191,36,0.12)', color: '#f59e0b', border: '1px solid rgba(251,191,36,0.3)', borderRadius: '6px', fontSize: '12px', fontWeight: 600 }}>{t.carrier}</span>
+                                    {t.trackingUrl ? (
+                                      <a href={t.trackingUrl} target="_blank" style={{ color: '#60a5fa', fontFamily: 'monospace', fontSize: '13px', textDecoration: 'none', wordBreak: 'break-all' }}>{t.trackingNumber}</a>
+                                    ) : (
+                                      <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--ops-text)', wordBreak: 'break-all' }}>{t.trackingNumber}</span>
+                                    )}
+                                    {t.shipDate && <span style={{ fontSize: '12px', color: 'var(--ops-text-muted)', marginLeft: 'auto' }}>Shipped {new Date(t.shipDate).toLocaleDateString()}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* ── Order Note ── */}
+                          {order.note && (
+                            <div style={{ padding: '12px 14px', background: 'rgba(167,139,250,0.08)', borderRadius: '10px', border: '1px solid rgba(167,139,250,0.2)' }}>
+                              <div style={{ fontSize: '11px', color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>Order Note</div>
+                              <div style={{ fontSize: '13px', color: 'var(--ops-text)' }}>{order.note}</div>
+                            </div>
+                          )}
+
+                          {/* ── ICCID / IMEI ── */}
+                          {(order.iccid || order.imei) && (
+                            <div style={{ padding: '14px 16px', background: 'rgba(248, 113, 113, 0.08)', borderRadius: '12px', border: '1px solid rgba(248, 113, 113, 0.2)' }}>
+                              <div style={{ fontSize: '11px', color: '#f87171', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>Device Activation Fields (ShipStation)</div>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
+                                {order.iccid && (() => {
+                                  const iccid = order.iccid;
+                                  const isValidIccid = iccid && iccid.length === 20 && iccid.startsWith('89148');
+                                  return (
+                                    <div>
+                                      <div style={{ fontSize: '12px', color: '#f87171', marginBottom: '6px' }}>ICCID {!isValidIccid && '⚠️ Invalid'}</div>
+                                      <div style={{ fontFamily: 'monospace', color: !isValidIccid ? '#ef4444' : 'var(--ops-text)', fontSize: '13px', fontWeight: !isValidIccid ? 700 : 400, wordBreak: 'break-all' }}>{iccid}</div>
+                                      <button
+                                        onClick={() => activeUsageIccid === iccid ? setActiveUsageIccid(null) : fetchUsage(iccid)}
+                                        style={{ marginTop: '8px', background: 'var(--surface-300)', border: '1px solid var(--border)', color: 'var(--ops-text)', padding: '5px 10px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                      >
+                                        <BarChart2 size={11} /> Analyze Usage
+                                      </button>
+                                    </div>
+                                  );
+                                })()}
+                                {order.imei && (
+                                  <div>
+                                    <div style={{ fontSize: '12px', color: '#f87171', marginBottom: '6px' }}>IMEI</div>
+                                    <div style={{ fontFamily: 'monospace', color: 'var(--ops-text)', fontSize: '13px', wordBreak: 'break-all' }}>{order.imei}</div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                        </div>
                       </div>
                     ))
                   )}
