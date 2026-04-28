@@ -35,10 +35,12 @@ export interface UnifiedOrder {
 
 export class CommerceService {
   private shopifyToken: string;
+  private shopifyDomain: string;
   private ssAuth: string;
 
   constructor() {
     this.shopifyToken = getSetting('shopify_admin_key') || '';
+    this.shopifyDomain = getSetting('shopify_store_domain') || 'nomadinternet.myshopify.com';
     const ssKey = getSetting('shipstation_api_key') || '';
     const ssSec = getSetting('shipstation_api_secret') || '';
     this.ssAuth = 'Basic ' + Buffer.from(`${ssKey}:${ssSec}`).toString('base64');
@@ -51,7 +53,7 @@ export class CommerceService {
   async getCustomerOrders(email: string): Promise<UnifiedOrder[]> {
     if (!this.isConfigured()) return [];
 
-    const shopRes = await fetch(`https://nomadinternet.myshopify.com/admin/api/2024-01/orders.json?status=any&email=${encodeURIComponent(email)}&limit=250`, {
+    const shopRes = await fetch(`https://${this.shopifyDomain}/admin/api/2024-01/orders.json?status=any&email=${encodeURIComponent(email)}&limit=250`, {
       headers: {
         'X-Shopify-Access-Token': this.shopifyToken,
         'Content-Type': 'application/json'
