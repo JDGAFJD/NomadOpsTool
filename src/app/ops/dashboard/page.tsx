@@ -226,7 +226,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
     setTimeout(() => setEscalationToast(null), 4000);
   };
 
-  const ESCALATION_CHANNEL = 'U05HMJ0JG79'; // Bryan Fury DM — swap to channel ID like C0XXXXXX
+  const ESCALATION_CHANNEL = '#0-urgent-live-calls'; // Escalations channel
 
   // Fire the actual Slack post
   const fireEscalate = async (
