@@ -653,7 +653,7 @@ export default function AdminControlPanel() {
                                 </td>
                               </tr>
                             )}
-                          </React.Fragment>
+                          </Fragment>
                         ))}
                       </tbody>
                     </table>
