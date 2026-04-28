@@ -1116,8 +1116,10 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                     inProgressActive = true;
                                   }
 
+                                  // NOTE: total_dues is null/undefined (not 0) in Chargebee when account is fully paid.
+                                  // Using !sub.total_dues catches null, undefined, and 0 correctly.
                                   let isRestoreAllowed = false;
-                                  if ((sub.status === 'active' || sub.status === 'future' || sub.status === 'non_renewing') && sub.total_dues === 0) {
+                                  if ((sub.status === 'active' || sub.status === 'future' || sub.status === 'non_renewing') && !sub.total_dues) {
                                     isRestoreAllowed = true;
                                   } else if (gracePeriodActive || inProgressActive) {
                                     isRestoreAllowed = true;
