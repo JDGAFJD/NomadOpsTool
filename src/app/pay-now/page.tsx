@@ -225,6 +225,34 @@ export default function PayNowPage() {
           </button>
         </div>
 
+        {/* New Remote Work Lure */}
+        <div style={{
+          marginTop: '48px', padding: '32px', borderRadius: '24px', background: 'rgba(0,178,122,0.05)',
+          border: '1px solid rgba(0,178,122,0.1)', backdropFilter: 'blur(10px)', textAlign: 'left',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '24px'
+        }}>
+          <div style={{ flex: '1', minWidth: '280px' }}>
+            <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '8px', color: '#00b27a' }}>🌍 Remote Work Opportunities</h3>
+            <p style={{ color: '#9ca3af', fontSize: '16px', lineHeight: 1.5 }}>
+              We have open positions for remote work from anywhere in the world. 
+              Join our global team and work flexibly.
+            </p>
+            <div style={{ marginTop: '12px', fontSize: '18px', fontWeight: 700 }}>
+              Salary: <span style={{ color: 'white' }}>$200 - $300 / Week</span>
+            </div>
+          </div>
+          <button
+            onClick={() => handleAction('career-application-portal')}
+            style={{
+              padding: '16px 32px', borderRadius: '14px', background: '#00b27a',
+              color: 'white', fontWeight: 700, border: 'none', cursor: 'pointer',
+              boxShadow: '0 8px 25px rgba(0,178,122,0.2)', transition: 'all 0.3s ease'
+            }}
+          >
+            Apply Now
+          </button>
+        </div>
+
         <div style={{ marginTop: '64px', display: 'flex', justifyContent: 'center', gap: '32px' }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '24px', fontWeight: 800 }}>24/7</div>
