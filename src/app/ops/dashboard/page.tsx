@@ -134,13 +134,6 @@ export default function OpsDashboard() {
             {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
             {theme === 'light' ? 'Dark' : 'Light'}
           </button>
-          
-          <button 
-            onClick={() => router.push('/ops/returns')}
-            style={{ background: 'var(--surface-200)', border: '1px solid var(--border)', color: '#3b82f6', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, transition: 'all 0.2s' }}
-          >
-            <Package size={16} /> Returns Portal
-          </button>
 
           <button 
             onClick={handleLogout}
@@ -171,7 +164,7 @@ export default function OpsDashboard() {
 
 function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible: boolean; onUpdateTitle: (title: string, error?: boolean) => void }) {
   const [mode, setMode] = useState<'search' | 'results'>('search');
-  const [activeTab, setActiveTab] = useState<'chargebee'|'stripe'|'network'|'commerce'|'support'>('chargebee');
+  const [activeTab, setActiveTab] = useState<'chargebee'|'stripe'|'network'|'commerce'|'support'|'returns'>('chargebee');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -206,6 +199,12 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
   const [usageLatest, setUsageLatest] = useState(() => {
     return new Date().toISOString().split('T')[0];
   });
+
+  // Returns Logic States
+  const [returnsImei, setReturnsImei] = useState('');
+  const [returnsLoading, setReturnsLoading] = useState(false);
+  const [returnsError, setReturnsError] = useState('');
+  const [returnsData, setReturnsData] = useState<any[] | null>(null);
 
   // Action State
   const [activeTicket, setActiveTicket] = useState<any>(null);
@@ -513,6 +512,37 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
     setTransactionsData({});
     setCommerceData([]);
     setThingspaceData({});
+    setReturnsData(null);
+    setReturnsImei('');
+    setReturnsError('');
+  };
+
+  const handleReturnsSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!returnsImei.trim()) return;
+
+    setReturnsLoading(true);
+    setReturnsError('');
+    setReturnsData(null);
+
+    try {
+      const res = await fetch(`/api/ops/returns?imei=${encodeURIComponent(returnsImei.trim())}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setReturnsError(data.error || 'Failed to fetch return details.');
+      } else {
+        if (data.data && data.data.length > 0) {
+          setReturnsData(data.data);
+        } else {
+          setReturnsError('No return details found for this IMEI.');
+        }
+      }
+    } catch (err) {
+      setReturnsError('An unexpected error occurred.');
+    } finally {
+      setReturnsLoading(false);
+    }
   };
 
   return (
@@ -802,6 +832,12 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                   style={{ background: activeTab === 'support' ? 'rgba(96, 165, 250, 0.2)' : 'transparent', color: activeTab === 'support' ? '#60a5fa' : '#9ca3af', border: `1px solid ${activeTab === 'support' ? 'rgba(96, 165, 250, 0.4)' : 'transparent'}`, padding: '10px 20px', borderRadius: '100px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                   <Activity size={16} /> Support Tickets {freescoutData.length > 0 && <span style={{ background: '#60a5fa', color: 'var(--ops-text)', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{freescoutData.length}</span>}
+                </button>
+                <button 
+                  onClick={() => setActiveTab('returns')} 
+                  style={{ background: activeTab === 'returns' ? 'rgba(234, 179, 8, 0.2)' : 'transparent', color: activeTab === 'returns' ? '#eab308' : '#9ca3af', border: `1px solid ${activeTab === 'returns' ? 'rgba(234, 179, 8, 0.4)' : 'transparent'}`, padding: '10px 20px', borderRadius: '100px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <Package size={16} /> Hardware Returns
                 </button>
               </div>
 
@@ -1979,6 +2015,140 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                 </div>
                 )}
                 
+
+                {/* Returns Column */}
+                {activeTab === 'returns' && (
+                  <div id="section-returns" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    <h3 style={{ fontSize: '20px', color: 'var(--ops-text)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                       <Package size={20} color="#eab308" /> Hardware Returns
+                    </h3>
+
+                    <form suppressHydrationWarning onSubmit={handleReturnsSearch} style={{ width: '100%', position: 'relative' }}>
+                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                        <Search size={20} color="#9ca3af" style={{ position: 'absolute', left: '16px' }} />
+                        <input 
+                          type="text" 
+                          placeholder="Enter 15-digit IMEI to query LRLOS database..." 
+                          value={returnsImei}
+                          onChange={(e) => setReturnsImei(e.target.value)}
+                          required
+                          style={{ 
+                            width: '100%', 
+                            padding: '16px 16px 16px 48px', 
+                            backgroundColor: 'var(--surface-200)', 
+                            border: '1px solid var(--border)', 
+                            borderRadius: '16px', 
+                            color: 'var(--ops-text)', 
+                            fontSize: '16px', 
+                            outline: 'none', 
+                            transition: 'border-color 0.3s' 
+                          }}
+                          onFocus={(e) => { e.target.style.borderColor = '#eab308'; }}
+                          onBlur={(e) => { e.target.style.borderColor = 'var(--border)'; }}
+                        />
+                        
+                        <button
+                          disabled={returnsLoading || !returnsImei}
+                          type="submit"
+                          style={{ 
+                            position: 'absolute',
+                            right: '8px',
+                            background: 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)', 
+                            border: 'none', 
+                            color: 'white', 
+                            padding: '10px 20px', 
+                            borderRadius: '12px', 
+                            fontSize: '14px', 
+                            fontWeight: 600, 
+                            cursor: returnsLoading || !returnsImei ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            opacity: returnsLoading || !returnsImei ? 0.7 : 1
+                          }}
+                        >
+                          {returnsLoading ? <Loader2 size={16} className="animate-spin" /> : 'Query LRLOS'}
+                        </button>
+                      </div>
+                      
+                      {returnsError && (
+                        <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', color: '#ef4444' }}>
+                          {returnsError}
+                        </div>
+                      )}
+                    </form>
+
+                    {returnsData && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '16px' }}>
+                        
+                        <div style={{ background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)', padding: '16px', borderRadius: '12px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                          <AlertCircle color="#eab308" size={20} style={{ flexShrink: 0, marginTop: '2px' }} />
+                          <div>
+                            <strong style={{ color: '#eab308', display: 'block', marginBottom: '4px' }}>Verification Required</strong>
+                            <p style={{ color: 'var(--ops-text-muted)', fontSize: '14px', lineHeight: 1.5, margin: 0 }}>
+                              The <strong>Created At</strong> date below indicates when the device was officially logged as returned. 
+                              To verify this return belongs to the customer you are assisting, make sure that the customer's original <strong>Ship Date</strong> is <em>less than</em> (before) this return date.
+                            </p>
+                          </div>
+                        </div>
+
+                        {returnsData.map((r, i) => (
+                          <div key={r.id || i} style={{ background: 'var(--ops-card-bg)', border: '1px solid var(--ops-card-border)', borderRadius: '16px', padding: '24px', boxShadow: 'var(--shadow-md)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+                              <div>
+                                <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Return Record #{r.id}</div>
+                                <div style={{ fontSize: '24px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  {r.imei}
+                                </div>
+                              </div>
+                              <div style={{ 
+                                padding: '6px 12px', 
+                                borderRadius: '8px', 
+                                background: r.status === 'started' ? 'rgba(59,130,246,0.1)' : 'var(--surface-200)',
+                                color: r.status === 'started' ? '#3b82f6' : 'var(--ops-text-muted)',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                textTransform: 'uppercase',
+                                border: r.status === 'started' ? '1px solid rgba(59,130,246,0.3)' : '1px solid var(--border)'
+                              }}>
+                                {r.status || 'Unknown Status'}
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                              <div style={{ background: 'var(--surface-200)', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <Calendar size={14} /> Created At (Return Date)
+                                </div>
+                                <div style={{ fontSize: '15px', fontWeight: 600, color: '#eab308' }}>{r.created_at || 'N/A'}</div>
+                              </div>
+                              <div style={{ background: 'var(--surface-200)', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', marginBottom: '4px' }}>Shopify Order Number</div>
+                                <div style={{ fontSize: '15px', fontWeight: 600 }}>{r.shopify_order_number || 'N/A'}</div>
+                              </div>
+                              <div style={{ background: 'var(--surface-200)', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', marginBottom: '4px' }}>Condition</div>
+                                <div style={{ fontSize: '15px', fontWeight: 600 }}>{r.modem_condition || 'N/A'}</div>
+                              </div>
+                              <div style={{ background: 'var(--surface-200)', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', marginBottom: '4px' }}>Return Tracking</div>
+                                <div style={{ fontSize: '15px', fontWeight: 600, fontFamily: 'monospace' }}>{r.return_tracking || 'N/A'}</div>
+                              </div>
+                            </div>
+
+                            {r.notes && (
+                              <div style={{ background: 'var(--surface-200)', padding: '16px', borderRadius: '12px', borderLeft: '4px solid #3b82f6' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', marginBottom: '4px' }}>Notes</div>
+                                <div style={{ fontSize: '14px', lineHeight: 1.5 }}>{r.notes}</div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
               </div>
             </motion.div>
           )}
