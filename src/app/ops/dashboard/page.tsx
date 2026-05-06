@@ -134,6 +134,14 @@ export default function OpsDashboard() {
             {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
             {theme === 'light' ? 'Dark' : 'Light'}
           </button>
+          
+          <button 
+            onClick={() => router.push('/ops/returns')}
+            style={{ background: 'var(--surface-200)', border: '1px solid var(--border)', color: '#3b82f6', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, transition: 'all 0.2s' }}
+          >
+            <Package size={16} /> Returns Portal
+          </button>
+
           <button 
             onClick={handleLogout}
             disabled={loggingOut}
