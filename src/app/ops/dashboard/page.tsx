@@ -206,6 +206,12 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
   const [returnsError, setReturnsError] = useState('');
   const [returnsData, setReturnsData] = useState<any[] | null>(null);
 
+  // Returns Modal Logic
+  const [returnsModal, setReturnsModal] = useState<{ imei: string; orderDate?: string } | null>(null);
+  const [modalReturnsLoading, setModalReturnsLoading] = useState(false);
+  const [modalReturnsError, setModalReturnsError] = useState('');
+  const [modalReturnsData, setModalReturnsData] = useState<any[] | null>(null);
+
   // Action State
   const [activeTicket, setActiveTicket] = useState<any>(null);
   const [activeThreads, setActiveThreads] = useState<any[]>([]);
@@ -542,6 +548,30 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
       setReturnsError('An unexpected error occurred.');
     } finally {
       setReturnsLoading(false);
+    }
+  };
+
+  const openReturnsModal = async (imei: string, orderDate?: string) => {
+    setReturnsModal({ imei, orderDate });
+    setModalReturnsLoading(true);
+    setModalReturnsError('');
+    setModalReturnsData(null);
+    try {
+      const res = await fetch(`/api/ops/returns?imei=${encodeURIComponent(imei.trim())}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setModalReturnsError(data.error || 'Failed to fetch return details.');
+      } else {
+        if (data.data && data.data.length > 0) {
+          setModalReturnsData(data.data);
+        } else {
+          setModalReturnsError('No return details found for this IMEI.');
+        }
+      }
+    } catch (err) {
+      setModalReturnsError('An unexpected error occurred.');
+    } finally {
+      setModalReturnsLoading(false);
     }
   };
 
@@ -999,7 +1029,16 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                        )}
                                        {cbImeiVal && (
                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                                           <span style={{ color: 'var(--ops-text-muted)' }}>IMEI</span>
+                                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                             <span style={{ color: 'var(--ops-text-muted)' }}>IMEI</span>
+                                             <button 
+                                               onClick={() => openReturnsModal(cbImeiVal)}
+                                               title="Query Return Details"
+                                               style={{ background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)', color: '#eab308', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}
+                                             >
+                                               <Package size={10} /> Check
+                                             </button>
+                                           </div>
                                            <span style={{ color: '#a78bfa', fontFamily: 'monospace', fontSize: '11px' }}>{cbImeiVal}</span>
                                          </div>
                                        )}
@@ -1855,7 +1894,15 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                 })()}
                                 {order.imei && (
                                   <div>
-                                    <div style={{ fontSize: '12px', color: '#f87171', marginBottom: '6px' }}>IMEI</div>
+                                    <div style={{ fontSize: '12px', color: '#f87171', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      IMEI
+                                      <button 
+                                        onClick={() => openReturnsModal(order.imei, order.orderDate)}
+                                        style={{ background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)', color: '#eab308', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                      >
+                                        <Package size={10} /> Check Returns
+                                      </button>
+                                    </div>
                                     <div style={{ fontFamily: 'monospace', color: 'var(--ops-text)', fontSize: '13px', wordBreak: 'break-all' }}>{order.imei}</div>
                                   </div>
                                 )}
@@ -2368,6 +2415,147 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                       )}
                     </>
                   )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Returns Checking Modal Overlay */}
+        <AnimatePresence>
+          {returnsModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              style={{
+                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)',
+                zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '24px'
+              }}
+            >
+              <motion.div
+                initial={{ y: 50, scale: 0.95 }}
+                animate={{ y: 0, scale: 1 }}
+                exit={{ y: 50, scale: 0.95 }}
+                style={{
+                  background: '#111', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: '24px',
+                  width: '100%', maxWidth: '800px', maxHeight: '90vh',
+                  display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 64px rgba(234, 179, 8, 0.15)'
+                }}
+              >
+                <div style={{ padding: '24px', borderBottom: '1px solid rgba(234, 179, 8, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(20,20,20,0.9)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Package size={24} color="#eab308" />
+                    <div>
+                      <div style={{ color: '#eab308', fontSize: '12px', fontWeight: 600, marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '1px' }}>Hardware Returns Query</div>
+                      <div style={{ color: 'var(--ops-text)', fontSize: '18px', fontWeight: 600, fontFamily: 'monospace' }}>{returnsModal.imei}</div>
+                    </div>
+                  </div>
+                  <button onClick={() => setReturnsModal(null)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'var(--ops-text)', padding: '8px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div style={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', gap: '24px', background: '#0a0a0a', overflowY: 'auto' }}>
+                  {modalReturnsLoading ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: '16px' }}>
+                      <Loader2 className="animate-spin" color="#eab308" size={32} />
+                      <span style={{ color: 'var(--ops-text-muted)', fontSize: '14px', animation: 'pulse 2s infinite' }}>Querying LRLOS...</span>
+                    </div>
+                  ) : modalReturnsError ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#ef4444', fontSize: '14px', padding: '24px', background: 'rgba(239,68,68,0.1)', borderRadius: '12px', border: '1px solid rgba(239,68,68,0.2)' }}>
+                      <AlertTriangle size={24} /> {modalReturnsError}
+                    </div>
+                  ) : modalReturnsData ? (
+                    <>
+                      {returnsModal.orderDate && (() => {
+                        const orderDate = new Date(returnsModal.orderDate);
+                        const firstReturn = modalReturnsData[0];
+                        const returnDate = new Date(firstReturn.created_at);
+                        const isValid = returnDate > orderDate;
+
+                        return (
+                          <div style={{ background: isValid ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', border: `1px solid ${isValid ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`, padding: '16px', borderRadius: '12px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                            {isValid ? <Check color="#10b981" size={24} /> : <AlertTriangle color="#ef4444" size={24} />}
+                            <div>
+                              <strong style={{ color: isValid ? '#10b981' : '#ef4444', display: 'block', marginBottom: '4px' }}>
+                                {isValid ? 'Validation Passed' : 'Validation Failed: Review Immediately'}
+                              </strong>
+                              <p style={{ color: 'var(--ops-text)', fontSize: '14px', margin: 0 }}>
+                                {isValid 
+                                  ? 'This return was logged AFTER the original order date, which means it probably belongs to this customer.'
+                                  : 'This return was logged BEFORE the original order date! This device may belong to a previous customer or the record is mismatched.'}
+                              </p>
+                              <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--ops-text-muted)' }}>
+                                Order Date: {orderDate.toLocaleDateString()} | Return Date: {returnDate.toLocaleDateString()}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {!returnsModal.orderDate && (
+                        <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '16px', borderRadius: '12px', fontSize: '13px', color: 'var(--ops-text-muted)' }}>
+                          <Info size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />
+                          Since no order date was provided by the source module, automatic validation could not be run. Please verify the return date manually.
+                        </div>
+                      )}
+
+                      {modalReturnsData.map((r, i) => (
+                        <div key={r.id || i} style={{ background: 'var(--surface-100)', border: '1px solid var(--border)', borderRadius: '16px', padding: '24px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+                            <div>
+                              <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Record #{r.id}</div>
+                              <div style={{ fontSize: '24px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {r.imei}
+                              </div>
+                            </div>
+                            <div style={{ 
+                              padding: '6px 12px', 
+                              borderRadius: '8px', 
+                              background: r.status === 'started' ? 'rgba(59,130,246,0.1)' : 'var(--surface-200)',
+                              color: r.status === 'started' ? '#3b82f6' : 'var(--ops-text-muted)',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              textTransform: 'uppercase',
+                              border: r.status === 'started' ? '1px solid rgba(59,130,246,0.3)' : '1px solid var(--border)'
+                            }}>
+                              {r.status || 'Unknown Status'}
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                            <div style={{ background: 'var(--surface-200)', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                              <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Calendar size={14} /> Created At
+                              </div>
+                              <div style={{ fontSize: '15px', fontWeight: 600, color: '#eab308' }}>{r.created_at || 'N/A'}</div>
+                            </div>
+                            <div style={{ background: 'var(--surface-200)', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                              <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', marginBottom: '4px' }}>Shopify Order</div>
+                              <div style={{ fontSize: '15px', fontWeight: 600 }}>{r.shopify_order_number || 'N/A'}</div>
+                            </div>
+                            <div style={{ background: 'var(--surface-200)', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                              <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', marginBottom: '4px' }}>Condition</div>
+                              <div style={{ fontSize: '15px', fontWeight: 600 }}>{r.modem_condition || 'N/A'}</div>
+                            </div>
+                            <div style={{ background: 'var(--surface-200)', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                              <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', marginBottom: '4px' }}>Tracking</div>
+                              <div style={{ fontSize: '15px', fontWeight: 600, fontFamily: 'monospace' }}>{r.return_tracking || 'N/A'}</div>
+                            </div>
+                          </div>
+
+                          {r.notes && (
+                            <div style={{ background: 'var(--surface-200)', padding: '16px', borderRadius: '12px', borderLeft: '4px solid #3b82f6' }}>
+                              <div style={{ fontSize: '12px', color: 'var(--ops-text-muted)', marginBottom: '4px' }}>Notes</div>
+                              <div style={{ fontSize: '14px', lineHeight: 1.5 }}>{r.notes}</div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </>
+                  ) : null}
                 </div>
               </motion.div>
             </motion.div>
