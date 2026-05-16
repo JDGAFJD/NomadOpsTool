@@ -2,59 +2,65 @@
 
 /* ── Dark Theme (default for :root fallback) ───────────────────────────────── */
 :root {
-  --background: #f0f2f5;
+  --background: #eef3f8;
   --surface-100: #ffffff;
-  --surface-200: #f5f7fa;
-  --surface-300: #e8ecf0;
+  --surface-200: #f7fafc;
+  --surface-300: #e6edf3;
+  --surface-raised: rgba(255, 255, 255, 0.92);
 
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --primary-light: rgba(99, 102, 241, 0.12);
+  --primary: #0f766e;
+  --primary-hover: #115e59;
+  --primary-light: rgba(15, 118, 110, 0.12);
+  --primary-strong: #0f172a;
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.12);
 
   --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+  --warning: #d97706;
+  --danger: #dc2626;
 
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --text-muted: #9ca3af;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #7c8a9a;
 
-  --border: rgba(0, 0, 0, 0.08);
-  --border-focus: rgba(99, 102, 241, 0.5);
+  --border: rgba(15, 23, 42, 0.1);
+  --border-strong: rgba(15, 23, 42, 0.16);
+  --border-focus: rgba(15, 118, 110, 0.42);
 
   --radius-sm: 6px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
   --radius-full: 9999px;
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.12);
-  --shadow-glow: 0 0 15px rgba(99, 102, 241, 0.25);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 24px 70px rgba(15, 23, 42, 0.14);
+  --shadow-glow: 0 18px 42px rgba(15, 118, 110, 0.18);
 
   --transition-fast: 0.15s ease-out;
   --transition-normal: 0.25s ease-out;
 
   /* OPS dashboard specific */
-  --ops-bg: #f0f2f5;
-  --ops-card-bg: rgba(255,255,255,0.9);
-  --ops-card-border: rgba(0,0,0,0.06);
-  --ops-header-bg: rgba(255,255,255,0.85);
-  --ops-text: #111827;
-  --ops-text-muted: #6b7280;
-  --ops-accent: #6366f1;
+  --ops-bg: #eef3f8;
+  --ops-card-bg: rgba(255,255,255,0.94);
+  --ops-card-border: rgba(15,23,42,0.1);
+  --ops-header-bg: rgba(255,255,255,0.88);
+  --ops-text: #0f172a;
+  --ops-text-muted: #64748b;
+  --ops-accent: #0f766e;
+  --ops-accent-2: #2563eb;
 }
 
 /* ── Light theme (same as default above, explicitly declared) ──────────────── */
 [data-theme="light"] {
-  --background: #f0f2f5;
+  --background: #eef3f8;
   --surface-100: #ffffff;
-  --surface-200: #f5f7fa;
-  --surface-300: #e8ecf0;
+  --surface-200: #f7fafc;
+  --surface-300: #e6edf3;
 
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --text-muted: #9ca3af;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #7c8a9a;
 
   --border: rgba(0, 0, 0, 0.08);
 
@@ -62,25 +68,27 @@
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.12);
 
-  --ops-bg: #f0f2f5;
-  --ops-card-bg: rgba(255,255,255,0.9);
-  --ops-card-border: rgba(0,0,0,0.06);
-  --ops-header-bg: rgba(255,255,255,0.85);
-  --ops-text: #111827;
-  --ops-text-muted: #6b7280;
-  --ops-accent: #6366f1;
+  --ops-bg: #eef3f8;
+  --ops-card-bg: rgba(255,255,255,0.94);
+  --ops-card-border: rgba(15,23,42,0.1);
+  --ops-header-bg: rgba(255,255,255,0.88);
+  --ops-text: #0f172a;
+  --ops-text-muted: #64748b;
+  --ops-accent: #0f766e;
+  --ops-accent-2: #2563eb;
 }
 
 /* ── Dark Theme ────────────────────────────────────────────────────────────── */
 [data-theme="dark"] {
-  --background: #0f1115;
-  --surface-100: #16181d;
-  --surface-200: #1e2128;
-  --surface-300: #292d36;
+  --background: #071014;
+  --surface-100: #0d171c;
+  --surface-200: #121f26;
+  --surface-300: #1d2c34;
+  --surface-raised: rgba(13, 23, 28, 0.9);
 
   --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-secondary: #b6c4d3;
+  --text-muted: #7d8d9c;
 
   --border: rgba(255, 255, 255, 0.08);
 
@@ -89,13 +97,14 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 15px rgba(99, 102, 241, 0.3);
 
-  --ops-bg: #050505;
-  --ops-card-bg: rgba(20,20,20,0.8);
-  --ops-card-border: rgba(255,255,255,0.08);
-  --ops-header-bg: rgba(5,5,5,0.9);
-  --ops-text: #e5e7eb;
-  --ops-text-muted: #9ca3af;
-  --ops-accent: #a78bfa;
+  --ops-bg: #071014;
+  --ops-card-bg: rgba(13,23,28,0.86);
+  --ops-card-border: rgba(148,163,184,0.16);
+  --ops-header-bg: rgba(7,16,20,0.9);
+  --ops-text: #f8fafc;
+  --ops-text-muted: #95a3b4;
+  --ops-accent: #2dd4bf;
+  --ops-accent-2: #60a5fa;
 }
 
 /* ── Theme transition ──────────────────────────────────────────────────────── */
@@ -111,7 +120,9 @@
 
 body {
   font-family: 'Inter', -apple-system, sans-serif;
-  background-color: var(--background);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.52), rgba(255,255,255,0) 240px),
+    var(--background);
   color: var(--text-primary);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -120,7 +131,7 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-family: 'Outfit', -apple-system, sans-serif;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 a {
@@ -141,9 +152,9 @@ button {
 }
 
 .glass-panel {
-  background: var(--surface-100);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: var(--surface-raised);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
   border-radius: var(--radius-lg);
@@ -160,20 +171,20 @@ button {
   gap: 8px;
   padding: 10px 20px;
   border-radius: var(--radius-md);
-  font-weight: 500;
+  font-weight: 650;
   font-size: 14px;
   transition: all var(--transition-normal);
 }
 
 .btn-primary {
-  background-color: var(--primary);
+  background: linear-gradient(135deg, var(--primary), #0d9488);
   color: white;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-glow);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: var(--primary-hover);
-  box-shadow: var(--shadow-glow);
+  background: linear-gradient(135deg, var(--primary-hover), var(--primary));
+  box-shadow: 0 18px 42px rgba(15, 118, 110, 0.24);
   transform: translateY(-1px);
 }
 
@@ -211,7 +222,7 @@ button {
 .input-field {
   width: 100%;
   padding: 12px 16px;
-  background-color: var(--surface-100);
+  background-color: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--text-primary);
@@ -233,8 +244,10 @@ button {
 }
 
 .sidebar {
-  width: 260px;
-  background-color: var(--surface-100);
+  width: 272px;
+  background:
+    linear-gradient(180deg, rgba(15, 118, 110, 0.08), transparent 280px),
+    var(--primary-strong);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -247,7 +260,9 @@ button {
   flex-direction: column;
   overflow-y: auto;
   position: relative;
-  background: radial-gradient(circle at top right, rgba(99,102,241,0.05) 0%, transparent 40%);
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.08), transparent 34%),
+    var(--background);
 }
 
 .nav-link {
@@ -255,7 +270,7 @@ button {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  color: var(--text-secondary);
+  color: rgba(226, 232, 240, 0.72);
   border-radius: var(--radius-md);
   margin-bottom: 8px;
   font-weight: 500;
@@ -263,8 +278,8 @@ button {
 }
 
 .nav-link:hover {
-  background-color: var(--surface-200);
-  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.08);
+  color: white;
 }
 
 .nav-link.active {
@@ -276,12 +291,22 @@ button {
 .page-header {
   padding: 32px 40px;
   border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,0.52);
+  backdrop-filter: blur(18px);
 }
 
 .page-title {
-  font-size: 28px;
+  font-size: 30px;
   margin-bottom: 8px;
   color: var(--text-primary);
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 [data-theme="dark"] .page-title {
@@ -447,3 +472,278 @@ button {
   stroke: rgba(0,0,0,0.08) !important;
 }
 
+/* ── Product UI System ───────────────────────────────────────────────────── */
+.ops-app-shell,
+.admin-shell {
+  min-height: 100vh;
+  color: var(--ops-text);
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent 240px),
+    var(--ops-bg) !important;
+  font-family: 'Inter', system-ui, sans-serif !important;
+}
+
+[data-theme="dark"] .ops-app-shell,
+[data-theme="dark"] .admin-shell {
+  background:
+    linear-gradient(135deg, rgba(45, 212, 191, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(7, 16, 20, 0.7), transparent 280px),
+    var(--ops-bg) !important;
+}
+
+.ops-topbar,
+.admin-topbar {
+  background: var(--ops-header-bg) !important;
+  border-bottom: 1px solid var(--ops-card-border) !important;
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.08);
+}
+
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  box-shadow: var(--shadow-glow);
+}
+
+.ops-tab {
+  border-radius: 8px !important;
+  background: var(--ops-card-bg) !important;
+  border: 1px solid var(--ops-card-border) !important;
+  color: var(--ops-text-muted) !important;
+  box-shadow: var(--shadow-sm);
+}
+
+.ops-tab[data-active="true"] {
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.14), rgba(37, 99, 235, 0.1)) !important;
+  border-color: rgba(15, 118, 110, 0.32) !important;
+  color: var(--ops-text) !important;
+}
+
+.ops-icon-button,
+.ops-secondary-button {
+  background: var(--ops-card-bg) !important;
+  border: 1px solid var(--ops-card-border) !important;
+  color: var(--ops-text) !important;
+  border-radius: 8px !important;
+}
+
+.ops-primary-button {
+  background: linear-gradient(135deg, var(--primary), #0d9488) !important;
+  border: none !important;
+  color: white !important;
+  border-radius: 8px !important;
+  box-shadow: var(--shadow-glow) !important;
+}
+
+#ops-dashboard-root {
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(255,255,255,0.38), transparent 220px),
+    var(--ops-bg) !important;
+}
+
+[data-theme="dark"] #ops-dashboard-root {
+  background:
+    linear-gradient(135deg, rgba(45, 212, 191, 0.1), transparent 34%),
+    var(--ops-bg) !important;
+}
+
+#ops-dashboard-root [style*="rgba(20,20,20"],
+#ops-dashboard-root [style*="rgba(20, 20, 20"],
+.admin-shell [style*="rgba(255,255,255,0.02)"],
+.admin-shell [style*="rgba(255,255,255,0.03)"] {
+  background: var(--ops-card-bg) !important;
+  border-color: var(--ops-card-border) !important;
+  color: var(--ops-text) !important;
+  box-shadow: var(--shadow-sm);
+}
+
+#ops-dashboard-root [style*="rgba(0,0,0,0.4"],
+#ops-dashboard-root [style*="rgba(0, 0, 0, 0.4"],
+#ops-dashboard-root [style*="rgba(0,0,0,0.5"],
+#ops-dashboard-root [style*="rgba(0, 0, 0, 0.5"],
+.admin-shell [style*="rgba(0,0,0,0.4"],
+.admin-shell [style*="rgba(0,0,0,0.5"],
+.admin-shell [style*="rgba(0,0,0,0.8"] {
+  background: var(--surface-200) !important;
+  border-color: var(--border) !important;
+}
+
+#ops-dashboard-root input,
+#ops-dashboard-root textarea,
+#ops-dashboard-root select,
+.admin-shell input,
+.admin-shell textarea,
+.admin-shell select {
+  background: var(--surface-raised) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
+  border-radius: 8px !important;
+}
+
+[data-theme="dark"] #ops-dashboard-root input,
+[data-theme="dark"] #ops-dashboard-root textarea,
+[data-theme="dark"] #ops-dashboard-root select,
+[data-theme="dark"] .admin-shell input,
+[data-theme="dark"] .admin-shell textarea,
+[data-theme="dark"] .admin-shell select {
+  color: var(--ops-text) !important;
+}
+
+#ops-dashboard-root input:focus,
+#ops-dashboard-root textarea:focus,
+.admin-shell input:focus,
+.admin-shell textarea:focus {
+  border-color: var(--border-focus) !important;
+  box-shadow: 0 0 0 4px var(--primary-light) !important;
+}
+
+#ops-dashboard-root .cb-tab-bar {
+  border-bottom-color: var(--ops-card-border) !important;
+}
+
+#ops-dashboard-root .cb-tab-bar button {
+  border-radius: 8px !important;
+  background: var(--ops-card-bg) !important;
+  border-color: var(--ops-card-border) !important;
+  color: var(--ops-text-muted) !important;
+}
+
+#ops-dashboard-root .cb-tab-bar button:hover,
+.admin-shell button:hover {
+  transform: translateY(-1px);
+}
+
+.ops-login-screen {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(320px, 0.95fr) minmax(360px, 1fr);
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(12, 74, 82, 0.94)),
+    #0f172a !important;
+  color: white;
+}
+
+.ops-login-panel {
+  padding: clamp(32px, 6vw, 72px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-right: 1px solid rgba(255,255,255,0.1);
+}
+
+.ops-login-story {
+  max-width: 560px;
+}
+
+.ops-login-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #99f6e4;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+
+.ops-login-title {
+  font-size: clamp(42px, 6vw, 76px);
+  line-height: 0.96;
+  max-width: 620px;
+  margin: 0 0 24px;
+}
+
+.ops-login-copy {
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 17px;
+  line-height: 1.7;
+  max-width: 520px;
+}
+
+.ops-login-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 42px;
+}
+
+.ops-login-metric {
+  border: 1px solid rgba(255,255,255,0.11);
+  border-radius: 10px;
+  padding: 16px;
+  background: rgba(255,255,255,0.05);
+}
+
+.ops-login-form-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(24px, 5vw, 64px);
+}
+
+.ops-login-card {
+  width: 100%;
+  max-width: 440px;
+  padding: 36px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.96) !important;
+  border: 1px solid rgba(255,255,255,0.5) !important;
+  box-shadow: 0 28px 90px rgba(0,0,0,0.28);
+  color: #0f172a;
+}
+
+.ops-login-card h2 {
+  color: #0f172a !important;
+}
+
+.ops-login-card p,
+.ops-login-card label {
+  color: #64748b !important;
+}
+
+.ops-login-card input {
+  background: #f8fafc !important;
+  border: 1px solid #dbe5ef !important;
+  color: #0f172a !important;
+}
+
+.ops-login-card input:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 4px rgba(15,118,110,0.14) !important;
+}
+
+.ops-login-submit {
+  background: linear-gradient(135deg, var(--primary), #2563eb) !important;
+  color: white !important;
+  border-radius: 8px !important;
+  box-shadow: 0 16px 34px rgba(15, 118, 110, 0.24) !important;
+}
+
+@media (max-width: 980px) {
+  .ops-login-screen {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-login-panel {
+    border-right: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .ops-login-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  #ops-dashboard-root main,
+  .admin-shell main {
+    padding: 24px !important;
+  }
+}

@@ -18,11 +18,11 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
       <aside className="sidebar">
         <div style={{ padding: '0 8px 32px 8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div suppressHydrationWarning style={{ 
-              background: 'linear-gradient(135deg, var(--primary), #8b5cf6)', 
+            <div suppressHydrationWarning style={{
+              background: 'linear-gradient(135deg, var(--primary), var(--accent))',
               width: '32px', 
               height: '32px', 
-              borderRadius: '8px',
+              borderRadius: '10px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -30,7 +30,7 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
             }}>
               <Ticket size={18} color="white" />
             </div>
-            <h1 style={{ fontSize: '18px', color: 'white', letterSpacing: '-0.5px' }}>Nomad Workspace</h1>
+            <h1 style={{ fontSize: '18px', color: 'white', letterSpacing: 0 }}>Nomad Workspace</h1>
           </div>
         </div>
         

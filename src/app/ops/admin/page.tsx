@@ -230,8 +230,8 @@ export default function AdminControlPanel() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: '#050505', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-        <Loader2 color="#00b27a" size={48} style={{ animation: 'spin 1s linear infinite' }} />
+      <div className="admin-shell" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+        <Loader2 color="var(--primary)" size={48} style={{ animation: 'spin 1s linear infinite' }} />
         <span style={{ color: '#6b7280', fontSize: 14 }}>Authenticating admin session...</span>
       </div>
     );
@@ -239,7 +239,7 @@ export default function AdminControlPanel() {
 
   if (accessDenied) {
     return (
-      <div style={{ minHeight: '100vh', background: '#050505', color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div className="admin-shell" style={{ minHeight: '100vh', color: 'var(--ops-text)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <ShieldAlert color="#ef4444" size={64} style={{ marginBottom: 24 }} />
         <h1 style={{ fontSize: 32, fontWeight: 800, marginBottom: 16 }}>UNAUTHORIZED ACCESS</h1>
         <p style={{ color: '#9ca3af', fontSize: 18, textAlign: 'center', maxWidth: 500 }}>This panel requires Administrator clearance.</p>
@@ -251,7 +251,7 @@ export default function AdminControlPanel() {
   // ── Main Render ────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#0a0a0a', color: 'white', fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div className="admin-shell" style={{ minHeight: '100vh', color: 'var(--ops-text)', fontFamily: "'Inter', system-ui, sans-serif" }}>
 
       {/* Toast */}
       <AnimatePresence>
@@ -259,32 +259,33 @@ export default function AdminControlPanel() {
       </AnimatePresence>
 
       {/* Header */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 40px', borderBottom: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(16px)', zIndex: 100, position: 'sticky', top: 0 }}>
+      <header className="admin-topbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 40px', borderBottom: '1px solid var(--ops-card-border)', backgroundColor: 'var(--ops-header-bg)', backdropFilter: 'blur(18px)', zIndex: 100, position: 'sticky', top: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="brand-mark">N</div>
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
-            <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-1px', display: 'flex', alignItems: 'center', gap: 2 }}>
-              n<span style={{ color: '#3b82f6' }}>ō</span>mad
+            <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: 0, display: 'flex', alignItems: 'center', gap: 2 }}>
+              Nomad
             </div>
-            <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '4px', color: '#3b82f6', marginTop: 2 }}>ADMIN OPS</div>
+            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.22em', color: 'var(--ops-accent)', marginTop: 2 }}>ADMIN OPS</div>
           </div>
-          <div style={{ height: 24, width: 1, background: 'rgba(255,255,255,0.1)', margin: '0 8px' }} />
-          <h1 style={{ fontSize: 14, margin: 0, fontWeight: 600, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ height: 24, width: 1, background: 'var(--border)', margin: '0 8px' }} />
+          <h1 style={{ fontSize: 14, margin: 0, fontWeight: 700, color: 'var(--ops-text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
             <Server size={14} /> CONTROL CENTER
           </h1>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={bootstrap} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#9ca3af', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+          <button className="ops-secondary-button" onClick={bootstrap} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--ops-text-muted)', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
             <RefreshCw size={14} /> Refresh
           </button>
-          <button onClick={() => router.push('/ops/dashboard')} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#e5e7eb', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+          <button className="ops-secondary-button" onClick={() => router.push('/ops/dashboard')} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--ops-text)', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
             <ArrowLeft size={16} /> Workspace
           </button>
         </div>
       </header>
 
       {/* Section Nav */}
-      <div style={{ display: 'flex', gap: 0, padding: '0 40px', borderBottom: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(0,0,0,0.3)' }}>
+      <div style={{ display: 'flex', gap: 0, padding: '0 40px', borderBottom: '1px solid var(--ops-card-border)', backgroundColor: 'rgba(255,255,255,0.32)', overflowX: 'auto' }}>
         {(['analytics', 'escalations', 'visitors', 'users'] as const).map(s => (
           <button
             key={s}
@@ -292,8 +293,8 @@ export default function AdminControlPanel() {
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
               padding: '16px 24px', fontSize: 14, fontWeight: 600,
-              color: activeSection === s ? 'white' : '#6b7280',
-              borderBottom: activeSection === s ? '2px solid #3b82f6' : '2px solid transparent',
+              color: activeSection === s ? 'var(--ops-text)' : 'var(--ops-text-muted)',
+              borderBottom: activeSection === s ? '2px solid var(--primary)' : '2px solid transparent',
               transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 8,
             }}
           >

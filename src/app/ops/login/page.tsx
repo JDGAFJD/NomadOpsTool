@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Lock, Mail, Loader2, ArrowRight, User, CheckCircle } from 'lucide-react';
 
@@ -78,36 +78,54 @@ export default function OpsLogin() {
   };
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      backgroundColor: '#050505', 
-      backgroundImage: 'radial-gradient(circle at 100% 100%, rgba(0, 178, 122, 0.15) 0%, transparent 50%)',
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center',
-      position: 'relative'
-    }}>
-      <motion.div 
-        animate={{ scale: [1, 1.1, 1], opacity: [0.2, 0.4, 0.2] }} 
-        transition={{ repeat: Infinity, duration: 10, ease: "easeInOut" }}
-        style={{ position: 'absolute', top: '10%', left: '10%', width: '500px', height: '500px', background: 'radial-gradient(circle, rgba(0, 178, 122, 0.1) 0%, transparent 60%)', filter: 'blur(60px)' }}
-      />
+    <div className="ops-login-screen" suppressHydrationWarning>
+      <section className="ops-login-panel">
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 72 }}>
+            <div className="brand-mark" suppressHydrationWarning>N</div>
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 800 }}>Nomad</div>
+              <div style={{ color: '#99f6e4', fontSize: 10, fontWeight: 800, letterSpacing: '0.26em' }}>OPS CENTER</div>
+            </div>
+          </div>
 
+          <div className="ops-login-story">
+            <div className="ops-login-kicker"><CheckCircle size={15} /> Network Operations</div>
+            <h1 className="ops-login-title">Support command, redesigned.</h1>
+            <p className="ops-login-copy">
+              A cleaner control surface for customer lookups, billing signals, device state, escalations, and agent access. Built for fast scanning and confident handoffs.
+            </p>
+            <div className="ops-login-metrics">
+              <div className="ops-login-metric">
+                <div style={{ fontSize: 24, fontWeight: 800 }}>360°</div>
+                <div style={{ color: 'rgba(226,232,240,0.68)', fontSize: 12, marginTop: 4 }}>Customer context</div>
+              </div>
+              <div className="ops-login-metric">
+                <div style={{ fontSize: 24, fontWeight: 800 }}>Live</div>
+                <div style={{ color: 'rgba(226,232,240,0.68)', fontSize: 12, marginTop: 4 }}>Network actions</div>
+              </div>
+              <div className="ops-login-metric">
+                <div style={{ fontSize: 24, fontWeight: 800 }}>Audit</div>
+                <div style={{ color: 'rgba(226,232,240,0.68)', fontSize: 12, marginTop: 4 }}>Admin visibility</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ color: 'rgba(226,232,240,0.46)', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          Nomad Internet internal systems
+        </div>
+      </section>
+
+      <section className="ops-login-form-wrap">
       <motion.form 
+        className="ops-login-card"
+        suppressHydrationWarning
         onSubmit={handleLogin}
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: 'easeOut' }}
         style={{ 
-          zIndex: 10, 
-          width: '100%', 
-          maxWidth: '420px', 
-          padding: '48px', 
-          backgroundColor: 'rgba(20, 20, 20, 0.6)', 
-          border: '1px solid rgba(255, 255, 255, 0.08)', 
-          borderRadius: '24px', 
-          backdropFilter: 'blur(24px)',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
           display: 'flex',
           flexDirection: 'column',
           gap: '24px'
@@ -115,15 +133,15 @@ export default function OpsLogin() {
       >
         <div style={{ textAlign: 'center', marginBottom: '8px' }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
-            <div style={{ padding: '12px', background: 'linear-gradient(135deg, rgba(0,178,122,0.2), rgba(0,162,106,0.2))', borderRadius: '16px', border: '1px solid rgba(0,178,122,0.3)' }}>
-               {mode === 'login' ? <Lock color="#00b27a" size={28} /> : <User color="#00b27a" size={28} />}
+            <div style={{ padding: '12px', background: 'rgba(15,118,110,0.1)', borderRadius: '12px', border: '1px solid rgba(15,118,110,0.18)' }}>
+               {mode === 'login' ? <Lock color="var(--primary)" size={28} /> : <User color="var(--primary)" size={28} />}
             </div>
           </div>
-          <h2 style={{ fontSize: '28px', color: 'white', fontWeight: 700, margin: '0 0 8px 0' }}>
-            {mode === 'login' ? 'Security Gateway' : 'Request Access'}
+          <h2 style={{ fontSize: '28px', fontWeight: 700, margin: '0 0 8px 0' }}>
+            {mode === 'login' ? 'Welcome back' : 'Request Access'}
           </h2>
-          <p style={{ color: '#9ca3af', margin: 0, fontSize: '14px' }}>
-            {mode === 'login' ? 'Nomad Network Operations Center' : 'Access requests are routed to Bryan Fury'}
+          <p style={{ margin: 0, fontSize: '14px' }}>
+            {mode === 'login' ? 'Sign in to continue to the operations workspace.' : 'Access requests are routed for approval.'}
           </p>
         </div>
 
@@ -137,7 +155,7 @@ export default function OpsLogin() {
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ padding: '24px 16px', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px', color: '#10b981', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', textAlign: 'center' }}>
             <CheckCircle size={40} />
             <div>
-              <strong style={{ display: 'block', fontSize: '18px', marginBottom: '6px', color: 'white' }}>Request Sent</strong>
+              <strong style={{ display: 'block', fontSize: '18px', marginBottom: '6px', color: '#0f172a' }}>Request Sent</strong>
               <span style={{ fontSize: '14px', color: '#a7f3d0' }}>Bryan Fury has been notified via Slack.</span>
             </div>
             <button 
@@ -153,37 +171,37 @@ export default function OpsLogin() {
             {mode === 'login' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ position: 'relative' }}>
-                  <Mail size={18} color="#9ca3af" style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '16px' }} />
+                  <Mail size={18} color="#64748b" style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '16px' }} />
                   <input 
                     type="email" 
-                    placeholder="Operator Email" 
+                    placeholder="Operator email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     style={{ width: '100%', padding: '14px 16px 14px 48px', backgroundColor: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: 'white', fontSize: '15px', outline: 'none', transition: 'border-color 0.2s' }}
-                    onFocus={(e) => e.target.style.borderColor = '#00b27a'}
-                    onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                    onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+                    onBlur={(e) => e.target.style.borderColor = '#dbe5ef'}
                   />
                 </div>
 
                 <div style={{ position: 'relative' }}>
-                  <Lock size={18} color="#9ca3af" style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '16px' }} />
+                  <Lock size={18} color="#64748b" style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '16px' }} />
                   <input 
                     type="password" 
-                    placeholder="Passcode" 
+                    placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     style={{ width: '100%', padding: '14px 16px 14px 48px', backgroundColor: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: 'white', fontSize: '15px', outline: 'none', transition: 'border-color 0.2s' }}
-                    onFocus={(e) => e.target.style.borderColor = '#00b27a'}
-                    onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                    onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+                    onBlur={(e) => e.target.style.borderColor = '#dbe5ef'}
                   />
                 </div>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ position: 'relative' }}>
-                  <User size={18} color="#9ca3af" style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '16px' }} />
+                  <User size={18} color="#64748b" style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '16px' }} />
                   <input 
                     type="text" 
                     placeholder="Full Name" 
@@ -191,13 +209,13 @@ export default function OpsLogin() {
                     onChange={(e) => setReqName(e.target.value)}
                     required
                     style={{ width: '100%', padding: '14px 16px 14px 48px', backgroundColor: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: 'white', fontSize: '15px', outline: 'none', transition: 'border-color 0.2s' }}
-                    onFocus={(e) => e.target.style.borderColor = '#00b27a'}
-                    onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                    onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+                    onBlur={(e) => e.target.style.borderColor = '#dbe5ef'}
                   />
                 </div>
 
                 <div style={{ position: 'relative' }}>
-                  <Mail size={18} color="#9ca3af" style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '16px' }} />
+                  <Mail size={18} color="#64748b" style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '16px' }} />
                   <input 
                     type="email" 
                     placeholder="Work Email" 
@@ -205,8 +223,8 @@ export default function OpsLogin() {
                     onChange={(e) => setReqEmail(e.target.value)}
                     required
                     style={{ width: '100%', padding: '14px 16px 14px 48px', backgroundColor: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: 'white', fontSize: '15px', outline: 'none', transition: 'border-color 0.2s' }}
-                    onFocus={(e) => e.target.style.borderColor = '#00b27a'}
-                    onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                    onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+                    onBlur={(e) => e.target.style.borderColor = '#dbe5ef'}
                   />
                 </div>
               </div>
@@ -215,23 +233,25 @@ export default function OpsLogin() {
             {mode === 'login' && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#9ca3af', fontSize: '13px' }}>
-                    <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} style={{ accentColor: '#00b27a', width: '16px', height: '16px' }} />
+                    <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} style={{ accentColor: 'var(--primary)', width: '16px', height: '16px' }} />
                     Remember me (30 Days)
                  </label>
-                 <button type="button" onClick={() => { setMode('request'); setError(''); }} style={{ background: 'transparent', border: 'none', color: '#00b27a', fontSize: '13px', textDecoration: 'none', cursor: 'pointer', padding: 0 }}>Request Access</button>
+                 <button type="button" onClick={() => { setMode('request'); setError(''); }} style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontSize: '13px', textDecoration: 'none', cursor: 'pointer', padding: 0, fontWeight: 700 }}>Request Access</button>
               </div>
             )}
 
             <motion.button
+              className="ops-login-submit"
+              suppressHydrationWarning
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               disabled={loading}
               type="submit"
               style={{ 
                 marginTop: '8px',
-                background: loading ? 'rgba(255,255,255,0.1)' : 'linear-gradient(90deg, #00b27a 0%, #00a26a 100%)', 
+                background: loading ? 'rgba(15,23,42,0.08)' : undefined,
                 border: 'none', 
-                color: loading ? '#9ca3af' : 'white', 
+                color: loading ? '#64748b' : 'white',
                 padding: '16px', 
                 borderRadius: '12px', 
                 fontSize: '15px', 
@@ -250,8 +270,8 @@ export default function OpsLogin() {
 
             {mode === 'request' && (
                <div style={{ textAlign: 'center', marginTop: '4px' }}>
-                 <button type="button" onClick={() => { setMode('login'); setError(''); }} style={{ background: 'transparent', border: 'none', color: '#9ca3af', fontSize: '13px', cursor: 'pointer', padding: 0 }}>
-                   ← Back to Login
+                 <button type="button" onClick={() => { setMode('login'); setError(''); }} style={{ background: 'transparent', border: 'none', color: '#64748b', fontSize: '13px', cursor: 'pointer', padding: 0 }}>
+                   Back to Login
                  </button>
                </div>
             )}
@@ -259,10 +279,7 @@ export default function OpsLogin() {
         )}
       </motion.form>
 
-      {/* Credit */}
-      <div style={{ position: 'absolute', bottom: '24px', left: '50%', transform: 'translateX(-50%)', color: 'rgba(255,255,255,0.25)', fontSize: '12px', letterSpacing: '1px', whiteSpace: 'nowrap' }}>
-        Created by Bryan
-      </div>
+      </section>
     </div>
   );
 }

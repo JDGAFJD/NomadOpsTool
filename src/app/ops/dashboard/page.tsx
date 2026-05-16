@@ -75,22 +75,23 @@ export default function OpsDashboard() {
   return (
     <>
     <style dangerouslySetInnerHTML={{__html: ".cb-tab-bar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; } .cb-tab-bar::-webkit-scrollbar { display: none; } .cb-customer-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); } .cb-customer-header-actions { display: flex; gap: 8px; flex-wrap: wrap; } .cb-sub-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; } .cb-network-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 12px; margin-bottom: 16px; } .cb-action-buttons { display: flex; gap: 8px; flex-wrap: wrap; } .cb-action-buttons > button { flex: 1; min-width: 120px; } @media (max-width: 768px) {  .cb-network-grid { grid-template-columns: 1fr 1fr; }  .cb-customer-header { flex-direction: column; align-items: flex-start; }  .cb-sub-header { flex-direction: column; }  .cb-action-buttons { flex-direction: column; }  .cb-action-buttons > button { width: 100%; min-width: unset; } } @media (max-width: 480px) { .cb-network-grid { grid-template-columns: 1fr; } }"}} />
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#0a0a0a', color: 'var(--ops-text)', fontFamily: 'system-ui, sans-serif' }}>
+    <div className="ops-app-shell" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', color: 'var(--ops-text)' }}>
       {/* Global Header */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 40px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--ops-header-bg)', backdropFilter: 'blur(10px)', zIndex: 100 }}>
+      <header className="ops-topbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 32px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--ops-header-bg)', backdropFilter: 'blur(18px)', zIndex: 100 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="brand-mark">N</div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
-             <div style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-1px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                n<span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ color: '#00b27a' }}>ō</span></span>mad
+             <div style={{ fontSize: '22px', fontWeight: 800, letterSpacing: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                Nomad
              </div>
-             <div style={{ fontSize: '9px', fontWeight: 500, letterSpacing: '4px', color: '#00b27a', marginLeft: '2px', marginTop: '2px' }}>
-                I N T E R N E T
+             <div style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '0.22em', color: 'var(--ops-accent)', marginLeft: '2px', marginTop: '2px' }}>
+                INTERNET
              </div>
           </div>
-          <div style={{ height: '20px', width: '1px', background: 'rgba(255,255,255,0.1)', margin: '0 12px' }} />
+          <div style={{ height: '24px', width: '1px', background: 'var(--border)', margin: '0 12px' }} />
           <div>
-            <h1 style={{ fontSize: '14px', margin: 0, fontWeight: 600, color: 'var(--text-secondary)' }}>NOC <span style={{ color: 'var(--ops-text-muted)' }}>Ecosystem</span></h1>
-            <div style={{ fontSize: '10px', color: 'var(--ops-text-muted)', opacity: 0.6, marginTop: '1px', letterSpacing: '0.5px' }}>Created by Bryan</div>
+            <h1 style={{ fontSize: '14px', margin: 0, fontWeight: 700, color: 'var(--text-secondary)' }}>NOC Ecosystem</h1>
+            <div style={{ fontSize: '10px', color: 'var(--ops-text-muted)', opacity: 0.8, marginTop: '1px', letterSpacing: '0.04em' }}>Customer intelligence console</div>
           </div>
         </div>
         
@@ -100,6 +101,8 @@ export default function OpsDashboard() {
             <div 
               key={tab.id}
               onClick={() => setActiveTabId(tab.id)}
+              className="ops-tab"
+              data-active={activeTabId === tab.id}
               style={{
                 display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '12px',
                 background: activeTabId === tab.id ? 'rgba(0, 178, 122, 0.15)' : 'rgba(255,255,255,0.03)',
@@ -111,7 +114,7 @@ export default function OpsDashboard() {
               }}
             >
               <Activity size={14} color={activeTabId === tab.id ? '#00b27a' : '#6b7280'} />
-              <div style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '13px', color: activeTabId === tab.id ? 'white' : '#9ca3af', fontWeight: activeTabId === tab.id ? 600 : 400 }}>
+              <div style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '13px', color: activeTabId === tab.id ? 'var(--ops-text)' : 'var(--ops-text-muted)', fontWeight: activeTabId === tab.id ? 700 : 500 }}>
                 {tab.title}
               </div>
               <button onClick={(e) => handleCloseTab(e, tab.id)} style={{ background: 'transparent', border: 'none', color: 'var(--ops-text-muted)', padding: '2px', cursor: 'pointer', borderRadius: '4px', display: 'flex' }}>
@@ -119,7 +122,7 @@ export default function OpsDashboard() {
               </button>
             </div>
           ))}
-          <button onClick={handleCreateTab} style={{ background: 'transparent', border: '1px dashed rgba(255,255,255,0.2)', color: 'var(--ops-text-muted)', borderRadius: '12px', padding: '0 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.2s' }}>
+          <button className="ops-secondary-button" onClick={handleCreateTab} style={{ background: 'transparent', border: '1px dashed var(--border)', color: 'var(--ops-text-muted)', borderRadius: '12px', padding: '0 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.2s' }}>
             +
           </button>
         </div>
@@ -129,6 +132,7 @@ export default function OpsDashboard() {
           <button
             onClick={toggleTheme}
             title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+            className="ops-secondary-button"
             style={{ background: 'var(--surface-200)', border: '1px solid var(--border)', color: 'var(--text-secondary)', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, transition: 'all 0.2s' }}
           >
             {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
@@ -138,6 +142,7 @@ export default function OpsDashboard() {
           <button 
             onClick={handleLogout}
             disabled={loggingOut}
+            className="ops-secondary-button"
             style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}
           >
             {loggingOut ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />} Disconnect
@@ -627,8 +632,8 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
 
             <div style={{ fontSize: 13, color: 'var(--ops-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
               {escalationModal.type === 'line_issue'
-                ? <>Please <strong style={{ color: 'var(--ops-text)' }}>describe the customer's internet issue</strong> before escalating to the team:</>  
-                : <>No obvious meta issue was detected. Please <strong style={{ color: 'var(--ops-text)' }}>briefly describe the problem</strong> so the team knows what to investigate:</> 
+                ? <>Please <strong style={{ color: 'var(--ops-text)' }}>describe the customer&apos;s internet issue</strong> before escalating to the team:</>
+                : <>No obvious meta issue was detected. Please <strong style={{ color: 'var(--ops-text)' }}>briefly describe the problem</strong> so the team knows what to investigate:</>
               }
             </div>
 
@@ -675,39 +680,39 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, y: -40, scale: 0.95 }}
               transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-              style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', maxWidth: '700px', margin: '0 auto', width: '100%' }}
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', maxWidth: '760px', margin: '0 auto', width: '100%' }}
             >
-              <div style={{ padding: '16px', background: 'rgba(0, 178, 122, 0.1)', borderRadius: '24px', marginBottom: '24px', border: '1px solid rgba(0, 178, 122, 0.2)' }}>
-                 <Activity color="#00b27a" size={32} />
+              <div style={{ padding: '14px', background: 'var(--primary-light)', borderRadius: '12px', marginBottom: '24px', border: '1px solid rgba(15, 118, 110, 0.22)' }}>
+                 <Activity color="var(--primary)" size={32} />
               </div>
-              <h2 style={{ fontSize: '48px', fontWeight: 800, marginBottom: '16px', textAlign: 'center', letterSpacing: '-1px' }}>System Omni-Search</h2>
-              <p style={{ color: 'var(--ops-text-muted)', fontSize: '18px', textAlign: 'center', marginBottom: '48px', lineHeight: 1.5 }}>
-                Enter a customer email to instantly scan Chargebee, Shopify, ShipStation, and ThingSpace databanks.
+              <h2 style={{ fontSize: 'clamp(36px, 6vw, 58px)', fontWeight: 800, marginBottom: '16px', textAlign: 'center', letterSpacing: 0 }}>Customer command search</h2>
+              <p style={{ color: 'var(--ops-text-muted)', fontSize: '18px', textAlign: 'center', marginBottom: '42px', lineHeight: 1.6, maxWidth: 620 }}>
+                Search once to bring billing, orders, tickets, and network records into a single operator-ready workspace.
               </p>
 
               <form suppressHydrationWarning onSubmit={handleSearch} style={{ width: '100%', position: 'relative' }}>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  <Search size={24} color="#9ca3af" style={{ position: 'absolute', left: '24px' }} />
+                  <Search size={24} color="var(--ops-text-muted)" style={{ position: 'absolute', left: '22px' }} />
                   <input 
                     type="email" 
-                    placeholder="Operator target email..." 
+                    placeholder="customer@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     style={{ 
                       width: '100%', 
-                      padding: '24px 24px 24px 64px', 
-                      backgroundColor: 'rgba(20,20,20,0.8)', 
-                      border: '1px solid rgba(255,255,255,0.1)', 
-                      borderRadius: '24px', 
+                      padding: '22px 190px 22px 60px',
+                      backgroundColor: 'var(--ops-card-bg)',
+                      border: '1px solid var(--ops-card-border)',
+                      borderRadius: '12px',
                       color: 'var(--ops-text)', 
-                      fontSize: '20px', 
+                      fontSize: '18px',
                       outline: 'none', 
-                      boxShadow: '0 24px 48px rgba(0,0,0,0.5)',
+                      boxShadow: 'var(--shadow-lg)',
                       transition: 'border-color 0.3s, box-shadow 0.3s' 
                     }}
-                    onFocus={(e) => { e.target.style.borderColor = '#00b27a'; e.target.style.boxShadow = '0 0 0 4px rgba(0, 178, 122, 0.2)'; }}
-                    onBlur={(e) => { e.target.style.borderColor = 'transparent'; e.target.style.boxShadow = 'none'; }}
+                    onFocus={(e) => { e.target.style.borderColor = 'var(--primary)'; e.target.style.boxShadow = '0 0 0 4px rgba(15, 118, 110, 0.14), var(--shadow-lg)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = 'var(--ops-card-border)'; e.target.style.boxShadow = 'var(--shadow-lg)'; }}
                   />
                   
                   <motion.button
@@ -716,14 +721,15 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                     whileTap={{ scale: 0.95 }}
                     disabled={loading || !email}
                     type="submit"
+                    className="ops-primary-button"
                     style={{ 
                       position: 'absolute',
                       right: '12px',
-                      background: 'linear-gradient(90deg, #00b27a 0%, #00a26a 100%)', 
+                      background: 'linear-gradient(135deg, var(--primary), #0d9488)',
                       border: 'none', 
-                      color: 'var(--ops-text)', 
-                      padding: '14px 28px', 
-                      borderRadius: '16px', 
+                      color: 'white',
+                      padding: '14px 24px',
+                      borderRadius: '8px',
                       fontSize: '16px', 
                       fontWeight: 600, 
                       cursor: loading || !email ? 'not-allowed' : 'pointer',
@@ -733,7 +739,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                       opacity: loading || !email ? 0.7 : 1
                     }}
                   >
-                    {loading ? <Loader2 size={20} className="animate-spin" /> : 'Scan Ecosystem'}
+                    {loading ? <Loader2 size={20} className="animate-spin" /> : 'Search'}
                     {!loading && <ArrowRight size={18} />}
                   </motion.button>
                 </div>
