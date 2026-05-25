@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, Fragment } from 'react';
+import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ShieldAlert, Server, UserPlus, Activity, Database,
@@ -81,6 +82,60 @@ const ACTION_LABEL: Record<string, string> = {
   search_unique_customer: 'Customer Lookup',
   restore_customer: 'Network Restored',
   suspend_customer: 'Network Suspended',
+};
+
+const adminTwoColumnGrid: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(280px, 360px) minmax(0, 1fr)',
+  gap: 28,
+  alignItems: 'start',
+};
+
+const adminStack: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 20,
+  minWidth: 0,
+};
+
+const adminTableCard: CSSProperties = {
+  background: 'rgba(255,255,255,0.02)',
+  border: '1px solid rgba(255,255,255,0.06)',
+  borderRadius: 24,
+  overflow: 'hidden',
+  minWidth: 0,
+};
+
+const adminTableScroll: CSSProperties = {
+  overflowX: 'auto',
+  width: '100%',
+};
+
+const adminTable: CSSProperties = {
+  width: '100%',
+  borderCollapse: 'collapse',
+  tableLayout: 'fixed',
+};
+
+const adminTh: CSSProperties = {
+  padding: '14px 18px',
+  fontSize: 12,
+  color: '#9ca3af',
+  fontWeight: 700,
+  whiteSpace: 'nowrap',
+};
+
+const adminTd: CSSProperties = {
+  padding: '14px 18px',
+  fontSize: 13,
+  verticalAlign: 'middle',
+};
+
+const adminCellTruncate: CSSProperties = {
+  minWidth: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
 };
 
 // ── Inline components ──────────────────────────────────────────────────────────
@@ -338,7 +393,7 @@ export default function AdminControlPanel() {
         ))}
       </div>
 
-      <main style={{ padding: '40px', maxWidth: 1400, margin: '0 auto' }}>
+      <main style={{ padding: '40px', width: '100%', maxWidth: 1600, margin: '0 auto', boxSizing: 'border-box' }}>
 
         {/* ── ANALYTICS TAB ── */}
         <AnimatePresence mode="wait">
@@ -518,10 +573,10 @@ export default function AdminControlPanel() {
           {/* ── ESCALATIONS TAB ── */}
           {activeSection === 'escalations' && (
             <motion.div key="escalations" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 1fr) 2fr', gap: 32 }}>
+              <div style={adminTwoColumnGrid}>
                 
                 {/* Stats Summary */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div style={adminStack}>
                   <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, padding: 24 }}>
                     <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 16, fontWeight: 600, letterSpacing: '0.5px' }}>TOTAL ESCALATIONS</div>
                     <div style={{ fontSize: 48, fontWeight: 800 }}>{escalationStats?.total || 0}</div>
@@ -553,26 +608,35 @@ export default function AdminControlPanel() {
                 </div>
 
                 {/* Log Table */}
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, padding: 0, overflow: 'hidden' }}>
-                  <div style={{ padding: '24px 32px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={adminTableCard}>
+                  <div style={{ padding: '22px 24px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Recent Escalations</h3>
                   </div>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <div style={adminTableScroll}>
+                    <table style={{ ...adminTable, minWidth: 760 }}>
+                      <colgroup>
+                        <col style={{ width: '38%' }} />
+                        <col style={{ width: '14%' }} />
+                        <col style={{ width: '32%' }} />
+                        <col style={{ width: '16%' }} />
+                      </colgroup>
                       <thead>
                         <tr style={{ textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                          <th style={{ padding: '16px 32px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>AGENT</th>
-                          <th style={{ padding: '16px 32px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>TYPE</th>
-                          <th style={{ padding: '16px 32px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>CUSTOMER</th>
-                          <th style={{ padding: '16px 32px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>DATE</th>
+                          <th style={adminTh}>AGENT</th>
+                          <th style={adminTh}>TYPE</th>
+                          <th style={adminTh}>CUSTOMER</th>
+                          <th style={adminTh}>DATE</th>
                         </tr>
                       </thead>
                       <tbody>
                         {escalations.map(e => (
                           <tr key={e.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                            <td style={{ padding: '16px 32px', fontSize: 14, fontWeight: 500 }}>{e.agent_email}</td>
-                            <td style={{ padding: '16px 32px' }}>
+                            <td style={{ ...adminTd, fontWeight: 600 }}>
+                              <div title={e.agent_email} style={adminCellTruncate}>{e.agent_email}</div>
+                            </td>
+                            <td style={adminTd}>
                               <span style={{ 
+                                display: 'inline-block',
                                 padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
                                 background: e.escalation_type === 'line_issue' ? '#ef444422' : '#3b82f622',
                                 color: e.escalation_type === 'line_issue' ? '#ef4444' : '#3b82f6'
@@ -580,8 +644,10 @@ export default function AdminControlPanel() {
                                 {e.escalation_type.replace(/_/g, ' ')}
                               </span>
                             </td>
-                            <td style={{ padding: '16px 32px', fontSize: 14, color: '#9ca3af' }}>{e.customer_email || '—'}</td>
-                            <td style={{ padding: '16px 32px', fontSize: 13, color: '#6b7280' }}>
+                            <td style={{ ...adminTd, color: '#9ca3af' }}>
+                              <div title={e.customer_email || undefined} style={adminCellTruncate}>{e.customer_email || '—'}</div>
+                            </td>
+                            <td style={{ ...adminTd, fontSize: 12, color: '#6b7280', lineHeight: 1.35, whiteSpace: 'normal' }}>
                               {new Date(e.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </td>
                           </tr>
@@ -597,8 +663,8 @@ export default function AdminControlPanel() {
           {/* ── REPLACEMENTS TAB ── */}
           {activeSection === 'replacements' && (
             <motion.div key="replacements" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 0.8fr) 2fr', gap: 32 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={adminTwoColumnGrid}>
+                <div style={adminStack}>
                   <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, padding: 24 }}>
                     <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 16, fontWeight: 600, letterSpacing: '0.5px' }}>TOTAL REPLACEMENTS</div>
                     <div style={{ fontSize: 48, fontWeight: 800 }}>{replacementStats?.total || 0}</div>
@@ -629,20 +695,28 @@ export default function AdminControlPanel() {
                   </div>
                 </div>
 
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, overflow: 'hidden' }}>
-                  <div style={{ padding: '24px 32px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={adminTableCard}>
+                  <div style={{ padding: '22px 24px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Recent Replacement Requests</h3>
                   </div>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <div style={adminTableScroll}>
+                    <table style={{ ...adminTable, minWidth: 1040 }}>
+                      <colgroup>
+                        <col style={{ width: '19%' }} />
+                        <col style={{ width: '23%' }} />
+                        <col style={{ width: '15%' }} />
+                        <col style={{ width: '18%' }} />
+                        <col style={{ width: '17%' }} />
+                        <col style={{ width: '8%' }} />
+                      </colgroup>
                       <thead>
                         <tr style={{ textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>AGENT</th>
-                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>CUSTOMER</th>
-                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>REPLACEMENT</th>
-                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>ISSUE</th>
-                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>REASON</th>
-                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>DATE</th>
+                          <th style={adminTh}>AGENT</th>
+                          <th style={adminTh}>CUSTOMER</th>
+                          <th style={adminTh}>REPLACEMENT</th>
+                          <th style={adminTh}>ISSUE</th>
+                          <th style={adminTh}>REASON</th>
+                          <th style={adminTh}>DATE</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -650,22 +724,30 @@ export default function AdminControlPanel() {
                           const replacementName = r.replacement_type === 'Other' ? r.custom_replacement_item || 'Other' : r.replacement_type;
                           return (
                             <tr key={r.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                              <td style={{ padding: '16px 24px', fontSize: 13, fontWeight: 600 }}>{r.agent_email}</td>
-                              <td style={{ padding: '16px 24px' }}>
-                                <div style={{ fontSize: 13, fontWeight: 700 }}>{r.customer_email || 'N/A'}</div>
-                                <div style={{ fontSize: 11, color: '#6b7280' }}>{r.subscription_id || 'No sub'} · {r.interaction_id || 'No interaction ID'}</div>
+                              <td style={{ ...adminTd, fontWeight: 600 }}>
+                                <div title={r.agent_email} style={adminCellTruncate}>{r.agent_email}</div>
                               </td>
-                              <td style={{ padding: '16px 24px' }}>
-                                <span style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 800, background: '#0f766e22', color: '#2dd4bf' }}>{replacementName}</span>
+                              <td style={adminTd}>
+                                <div title={r.customer_email || undefined} style={{ ...adminCellTruncate, fontWeight: 700 }}>{r.customer_email || 'N/A'}</div>
+                                <div title={`${r.subscription_id || 'No sub'} · ${r.interaction_id || 'No interaction ID'}`} style={{ ...adminCellTruncate, fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                                  {r.subscription_id || 'No sub'} · {r.interaction_id || 'No interaction ID'}
+                                </div>
                               </td>
-                              <td style={{ padding: '16px 24px', fontSize: 13, color: '#9ca3af', textTransform: 'capitalize' }}>
-                                {r.issue_branch.replace(/_/g, ' ')} / {r.branch_decision.replace(/_/g, ' ')}
+                              <td style={adminTd}>
+                                <span title={replacementName} style={{ display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 800, background: '#0f766e22', color: '#2dd4bf' }}>{replacementName}</span>
                               </td>
-                              <td style={{ padding: '16px 24px', fontSize: 13, color: '#9ca3af', maxWidth: 260 }}>
-                                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.replacement_reason}</div>
-                                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>{r.iccid || 'No ICCID'} · {r.imei || 'No IMEI'}</div>
+                              <td style={{ ...adminTd, color: '#9ca3af', textTransform: 'capitalize' }}>
+                                <div title={`${r.issue_branch.replace(/_/g, ' ')} / ${r.branch_decision.replace(/_/g, ' ')}`} style={adminCellTruncate}>
+                                  {r.issue_branch.replace(/_/g, ' ')} / {r.branch_decision.replace(/_/g, ' ')}
+                                </div>
                               </td>
-                              <td style={{ padding: '16px 24px', fontSize: 12, color: '#6b7280' }}>
+                              <td style={{ ...adminTd, color: '#9ca3af' }}>
+                                <div title={r.replacement_reason} style={adminCellTruncate}>{r.replacement_reason}</div>
+                                <div title={`${r.iccid || 'No ICCID'} · ${r.imei || 'No IMEI'}`} style={{ ...adminCellTruncate, fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                                  {r.iccid || 'No ICCID'} · {r.imei || 'No IMEI'}
+                                </div>
+                              </td>
+                              <td style={{ ...adminTd, fontSize: 12, color: '#6b7280', lineHeight: 1.35, whiteSpace: 'normal' }}>
                                 {new Date(r.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                               </td>
                             </tr>
