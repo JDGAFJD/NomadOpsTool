@@ -40,6 +40,7 @@ type ReplacementPowerDecision = 'full_unit' | 'power_cord';
 type ReplacementInternetDecision = 'stopped_working' | 'never_worked';
 type ReplacementType = 'Air' | 'Dragon/Raptor' | 'Omega/Cube' | 'Replacement power cord' | 'Other';
 type ReplacementChecklist = {
+  checkedOtherSockets: boolean;
   customerMoved: boolean;
   coverageChecked: boolean;
   outageChecked: boolean;
@@ -70,6 +71,7 @@ const EMPTY_REPLACEMENT_FORM: ReplacementForm = {
   powerDecision: '',
   internetDecision: '',
   checklist: {
+    checkedOtherSockets: false,
     customerMoved: false,
     coverageChecked: false,
     outageChecked: false,
@@ -91,6 +93,9 @@ const REPLACEMENT_CHECKLIST_LABELS: { key: keyof ReplacementChecklist; label: st
   { key: 'lineRefreshTried', label: 'Did we try a line refresh?' },
   { key: 'hardResetTried', label: 'Did we try a hard reset?' },
   { key: 'deviceMoved', label: 'Did we try moving/repositioning the device?' },
+];
+const POWER_REPLACEMENT_CHECKLIST_LABELS: { key: keyof ReplacementChecklist; label: string }[] = [
+  { key: 'checkedOtherSockets', label: 'Did we check other sockets?' },
 ];
 
 export default function OpsDashboard() {
@@ -352,6 +357,9 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
     if (step === 3 && replacementForm.issueBranch === 'internet') {
       const allChecked = REPLACEMENT_CHECKLIST_LABELS.every(item => replacementForm.checklist[item.key]);
       if (!allChecked) return 'Complete every troubleshooting checkbox before proceeding.';
+    }
+    if (step === 3 && replacementForm.issueBranch === 'power') {
+      if (!replacementForm.checklist.checkedOtherSockets) return 'Confirm that other sockets were checked before proceeding.';
     }
     if (step === 4) {
       if (!replacementForm.replacementType) return 'Select what replacement we are sending.';
@@ -940,8 +948,18 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                       ))}
                     </div>
                   ) : (
-                    <div style={{ padding: 18, borderRadius: 12, background: 'var(--surface-200)', color: 'var(--ops-text-muted)', border: '1px solid var(--border)' }}>
-                      No internet checklist is required for the power path.
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10, marginTop: 16 }}>
+                      {POWER_REPLACEMENT_CHECKLIST_LABELS.map(item => (
+                        <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 10, background: 'var(--surface-200)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--ops-text)', fontSize: 14, fontWeight: 600 }}>
+                          <input
+                            type="checkbox"
+                            checked={replacementForm.checklist[item.key]}
+                            onChange={e => updateReplacementForm({ checklist: { ...replacementForm.checklist, [item.key]: e.target.checked } })}
+                            style={{ width: 16, height: 16, accentColor: 'var(--primary)' }}
+                          />
+                          {item.label}
+                        </label>
+                      ))}
                     </div>
                   )}
                 </div>

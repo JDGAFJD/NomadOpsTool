@@ -10,7 +10,9 @@ const ISSUE_BRANCHES = ['power', 'internet'] as const;
 const POWER_DECISIONS = ['full_unit', 'power_cord'] as const;
 const INTERNET_DECISIONS = ['stopped_working', 'never_worked'] as const;
 const REPLACEMENT_TYPES = ['Air', 'Dragon/Raptor', 'Omega/Cube', 'Replacement power cord', 'Other'] as const;
-const CHECKLIST_KEYS = ['customerMoved', 'coverageChecked', 'outageChecked', 'lineRefreshTried', 'hardResetTried', 'deviceMoved'] as const;
+const CHECKLIST_KEYS = ['checkedOtherSockets', 'customerMoved', 'coverageChecked', 'outageChecked', 'lineRefreshTried', 'hardResetTried', 'deviceMoved'] as const;
+const POWER_CHECKLIST_KEYS = ['checkedOtherSockets'] as const;
+const INTERNET_CHECKLIST_KEYS = ['customerMoved', 'coverageChecked', 'outageChecked', 'lineRefreshTried', 'hardResetTried', 'deviceMoved'] as const;
 
 type ReplacementBody = {
   customer?: Record<string, any>;
@@ -48,8 +50,9 @@ function ensureChecklist(checklist: ReplacementBody['checklist']) {
   }, {} as Record<typeof CHECKLIST_KEYS[number], boolean>);
 }
 
-function checklistSummary(checklist: Record<typeof CHECKLIST_KEYS[number], boolean>) {
+function checklistSummary(checklist: Record<typeof CHECKLIST_KEYS[number], boolean>, issueBranch: ReplacementBody['issueBranch']) {
   const labels: Record<typeof CHECKLIST_KEYS[number], string> = {
+    checkedOtherSockets: 'Checked other sockets',
     customerMoved: 'Customer moved',
     coverageChecked: 'Coverage checked',
     outageChecked: 'Outage checked',
@@ -57,7 +60,8 @@ function checklistSummary(checklist: Record<typeof CHECKLIST_KEYS[number], boole
     hardResetTried: 'Hard reset tried',
     deviceMoved: 'Device moved/repositioned',
   };
-  return CHECKLIST_KEYS.map(key => `${checklist[key] ? '✅' : '⬜'} ${labels[key]}`).join('\n');
+  const keys = issueBranch === 'power' ? POWER_CHECKLIST_KEYS : INTERNET_CHECKLIST_KEYS;
+  return keys.map(key => `${checklist[key] ? '✅' : '⬜'} ${labels[key]}`).join('\n');
 }
 
 async function ensureReplacementTable() {
@@ -112,6 +116,12 @@ export async function POST(request: Request) {
     }
     if (body.issueBranch === 'internet' && !isOneOf(body.internetDecision, INTERNET_DECISIONS)) {
       return NextResponse.json({ error: 'Select whether the internet issue is new or started after working before.' }, { status: 400 });
+    }
+    if (body.issueBranch === 'power' && !checklist.checkedOtherSockets) {
+      return NextResponse.json({ error: 'Confirm that other sockets were checked before proceeding.' }, { status: 400 });
+    }
+    if (body.issueBranch === 'internet' && !INTERNET_CHECKLIST_KEYS.every(key => checklist[key])) {
+      return NextResponse.json({ error: 'Complete every troubleshooting checkbox before proceeding.' }, { status: 400 });
     }
     if (!isOneOf(body.replacementType, REPLACEMENT_TYPES)) {
       return NextResponse.json({ error: 'Select what replacement is being sent.' }, { status: 400 });
@@ -180,10 +190,10 @@ export async function POST(request: Request) {
         type: 'section',
         text: { type: 'mrkdwn', text: `*Troubleshooting Already Performed*\n>${escapeMrkdwn(body.troubleshootingSteps || 'Not provided')}` },
       },
-      ...(body.issueBranch === 'internet' ? [{
+      {
         type: 'section',
-        text: { type: 'mrkdwn', text: `*Troubleshooting Checklist*\n${checklistSummary(checklist)}` },
-      }] : []),
+        text: { type: 'mrkdwn', text: `*Troubleshooting Checklist*\n${checklistSummary(checklist, body.issueBranch)}` },
+      },
       {
         type: 'section',
         text: { type: 'mrkdwn', text: `*Replacement Reason*\n>${escapeMrkdwn(body.replacementReason)}` },
