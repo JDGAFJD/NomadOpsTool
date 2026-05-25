@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { LogOut, ShieldCheck, Loader2, Search, Package, Zap, CreditCard, Activity, ArrowRight, DollarSign, Calendar, Play, Pause, AlertCircle, Copy, RefreshCw, X, AlertTriangle, ShieldAlert, Check, Info, BarChart2, Sun, Moon } from 'lucide-react';
+import { LogOut, ShieldCheck, Loader2, Search, Package, Zap, CreditCard, Activity, ArrowRight, DollarSign, Calendar, Play, Pause, AlertCircle, Copy, RefreshCw, X, AlertTriangle, ShieldAlert, Check, Info, BarChart2, Sun, Moon, ClipboardList } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useTheme } from '@/components/ThemeProvider';
@@ -33,6 +33,64 @@ const GOOD_SKUS = [
   'M2MPublicStatic',
   'Static 5G Bus Internet 100MBPS',
   '59145x48526x84777'
+];
+
+type ReplacementIssueBranch = 'power' | 'internet';
+type ReplacementPowerDecision = 'full_unit' | 'power_cord';
+type ReplacementInternetDecision = 'stopped_working' | 'never_worked';
+type ReplacementType = 'Air' | 'Dragon/Raptor' | 'Omega/Cube' | 'Replacement power cord' | 'Other';
+type ReplacementChecklist = {
+  customerMoved: boolean;
+  coverageChecked: boolean;
+  outageChecked: boolean;
+  lineRefreshTried: boolean;
+  hardResetTried: boolean;
+  deviceMoved: boolean;
+};
+type ReplacementForm = {
+  troubleshootingSteps: string;
+  issueBranch: ReplacementIssueBranch | '';
+  powerDecision: ReplacementPowerDecision | '';
+  internetDecision: ReplacementInternetDecision | '';
+  checklist: ReplacementChecklist;
+  replacementType: ReplacementType | '';
+  customReplacementItem: string;
+  replacementReason: string;
+  interactionId: string;
+};
+type ReplacementTarget = {
+  customer: any;
+  subscription: any;
+  network?: any;
+};
+
+const EMPTY_REPLACEMENT_FORM: ReplacementForm = {
+  troubleshootingSteps: '',
+  issueBranch: '',
+  powerDecision: '',
+  internetDecision: '',
+  checklist: {
+    customerMoved: false,
+    coverageChecked: false,
+    outageChecked: false,
+    lineRefreshTried: false,
+    hardResetTried: false,
+    deviceMoved: false,
+  },
+  replacementType: '',
+  customReplacementItem: '',
+  replacementReason: '',
+  interactionId: '',
+};
+
+const REPLACEMENT_TYPES: ReplacementType[] = ['Air', 'Dragon/Raptor', 'Omega/Cube', 'Replacement power cord', 'Other'];
+const REPLACEMENT_CHECKLIST_LABELS: { key: keyof ReplacementChecklist; label: string }[] = [
+  { key: 'customerMoved', label: 'Did the customer move?' },
+  { key: 'coverageChecked', label: 'Did we check coverage?' },
+  { key: 'outageChecked', label: 'Did we check for an outage in the area?' },
+  { key: 'lineRefreshTried', label: 'Did we try a line refresh?' },
+  { key: 'hardResetTried', label: 'Did we try a hard reset?' },
+  { key: 'deviceMoved', label: 'Did we try moving/repositioning the device?' },
 ];
 
 export default function OpsDashboard() {
@@ -239,12 +297,122 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
   } | null>(null);
   const [escalationNote, setEscalationNote] = useState('');
 
+  // Replacement request workflow
+  const [replacementTarget, setReplacementTarget] = useState<ReplacementTarget | null>(null);
+  const [replacementForm, setReplacementForm] = useState<ReplacementForm>(EMPTY_REPLACEMENT_FORM);
+  const [replacementStep, setReplacementStep] = useState(1);
+  const [replacementError, setReplacementError] = useState('');
+  const [replacementSubmitting, setReplacementSubmitting] = useState(false);
+  const [replacementAgentEmail, setReplacementAgentEmail] = useState('');
+
   const showEscalationToast = (msg: string, ok: boolean) => {
     setEscalationToast({ msg, ok });
     setTimeout(() => setEscalationToast(null), 4000);
   };
 
   const ESCALATION_CHANNEL = '#0-urgent-live-calls'; // Escalations channel
+
+  const openReplacementModal = async (customer: any, subscription: any) => {
+    const iccid = subscription?.cf_SIM_ID_ICCID || subscription?.cf_iccid;
+    setReplacementTarget({ customer, subscription, network: iccid ? thingspaceData[iccid] : undefined });
+    setReplacementForm(EMPTY_REPLACEMENT_FORM);
+    setReplacementStep(1);
+    setReplacementError('');
+    setReplacementAgentEmail('');
+    try {
+      const res = await fetch('/api/ops/actions/replacement');
+      const data = await res.json();
+      if (res.ok && data.agentEmail) setReplacementAgentEmail(data.agentEmail);
+    } catch {
+      setReplacementAgentEmail('');
+    }
+  };
+
+  const closeReplacementModal = () => {
+    if (replacementSubmitting) return;
+    setReplacementTarget(null);
+    setReplacementForm(EMPTY_REPLACEMENT_FORM);
+    setReplacementStep(1);
+    setReplacementError('');
+    setReplacementAgentEmail('');
+  };
+
+  const updateReplacementForm = (patch: Partial<ReplacementForm>) => {
+    setReplacementForm(prev => ({ ...prev, ...patch }));
+    setReplacementError('');
+  };
+
+  const validateReplacementStep = (step: number) => {
+    if (step === 1) return true;
+    if (step === 2) {
+      if (!replacementForm.issueBranch) return 'Select an issue branch.';
+      if (replacementForm.issueBranch === 'power' && !replacementForm.powerDecision) return 'Select full unit replacement or replacement power cord.';
+      if (replacementForm.issueBranch === 'internet' && !replacementForm.internetDecision) return 'Select whether this device stopped working or never worked.';
+    }
+    if (step === 3 && replacementForm.issueBranch === 'internet') {
+      const allChecked = REPLACEMENT_CHECKLIST_LABELS.every(item => replacementForm.checklist[item.key]);
+      if (!allChecked) return 'Complete every troubleshooting checkbox before proceeding.';
+    }
+    if (step === 4) {
+      if (!replacementForm.replacementType) return 'Select what replacement we are sending.';
+      if (replacementForm.replacementType === 'Other' && !replacementForm.customReplacementItem.trim()) return 'Type the replacement item when Other is selected.';
+    }
+    if (step === 5 && !replacementForm.replacementReason.trim()) return 'Add the reason why this replacement is being sent.';
+    return true;
+  };
+
+  const goReplacementNext = () => {
+    const valid = validateReplacementStep(replacementStep);
+    if (valid !== true) {
+      setReplacementError(valid);
+      return;
+    }
+    setReplacementError('');
+    setReplacementStep(step => Math.min(6, step + 1));
+  };
+
+  const submitReplacementRequest = async () => {
+    if (!replacementTarget) return;
+    const valid = validateReplacementStep(5);
+    if (valid !== true) {
+      setReplacementError(valid);
+      return;
+    }
+    setReplacementSubmitting(true);
+    setReplacementError('');
+    try {
+      const res = await fetch('/api/ops/actions/replacement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer: replacementTarget.customer,
+          subscription: replacementTarget.subscription,
+          network: replacementTarget.network,
+          troubleshootingSteps: replacementForm.troubleshootingSteps,
+          issueBranch: replacementForm.issueBranch,
+          powerDecision: replacementForm.powerDecision || undefined,
+          internetDecision: replacementForm.internetDecision || undefined,
+          checklist: replacementForm.checklist,
+          replacementType: replacementForm.replacementType,
+          customReplacementItem: replacementForm.customReplacementItem,
+          replacementReason: replacementForm.replacementReason,
+          interactionId: replacementForm.interactionId,
+          disclaimerAccepted: true,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showEscalationToast('✅ Replacement request recorded and sent to Slack.', true);
+        closeReplacementModal();
+      } else {
+        setReplacementError(data.error || 'Replacement request failed.');
+      }
+    } catch (err: any) {
+      setReplacementError(err.message || 'Replacement request failed.');
+    } finally {
+      setReplacementSubmitting(false);
+    }
+  };
 
   // Fire the actual Slack post
   const fireEscalate = async (
@@ -671,6 +839,178 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
         </div>
       )}
 
+      {/* Replacement Request Modal */}
+      {replacementTarget && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ width: '100%', maxWidth: 760, maxHeight: '92vh', overflow: 'hidden', background: 'var(--surface-100)', border: '1px solid rgba(15,118,110,0.28)', borderRadius: 16, boxShadow: '0 28px 90px rgba(0,0,0,0.45)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '22px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ padding: 10, borderRadius: 12, background: 'var(--primary-light)', color: 'var(--primary)' }}>
+                  <ClipboardList size={22} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Request Replacement</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--ops-text)' }}>{replacementTarget.customer?.email || email}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ops-text-muted)' }}>Step {replacementStep} of 6 · Sub {replacementTarget.subscription?.id || 'N/A'}</div>
+                </div>
+              </div>
+              <button onClick={closeReplacementModal} disabled={replacementSubmitting} style={{ background: 'var(--surface-200)', border: '1px solid var(--border)', color: 'var(--ops-text)', borderRadius: 8, padding: 8, cursor: replacementSubmitting ? 'not-allowed' : 'pointer', display: 'flex' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: 24, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {replacementStep === 1 && (
+                <div>
+                  <h3 style={{ margin: '0 0 8px', fontSize: 20 }}>What steps have already been performed?</h3>
+                  <p style={{ margin: '0 0 16px', color: 'var(--ops-text-muted)', fontSize: 14 }}>Add the troubleshooting steps already tried with the customer.</p>
+                  <textarea
+                    value={replacementForm.troubleshootingSteps}
+                    onChange={e => updateReplacementForm({ troubleshootingSteps: e.target.value })}
+                    placeholder="Example: confirmed power outlet, checked account status, moved device near window, line refresh performed..."
+                    style={{ width: '100%', minHeight: 140, resize: 'vertical', padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface-200)', color: 'var(--ops-text)', fontSize: 14, lineHeight: 1.5 }}
+                  />
+                </div>
+              )}
+
+              {replacementStep === 2 && (
+                <div>
+                  <h3 style={{ margin: '0 0 8px', fontSize: 20 }}>Choose the issue path</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginTop: 16 }}>
+                    {[
+                      { key: 'power' as const, title: 'Device not turning on', desc: 'Use when the unit has no power or will not boot.' },
+                      { key: 'internet' as const, title: 'Internet not working after troubleshooting', desc: 'Use after service/device troubleshooting has been attempted.' },
+                    ].map(option => (
+                      <button key={option.key} onClick={() => updateReplacementForm({ issueBranch: option.key, powerDecision: '', internetDecision: '' })} style={{ textAlign: 'left', padding: 16, borderRadius: 12, border: `1px solid ${replacementForm.issueBranch === option.key ? 'var(--primary)' : 'var(--border)'}`, background: replacementForm.issueBranch === option.key ? 'var(--primary-light)' : 'var(--surface-200)', color: 'var(--ops-text)', cursor: 'pointer' }}>
+                        <div style={{ fontWeight: 800, marginBottom: 6 }}>{option.title}</div>
+                        <div style={{ color: 'var(--ops-text-muted)', fontSize: 13 }}>{option.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {replacementForm.issueBranch === 'power' && (
+                    <div style={{ marginTop: 18 }}>
+                      <div style={{ fontSize: 13, color: 'var(--ops-text-muted)', fontWeight: 700, marginBottom: 8 }}>What do we need to send?</div>
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        {[
+                          { key: 'full_unit' as const, label: 'Full unit replacement' },
+                          { key: 'power_cord' as const, label: 'Replacement power cord' },
+                        ].map(option => (
+                          <button key={option.key} onClick={() => updateReplacementForm({ powerDecision: option.key, replacementType: option.key === 'power_cord' ? 'Replacement power cord' : replacementForm.replacementType })} style={{ padding: '10px 14px', borderRadius: 8, border: `1px solid ${replacementForm.powerDecision === option.key ? 'var(--primary)' : 'var(--border)'}`, background: replacementForm.powerDecision === option.key ? 'var(--primary-light)' : 'transparent', color: 'var(--ops-text)', cursor: 'pointer', fontWeight: 700 }}>
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {replacementForm.issueBranch === 'internet' && (
+                    <div style={{ marginTop: 18 }}>
+                      <div style={{ fontSize: 13, color: 'var(--ops-text-muted)', fontWeight: 700, marginBottom: 8 }}>What best describes the failure?</div>
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        {[
+                          { key: 'stopped_working' as const, label: 'It stopped working after working before' },
+                          { key: 'never_worked' as const, label: "New device, hasn't worked from the start" },
+                        ].map(option => (
+                          <button key={option.key} onClick={() => updateReplacementForm({ internetDecision: option.key })} style={{ padding: '10px 14px', borderRadius: 8, border: `1px solid ${replacementForm.internetDecision === option.key ? 'var(--primary)' : 'var(--border)'}`, background: replacementForm.internetDecision === option.key ? 'var(--primary-light)' : 'transparent', color: 'var(--ops-text)', cursor: 'pointer', fontWeight: 700 }}>
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {replacementStep === 3 && (
+                <div>
+                  <h3 style={{ margin: '0 0 8px', fontSize: 20 }}>Troubleshooting checklist</h3>
+                  {replacementForm.issueBranch === 'internet' ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10, marginTop: 16 }}>
+                      {REPLACEMENT_CHECKLIST_LABELS.map(item => (
+                        <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 10, background: 'var(--surface-200)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--ops-text)', fontSize: 14, fontWeight: 600 }}>
+                          <input
+                            type="checkbox"
+                            checked={replacementForm.checklist[item.key]}
+                            onChange={e => updateReplacementForm({ checklist: { ...replacementForm.checklist, [item.key]: e.target.checked } })}
+                            style={{ width: 16, height: 16, accentColor: 'var(--primary)' }}
+                          />
+                          {item.label}
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ padding: 18, borderRadius: 12, background: 'var(--surface-200)', color: 'var(--ops-text-muted)', border: '1px solid var(--border)' }}>
+                      No internet checklist is required for the power path.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {replacementStep === 4 && (
+                <div>
+                  <h3 style={{ margin: '0 0 8px', fontSize: 20 }}>What replacement are we sending?</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginTop: 16 }}>
+                    {REPLACEMENT_TYPES.map(type => (
+                      <button key={type} onClick={() => updateReplacementForm({ replacementType: type })} style={{ padding: 14, borderRadius: 10, border: `1px solid ${replacementForm.replacementType === type ? 'var(--primary)' : 'var(--border)'}`, background: replacementForm.replacementType === type ? 'var(--primary-light)' : 'var(--surface-200)', color: 'var(--ops-text)', cursor: 'pointer', fontWeight: 800 }}>
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                  {replacementForm.replacementType === 'Other' && (
+                    <input value={replacementForm.customReplacementItem} onChange={e => updateReplacementForm({ customReplacementItem: e.target.value })} placeholder="Type replacement item..." style={{ width: '100%', marginTop: 14, padding: 12, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-200)', color: 'var(--ops-text)' }} />
+                  )}
+                </div>
+              )}
+
+              {replacementStep === 5 && (
+                <div>
+                  <h3 style={{ margin: '0 0 8px', fontSize: 20 }}>Reason and interaction</h3>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--ops-text-muted)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Reason for replacement</label>
+                  <textarea value={replacementForm.replacementReason} onChange={e => updateReplacementForm({ replacementReason: e.target.value })} placeholder="Explain why a replacement is being sent..." style={{ width: '100%', minHeight: 120, resize: 'vertical', padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface-200)', color: 'var(--ops-text)', fontSize: 14, lineHeight: 1.5 }} />
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--ops-text-muted)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '16px 0 8px' }}>Ticket ID or call log ID (optional)</label>
+                  <input value={replacementForm.interactionId} onChange={e => updateReplacementForm({ interactionId: e.target.value })} placeholder="Example: FS #12345 or call log ID..." style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-200)', color: 'var(--ops-text)' }} />
+                </div>
+              )}
+
+              {replacementStep === 6 && (
+                <div>
+                  <h3 style={{ margin: '0 0 8px', fontSize: 20 }}>Confirm replacement cost disclaimer</h3>
+                  <div style={{ padding: 18, borderRadius: 12, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', color: 'var(--ops-text)', lineHeight: 1.6 }}>
+                    <strong style={{ color: '#f59e0b' }}>Please know:</strong> a replacement costs us extra money and usually means the next 2-3 months would only cover the cost of the replacement that was sent out. This replacement will be recorded under your name.
+                  </div>
+                  <div style={{ marginTop: 16, padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface-200)' }}>
+                    <div style={{ fontSize: 12, color: 'var(--ops-text-muted)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Recorded agent</div>
+                    <div style={{ color: 'var(--ops-text)', fontWeight: 800 }}>{replacementAgentEmail || 'Your authenticated OPS session'}</div>
+                  </div>
+                </div>
+              )}
+
+              {replacementError && (
+                <div style={{ padding: 12, borderRadius: 10, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: 13, fontWeight: 700 }}>
+                  {replacementError}
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: 18, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 12, background: 'var(--surface-100)' }}>
+              <button onClick={() => replacementStep === 1 ? closeReplacementModal() : setReplacementStep(step => step - 1)} disabled={replacementSubmitting} style={{ padding: '11px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--ops-text-muted)', cursor: replacementSubmitting ? 'not-allowed' : 'pointer', fontWeight: 700 }}>
+                {replacementStep === 1 ? 'Cancel' : 'Back'}
+              </button>
+              {replacementStep < 6 ? (
+                <button onClick={goReplacementNext} style={{ padding: '11px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary), #0d9488)', color: 'white', cursor: 'pointer', fontWeight: 800 }}>
+                  Proceed
+                </button>
+              ) : (
+                <button onClick={submitReplacementRequest} disabled={replacementSubmitting} style={{ padding: '11px 18px', borderRadius: 8, border: 'none', background: replacementSubmitting ? 'var(--surface-300)' : 'linear-gradient(135deg, var(--primary), #0d9488)', color: 'white', cursor: replacementSubmitting ? 'not-allowed' : 'pointer', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {replacementSubmitting ? <><Loader2 size={16} className="animate-spin" /> Sending...</> : 'Accept and Send'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <main style={{ flex: 1, padding: '40px', position: 'relative', display: 'flex', flexDirection: 'column' }}>
         <AnimatePresence mode="wait">
           {mode === 'search' && (
@@ -1058,6 +1398,14 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                                   onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(167, 139, 250, 0.1)'; }}
                                 >
                                   Load Financials & Comments
+                                </button>
+                                <button
+                                  onClick={() => openReplacementModal(c, sub)}
+                                  style={{ width: '100%', marginTop: '10px', padding: '10px', background: 'rgba(15, 118, 110, 0.1)', border: '1px solid rgba(15, 118, 110, 0.3)', borderRadius: '8px', color: 'var(--primary)', fontSize: '12px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                  onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(15, 118, 110, 0.18)'; }}
+                                  onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(15, 118, 110, 0.1)'; }}
+                                >
+                                  <ClipboardList size={14} /> Request Replacement
                                 </button>
                                 {(() => {
                                   const iccid = sub.cf_SIM_ID_ICCID || sub.cf_iccid;

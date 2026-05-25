@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   ShieldAlert, Server, UserPlus, Activity, Database,
   Loader2, ArrowLeft, Shield, User, Trash2, ChevronDown,
-  ChevronUp, RefreshCw, Check, X as XIcon, TrendingUp, AlertCircle
+  ChevronUp, RefreshCw, Check, X as XIcon, TrendingUp, AlertCircle, Package
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -44,6 +44,30 @@ type VisitorLog = {
   captured_at: string;
 };
 type VisitorStats = { total: string; unique_ips: string; countries: string; vpn_count: string };
+type ReplacementRecord = {
+  id: number;
+  agent_email: string;
+  customer_email: string | null;
+  customer_name: string | null;
+  subscription_id: string | null;
+  plan_id: string | null;
+  iccid: string | null;
+  imei: string | null;
+  issue_branch: string;
+  branch_decision: string;
+  replacement_type: string;
+  custom_replacement_item: string | null;
+  replacement_reason: string;
+  interaction_id: string | null;
+  slack_ts: string | null;
+  created_at: string;
+};
+type ReplacementStats = {
+  total: string;
+  byAgent: { agent_email: string; count: string }[];
+  byType: { replacement_type: string; count: string }[];
+  byIssue: { issue_branch: string; count: string }[];
+};
 
 const ACTION_COLOR: Record<string, string> = {
   signin: '#3b82f6',
@@ -95,7 +119,7 @@ export default function AdminControlPanel() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   // Active section tab
-  const [activeSection, setActiveSection] = useState<'analytics' | 'users' | 'escalations' | 'visitors'>('analytics');
+  const [activeSection, setActiveSection] = useState<'analytics' | 'users' | 'escalations' | 'visitors' | 'replacements'>('analytics');
 
   // Analytics
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
@@ -110,6 +134,10 @@ export default function AdminControlPanel() {
   const [visitorLogs, setVisitorLogs] = useState<VisitorLog[]>([]);
   const [visitorStats, setVisitorStats] = useState<VisitorStats | null>(null);
   const [expandedVisitor, setExpandedVisitor] = useState<number | null>(null);
+
+  // Replacement requests
+  const [replacements, setReplacements] = useState<ReplacementRecord[]>([]);
+  const [replacementStats, setReplacementStats] = useState<ReplacementStats | null>(null);
 
   // Users
   const [users, setUsers] = useState<OpsUser[]>([]);
@@ -134,11 +162,12 @@ export default function AdminControlPanel() {
   const bootstrap = async () => {
     setLoading(true);
     try {
-      const [logsRes, usersRes, escalationsRes, visitorsRes] = await Promise.all([
+      const [logsRes, usersRes, escalationsRes, visitorsRes, replacementsRes] = await Promise.all([
         fetch('/api/ops/admin/logs'),
         fetch('/api/ops/admin/users'),
         fetch('/api/ops/admin/escalations'),
         fetch('/api/ops/visitor-log'),
+        fetch('/api/ops/admin/replacements'),
       ]);
 
       if (logsRes.status === 403 || logsRes.status === 401) {
@@ -161,6 +190,11 @@ export default function AdminControlPanel() {
       if (!escalationsData.error) {
         setEscalations(escalationsData.escalations || []);
         setEscalationStats(escalationsData.stats || null);
+      }
+      const replacementsData = await replacementsRes.json().catch(() => ({}));
+      if (replacementsData.success) {
+        setReplacements(replacementsData.replacements || []);
+        setReplacementStats(replacementsData.stats || null);
       }
       const visitorsData = await visitorsRes.json().catch(() => ({}));
       if (!visitorsData.error) {
@@ -286,7 +320,7 @@ export default function AdminControlPanel() {
 
       {/* Section Nav */}
       <div style={{ display: 'flex', gap: 0, padding: '0 40px', borderBottom: '1px solid var(--ops-card-border)', backgroundColor: 'rgba(255,255,255,0.32)', overflowX: 'auto' }}>
-        {(['analytics', 'escalations', 'visitors', 'users'] as const).map(s => (
+        {(['analytics', 'escalations', 'replacements', 'visitors', 'users'] as const).map(s => (
           <button
             key={s}
             onClick={() => setActiveSection(s)}
@@ -298,8 +332,8 @@ export default function AdminControlPanel() {
               transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 8,
             }}
           >
-            {s === 'analytics' ? <Activity size={14} /> : s === 'escalations' ? <ShieldAlert size={14} /> : s === 'visitors' ? <Database size={14} /> : <User size={14} />}
-            {s === 'analytics' ? 'Activity Logs' : s === 'escalations' ? 'Escalations' : s === 'visitors' ? 'Visitor Logs' : 'Manage Users'}
+            {s === 'analytics' ? <Activity size={14} /> : s === 'escalations' ? <ShieldAlert size={14} /> : s === 'replacements' ? <Package size={14} /> : s === 'visitors' ? <Database size={14} /> : <User size={14} />}
+            {s === 'analytics' ? 'Activity Logs' : s === 'escalations' ? 'Escalations' : s === 'replacements' ? 'Replacements' : s === 'visitors' ? 'Visitor Logs' : 'Manage Users'}
           </button>
         ))}
       </div>
@@ -552,6 +586,96 @@ export default function AdminControlPanel() {
                             </td>
                           </tr>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── REPLACEMENTS TAB ── */}
+          {activeSection === 'replacements' && (
+            <motion.div key="replacements" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 0.8fr) 2fr', gap: 32 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, padding: 24 }}>
+                    <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 16, fontWeight: 600, letterSpacing: '0.5px' }}>TOTAL REPLACEMENTS</div>
+                    <div style={{ fontSize: 48, fontWeight: 800 }}>{replacementStats?.total || 0}</div>
+                  </div>
+
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, padding: 24 }}>
+                    <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 16, fontWeight: 600, letterSpacing: '0.5px' }}>BY REPLACEMENT TYPE</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {replacementStats?.byType.map(t => (
+                        <div key={t.replacement_type} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                          <span style={{ fontSize: 14, color: '#e5e7eb', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.replacement_type}</span>
+                          <span style={{ background: '#0f766e33', color: '#2dd4bf', padding: '2px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>{t.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, padding: 24 }}>
+                    <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 16, fontWeight: 600, letterSpacing: '0.5px' }}>TOP AGENTS</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {replacementStats?.byAgent.map(a => (
+                        <div key={a.agent_email} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                          <span style={{ fontSize: 14, color: '#e5e7eb', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.agent_email}</span>
+                          <span style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>{a.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, overflow: 'hidden' }}>
+                  <div style={{ padding: '24px 32px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Recent Replacement Requests</h3>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>AGENT</th>
+                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>CUSTOMER</th>
+                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>REPLACEMENT</th>
+                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>ISSUE</th>
+                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>REASON</th>
+                          <th style={{ padding: '16px 24px', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>DATE</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {replacements.map(r => {
+                          const replacementName = r.replacement_type === 'Other' ? r.custom_replacement_item || 'Other' : r.replacement_type;
+                          return (
+                            <tr key={r.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                              <td style={{ padding: '16px 24px', fontSize: 13, fontWeight: 600 }}>{r.agent_email}</td>
+                              <td style={{ padding: '16px 24px' }}>
+                                <div style={{ fontSize: 13, fontWeight: 700 }}>{r.customer_email || 'N/A'}</div>
+                                <div style={{ fontSize: 11, color: '#6b7280' }}>{r.subscription_id || 'No sub'} · {r.interaction_id || 'No interaction ID'}</div>
+                              </td>
+                              <td style={{ padding: '16px 24px' }}>
+                                <span style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 800, background: '#0f766e22', color: '#2dd4bf' }}>{replacementName}</span>
+                              </td>
+                              <td style={{ padding: '16px 24px', fontSize: 13, color: '#9ca3af', textTransform: 'capitalize' }}>
+                                {r.issue_branch.replace(/_/g, ' ')} / {r.branch_decision.replace(/_/g, ' ')}
+                              </td>
+                              <td style={{ padding: '16px 24px', fontSize: 13, color: '#9ca3af', maxWidth: 260 }}>
+                                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.replacement_reason}</div>
+                                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>{r.iccid || 'No ICCID'} · {r.imei || 'No IMEI'}</div>
+                              </td>
+                              <td style={{ padding: '16px 24px', fontSize: 12, color: '#6b7280' }}>
+                                {new Date(r.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {replacements.length === 0 && (
+                          <tr>
+                            <td colSpan={6} style={{ padding: '48px 24px', color: '#6b7280', textAlign: 'center' }}>No replacement requests recorded yet.</td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
