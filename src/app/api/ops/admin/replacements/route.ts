@@ -23,10 +23,16 @@ async function ensureReplacementTable() {
       custom_replacement_item TEXT,
       replacement_reason TEXT NOT NULL,
       interaction_id TEXT,
+      address_source TEXT,
+      original_shopify_address TEXT,
+      shipping_address TEXT,
       slack_ts TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await queryOpsDb(`ALTER TABLE ops_replacement_requests ADD COLUMN IF NOT EXISTS address_source TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_replacement_requests ADD COLUMN IF NOT EXISTS original_shopify_address TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_replacement_requests ADD COLUMN IF NOT EXISTS shipping_address TEXT`);
 }
 
 export async function GET() {

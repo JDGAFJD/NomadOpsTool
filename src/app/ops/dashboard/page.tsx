@@ -58,11 +58,14 @@ type ReplacementForm = {
   customReplacementItem: string;
   replacementReason: string;
   interactionId: string;
+  addressChoice: 'confirmed' | 'new' | '';
+  newShippingAddress: string;
 };
 type ReplacementTarget = {
   customer: any;
   subscription: any;
   network?: any;
+  shopifyAddress?: string;
 };
 
 const EMPTY_REPLACEMENT_FORM: ReplacementForm = {
@@ -83,6 +86,8 @@ const EMPTY_REPLACEMENT_FORM: ReplacementForm = {
   customReplacementItem: '',
   replacementReason: '',
   interactionId: '',
+  addressChoice: '',
+  newShippingAddress: '',
 };
 
 const REPLACEMENT_TYPES: ReplacementType[] = ['Air', 'Dragon/Raptor', 'Omega/Cube', 'Replacement power cord', 'Other'];
@@ -97,6 +102,23 @@ const REPLACEMENT_CHECKLIST_LABELS: { key: keyof ReplacementChecklist; label: st
 const POWER_REPLACEMENT_CHECKLIST_LABELS: { key: keyof ReplacementChecklist; label: string }[] = [
   { key: 'checkedOtherSockets', label: 'Did we check other sockets?' },
 ];
+
+function formatCommerceAddress(addr: any) {
+  if (!addr) return '';
+  const cityLine = [
+    addr.city,
+    [addr.state, addr.zip].filter(Boolean).join(' '),
+  ].filter(Boolean).join(', ');
+  return [
+    addr.name,
+    addr.company,
+    addr.address1,
+    addr.address2,
+    cityLine,
+    addr.country,
+    addr.phone ? `Phone: ${addr.phone}` : '',
+  ].filter(Boolean).join('\n').trim();
+}
 
 export default function OpsDashboard() {
   const router = useRouter();
@@ -319,7 +341,15 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
 
   const openReplacementModal = async (customer: any, subscription: any) => {
     const iccid = subscription?.cf_SIM_ID_ICCID || subscription?.cf_iccid;
-    setReplacementTarget({ customer, subscription, network: iccid ? thingspaceData[iccid] : undefined });
+    const latestOrderWithAddress = [...commerceData]
+      .filter(order => order?.shippingAddress && formatCommerceAddress(order.shippingAddress))
+      .sort((a, b) => new Date(b.orderDate || 0).getTime() - new Date(a.orderDate || 0).getTime())[0];
+    setReplacementTarget({
+      customer,
+      subscription,
+      network: iccid ? thingspaceData[iccid] : undefined,
+      shopifyAddress: formatCommerceAddress(latestOrderWithAddress?.shippingAddress),
+    });
     setReplacementForm(EMPTY_REPLACEMENT_FORM);
     setReplacementStep(1);
     setReplacementError('');
@@ -366,6 +396,11 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
       if (replacementForm.replacementType === 'Other' && !replacementForm.customReplacementItem.trim()) return 'Type the replacement item when Other is selected.';
     }
     if (step === 5 && !replacementForm.replacementReason.trim()) return 'Add the reason why this replacement is being sent.';
+    if (step === 6) {
+      if (!replacementForm.addressChoice) return 'Confirm the Shopify address or choose to enter a new address.';
+      if (replacementForm.addressChoice === 'confirmed' && !replacementTarget?.shopifyAddress) return 'No Shopify address was found. Enter the replacement shipping address.';
+      if (replacementForm.addressChoice === 'new' && !replacementForm.newShippingAddress.trim()) return 'Enter the new replacement shipping address.';
+    }
     return true;
   };
 
@@ -376,7 +411,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
       return;
     }
     setReplacementError('');
-    setReplacementStep(step => Math.min(6, step + 1));
+    setReplacementStep(step => Math.min(7, step + 1));
   };
 
   const submitReplacementRequest = async () => {
@@ -386,8 +421,16 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
       setReplacementError(valid);
       return;
     }
+    const addressValid = validateReplacementStep(6);
+    if (addressValid !== true) {
+      setReplacementError(addressValid);
+      return;
+    }
     setReplacementSubmitting(true);
     setReplacementError('');
+    const selectedShippingAddress = replacementForm.addressChoice === 'confirmed'
+      ? replacementTarget.shopifyAddress
+      : replacementForm.newShippingAddress.trim();
     try {
       const res = await fetch('/api/ops/actions/replacement', {
         method: 'POST',
@@ -405,6 +448,9 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
           customReplacementItem: replacementForm.customReplacementItem,
           replacementReason: replacementForm.replacementReason,
           interactionId: replacementForm.interactionId,
+          addressChoice: replacementForm.addressChoice,
+          originalShopifyAddress: replacementTarget.shopifyAddress || '',
+          shippingAddress: selectedShippingAddress,
           disclaimerAccepted: true,
         }),
       });
@@ -859,7 +905,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                 <div>
                   <div style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Request Replacement</div>
                   <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--ops-text)' }}>{replacementTarget.customer?.email || email}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ops-text-muted)' }}>Step {replacementStep} of 6 · Sub {replacementTarget.subscription?.id || 'N/A'}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ops-text-muted)' }}>Step {replacementStep} of 7 · Sub {replacementTarget.subscription?.id || 'N/A'}</div>
                 </div>
               </div>
               <button onClick={closeReplacementModal} disabled={replacementSubmitting} style={{ background: 'var(--surface-200)', border: '1px solid var(--border)', color: 'var(--ops-text)', borderRadius: 8, padding: 8, cursor: replacementSubmitting ? 'not-allowed' : 'pointer', display: 'flex' }}>
@@ -993,6 +1039,48 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
 
               {replacementStep === 6 && (
                 <div>
+                  <h3 style={{ margin: '0 0 8px', fontSize: 20 }}>Verify replacement shipping address</h3>
+                  <p style={{ margin: '0 0 16px', color: 'var(--ops-text-muted)', fontSize: 14 }}>
+                    Confirm the latest Shopify shipping address or enter the corrected address for this replacement.
+                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                    <button
+                      onClick={() => updateReplacementForm({ addressChoice: 'confirmed' })}
+                      disabled={!replacementTarget.shopifyAddress}
+                      style={{ textAlign: 'left', padding: 16, borderRadius: 12, border: `1px solid ${replacementForm.addressChoice === 'confirmed' ? 'var(--primary)' : 'var(--border)'}`, background: replacementForm.addressChoice === 'confirmed' ? 'var(--primary-light)' : 'var(--surface-200)', color: 'var(--ops-text)', cursor: replacementTarget.shopifyAddress ? 'pointer' : 'not-allowed', opacity: replacementTarget.shopifyAddress ? 1 : 0.55 }}
+                    >
+                      <div style={{ fontWeight: 800, marginBottom: 8 }}>Use Shopify address</div>
+                      <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: 'var(--ops-text-muted)', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.45 }}>
+                        {replacementTarget.shopifyAddress || 'No Shopify shipping address found for this customer.'}
+                      </pre>
+                    </button>
+
+                    <button
+                      onClick={() => updateReplacementForm({ addressChoice: 'new' })}
+                      style={{ textAlign: 'left', padding: 16, borderRadius: 12, border: `1px solid ${replacementForm.addressChoice === 'new' ? 'var(--primary)' : 'var(--border)'}`, background: replacementForm.addressChoice === 'new' ? 'var(--primary-light)' : 'var(--surface-200)', color: 'var(--ops-text)', cursor: 'pointer' }}
+                    >
+                      <div style={{ fontWeight: 800, marginBottom: 8 }}>Enter new address</div>
+                      <div style={{ color: 'var(--ops-text-muted)', fontSize: 13, lineHeight: 1.45 }}>Use this when the customer confirms Shopify has the wrong delivery address.</div>
+                    </button>
+                  </div>
+
+                  {replacementForm.addressChoice === 'new' && (
+                    <div style={{ marginTop: 16 }}>
+                      <label style={{ display: 'block', fontSize: 12, color: 'var(--ops-text-muted)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>New replacement shipping address</label>
+                      <textarea
+                        value={replacementForm.newShippingAddress}
+                        onChange={e => updateReplacementForm({ newShippingAddress: e.target.value })}
+                        placeholder={"Name\nStreet address\nCity, State ZIP\nCountry\nPhone if available"}
+                        style={{ width: '100%', minHeight: 130, resize: 'vertical', padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface-200)', color: 'var(--ops-text)', fontSize: 14, lineHeight: 1.5 }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {replacementStep === 7 && (
+                <div>
                   <h3 style={{ margin: '0 0 8px', fontSize: 20 }}>Confirm replacement cost disclaimer</h3>
                   <div style={{ padding: 18, borderRadius: 12, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', color: 'var(--ops-text)', lineHeight: 1.6 }}>
                     <strong style={{ color: '#f59e0b' }}>Please know:</strong> a replacement costs us extra money and usually means the next 2-3 months would only cover the cost of the replacement that was sent out. This replacement will be recorded under your name.
@@ -1015,7 +1103,7 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
               <button onClick={() => replacementStep === 1 ? closeReplacementModal() : setReplacementStep(step => step - 1)} disabled={replacementSubmitting} style={{ padding: '11px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--ops-text-muted)', cursor: replacementSubmitting ? 'not-allowed' : 'pointer', fontWeight: 700 }}>
                 {replacementStep === 1 ? 'Cancel' : 'Back'}
               </button>
-              {replacementStep < 6 ? (
+              {replacementStep < 7 ? (
                 <button onClick={goReplacementNext} style={{ padding: '11px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary), #0d9488)', color: 'white', cursor: 'pointer', fontWeight: 800 }}>
                   Proceed
                 </button>

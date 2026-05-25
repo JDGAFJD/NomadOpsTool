@@ -60,6 +60,8 @@ type ReplacementRecord = {
   custom_replacement_item: string | null;
   replacement_reason: string;
   interaction_id: string | null;
+  address_source: string | null;
+  shipping_address: string | null;
   slack_ts: string | null;
   created_at: string;
 };
@@ -743,6 +745,9 @@ export default function AdminControlPanel() {
                               </td>
                               <td style={{ ...adminTd, color: '#9ca3af' }}>
                                 <div title={r.replacement_reason} style={adminCellTruncate}>{r.replacement_reason}</div>
+                                <div title={r.shipping_address || 'No replacement address'} style={{ ...adminCellTruncate, fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                                  {r.shipping_address ? `${r.address_source === 'new' ? 'New address' : 'Shopify address'}: ${r.shipping_address.split('\n')[0]}` : 'No replacement address'}
+                                </div>
                                 <div title={`${r.iccid || 'No ICCID'} · ${r.imei || 'No IMEI'}`} style={{ ...adminCellTruncate, fontSize: 11, color: '#6b7280', marginTop: 4 }}>
                                   {r.iccid || 'No ICCID'} · {r.imei || 'No IMEI'}
                                 </div>

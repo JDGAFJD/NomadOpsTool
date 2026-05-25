@@ -27,6 +27,9 @@ type ReplacementBody = {
   customReplacementItem?: string;
   replacementReason?: string;
   interactionId?: string;
+  addressChoice?: 'confirmed' | 'new';
+  originalShopifyAddress?: string;
+  shippingAddress?: string;
   disclaimerAccepted?: boolean;
 };
 
@@ -85,10 +88,16 @@ async function ensureReplacementTable() {
       custom_replacement_item TEXT,
       replacement_reason TEXT NOT NULL,
       interaction_id TEXT,
+      address_source TEXT,
+      original_shopify_address TEXT,
+      shipping_address TEXT,
       slack_ts TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await queryOpsDb(`ALTER TABLE ops_replacement_requests ADD COLUMN IF NOT EXISTS address_source TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_replacement_requests ADD COLUMN IF NOT EXISTS original_shopify_address TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_replacement_requests ADD COLUMN IF NOT EXISTS shipping_address TEXT`);
 }
 
 export async function GET() {
@@ -132,6 +141,15 @@ export async function POST(request: Request) {
     if (!body.replacementReason?.trim()) {
       return NextResponse.json({ error: 'Replacement reason is required.' }, { status: 400 });
     }
+    if (body.addressChoice !== 'confirmed' && body.addressChoice !== 'new') {
+      return NextResponse.json({ error: 'Confirm the Shopify address or enter a new replacement address.' }, { status: 400 });
+    }
+    if (body.addressChoice === 'confirmed' && !body.originalShopifyAddress?.trim()) {
+      return NextResponse.json({ error: 'No Shopify address was provided to confirm.' }, { status: 400 });
+    }
+    if (!body.shippingAddress?.trim()) {
+      return NextResponse.json({ error: 'Replacement shipping address is required.' }, { status: 400 });
+    }
     if (!body.disclaimerAccepted) {
       return NextResponse.json({ error: 'The replacement cost disclaimer must be accepted.' }, { status: 400 });
     }
@@ -166,6 +184,8 @@ export async function POST(request: Request) {
     const decisionLabel = body.issueBranch === 'power'
       ? (body.powerDecision === 'full_unit' ? 'Full unit replacement' : 'Replacement power cord')
       : (body.internetDecision === 'stopped_working' ? 'Stopped working after previously working' : 'New device, never worked from start');
+    const addressSourceLabel = body.addressChoice === 'confirmed' ? 'Confirmed Shopify address' : 'Agent entered corrected address';
+    const shippingAddress = body.shippingAddress.trim();
 
     const blocks = [
       { type: 'header', text: { type: 'plain_text', text: '📦 Replacement Request', emoji: true } },
@@ -197,6 +217,10 @@ export async function POST(request: Request) {
       {
         type: 'section',
         text: { type: 'mrkdwn', text: `*Replacement Reason*\n>${escapeMrkdwn(body.replacementReason)}` },
+      },
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: `*Replacement Shipping Address* (${escapeMrkdwn(addressSourceLabel)})\n\`\`\`${escapeMrkdwn(shippingAddress)}\`\`\`` },
       },
       { type: 'divider' },
       {
@@ -230,8 +254,9 @@ export async function POST(request: Request) {
       `INSERT INTO ops_replacement_requests
         (agent_email, customer_email, customer_id, customer_name, subscription_id, subscription_status,
          plan_id, iccid, imei, issue_branch, branch_decision, troubleshooting_steps, checklist,
-         replacement_type, custom_replacement_item, replacement_reason, interaction_id, slack_ts)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18)
+         replacement_type, custom_replacement_item, replacement_reason, interaction_id,
+         address_source, original_shopify_address, shipping_address, slack_ts)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19,$20,$21)
        RETURNING id`,
       [
         agentEmail,
@@ -251,6 +276,9 @@ export async function POST(request: Request) {
         body.replacementType === 'Other' ? body.customReplacementItem!.trim() : null,
         body.replacementReason.trim(),
         body.interactionId?.trim() || null,
+        body.addressChoice,
+        body.originalShopifyAddress?.trim() || null,
+        shippingAddress,
         slackResult.ts || null,
       ]
     );
