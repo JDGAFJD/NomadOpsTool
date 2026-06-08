@@ -8,5 +8,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
     redirect('/ops/login');
   }
 
+  if (session.role === 'returns_manager') {
+    redirect('/ops/returns-manager');
+  }
+
+  if (session.role === 'cancellation_agent') {
+    redirect('/ops/cancellation-team');
+  }
+
   return <>{children}</>;
 }

@@ -39,7 +39,9 @@ export default function OpsLogin() {
       const data = await res.json();
       
       if (res.ok && data.success) {
-        router.push('/ops/dashboard');
+        if (data.role === 'returns_manager') router.push('/ops/returns-manager');
+        else if (data.role === 'cancellation_agent') router.push('/ops/cancellation-team');
+        else router.push('/ops/dashboard');
       } else {
         setError(data.error || 'Authenication failed');
       }

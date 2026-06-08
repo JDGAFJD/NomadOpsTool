@@ -3,6 +3,8 @@ import { queryOpsDb } from '@/lib/opsDb';
 import { verifyAuth } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
 
+const VALID_ROLES = ['admin', 'agent', 'returns_manager', 'cancellation_agent'];
+
 // GET — Fetch full user roster
 export async function GET() {
   try {
@@ -38,7 +40,7 @@ export async function POST(request: Request) {
     }
 
     const hash = await bcrypt.hash(password, 10);
-    const assignedRole = role === 'admin' ? 'admin' : 'agent';
+    const assignedRole = VALID_ROLES.includes(role) ? role : 'agent';
     await queryOpsDb(
       'INSERT INTO ops_users (email, password_hash, role) VALUES ($1, $2, $3)',
       [email, hash, assignedRole]
@@ -62,7 +64,7 @@ export async function PATCH(request: Request) {
     if (!id || !role) {
       return NextResponse.json({ error: 'id and role required' }, { status: 400 });
     }
-    if (!['admin', 'agent'].includes(role)) {
+    if (!VALID_ROLES.includes(role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
     }
 

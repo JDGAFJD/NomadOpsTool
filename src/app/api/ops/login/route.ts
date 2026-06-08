@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     // Inject Telemetry trace
     await logActivity(user.email, 'signin', null, request);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, role: user.role });
   } catch (error: any) {
     console.error('OPS Login Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

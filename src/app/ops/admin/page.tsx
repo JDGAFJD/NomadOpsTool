@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+type OpsRole = 'agent' | 'admin' | 'returns_manager' | 'cancellation_agent';
 type OpsUser = { id: number; email: string; role: string; created_at: string };
 type ActivityLog = { id: number; agent_email: string; action_type: string; target: string | null; location: string | null; timestamp: string };
 type Analytics = Record<string, Record<string, { searches: number; restores: string[]; suspends: string[]; signins: number }>>;
@@ -206,7 +207,7 @@ export default function AdminControlPanel() {
   // New user form
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<'agent' | 'admin'>('agent');
+  const [newRole, setNewRole] = useState<OpsRole>('agent');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const showToast = (msg: string, type: 'success' | 'error') => {
@@ -423,8 +424,10 @@ export default function AdminControlPanel() {
                     </div>
                     <div>
                       <label style={{ display: 'block', color: '#9ca3af', fontSize: 11, marginBottom: 6, fontWeight: 600, letterSpacing: '0.5px' }}>CLEARANCE ROLE</label>
-                      <select value={newRole} onChange={e => setNewRole(e.target.value as any)} style={{ width: '100%', background: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '11px 14px', borderRadius: 8, outline: 'none', fontSize: 14, boxSizing: 'border-box' }}>
+                      <select value={newRole} onChange={e => setNewRole(e.target.value as OpsRole)} style={{ width: '100%', background: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '11px 14px', borderRadius: 8, outline: 'none', fontSize: 14, boxSizing: 'border-box' }}>
                         <option value="agent">Standard Operations Agent</option>
+                        <option value="returns_manager">Returns Manager</option>
+                        <option value="cancellation_agent">Cancellation Agent</option>
                         <option value="admin">System Administrator</option>
                       </select>
                     </div>
@@ -930,8 +933,10 @@ export default function AdminControlPanel() {
                     </div>
                     <div>
                       <label style={{ display: 'block', color: '#9ca3af', fontSize: 11, marginBottom: 6, fontWeight: 600, letterSpacing: '0.5px' }}>CLEARANCE ROLE</label>
-                      <select value={newRole} onChange={e => setNewRole(e.target.value as any)} style={{ width: '100%', background: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '11px 14px', borderRadius: 8, outline: 'none', fontSize: 14, boxSizing: 'border-box' }}>
+                      <select value={newRole} onChange={e => setNewRole(e.target.value as OpsRole)} style={{ width: '100%', background: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '11px 14px', borderRadius: 8, outline: 'none', fontSize: 14, boxSizing: 'border-box' }}>
                         <option value="agent">Standard Operations Agent</option>
+                        <option value="returns_manager">Returns Manager</option>
+                        <option value="cancellation_agent">Cancellation Agent</option>
                         <option value="admin">System Administrator</option>
                       </select>
                     </div>
@@ -980,6 +985,8 @@ export default function AdminControlPanel() {
                                   style={{ background: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.15)', color: 'white', padding: '7px 12px', borderRadius: 8, outline: 'none', fontSize: 13 }}
                                 >
                                   <option value="agent">Agent</option>
+                                  <option value="returns_manager">Returns Manager</option>
+                                  <option value="cancellation_agent">Cancellation Agent</option>
                                   <option value="admin">Admin</option>
                                 </select>
                                 <button onClick={() => handleRoleSave(u.id)} disabled={roleSaving} style={{ background: '#10b981', border: 'none', color: 'white', padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
