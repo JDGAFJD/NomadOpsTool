@@ -69,6 +69,7 @@ export async function ensureReturnsTables() {
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_ops_returns_status ON ops_returns(status)`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_ops_returns_imei ON ops_returns(imei)`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_ops_returns_batch ON ops_returns(batch_uuid)`);
+  await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_ops_returns_tracking_lower ON ops_returns(LOWER(tracking_number))`);
 
   await queryOpsDb(`
     CREATE TABLE IF NOT EXISTS ops_return_audit (
@@ -92,6 +93,10 @@ export async function auditReturn(returnId: number, actorEmail: string, action: 
 
 export function normalizeImei(value: string) {
   return value.replace(/\D/g, '').trim();
+}
+
+export function normalizeTrackingNumber(value: string) {
+  return value.trim().toUpperCase();
 }
 
 function parseCsvLine(line: string) {
@@ -149,7 +154,7 @@ export function parseReturnsCsv(csv: string) {
     const cells = parseCsvLine(line);
     const imei = normalizeImei(cells[index.imei] || '');
     const deviceCondition = (cells[index.device_condition] || '').trim();
-    const trackingNumber = (cells[index.tracking_number] || '').trim();
+    const trackingNumber = normalizeTrackingNumber(cells[index.tracking_number] || '');
 
     if (!imei) {
       rejected.push({ row: rowNumber, reason: 'Missing IMEI' });

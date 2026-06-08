@@ -12,6 +12,7 @@ import {
 export const dynamic = 'force-dynamic';
 
 type ImeiRow = { imei: string };
+type TrackingRow = { tracking_number: string };
 
 export async function GET() {
   try {
@@ -66,16 +67,51 @@ export async function POST(request: Request) {
     const text = await file.text();
     const parsed = parseReturnsCsv(text);
     const imeis = parsed.rows.map((row) => row.imei);
-    const existing = imeis.length
-      ? await queryOpsDb('SELECT imei FROM ops_returns WHERE imei = ANY($1::text[])', [imeis])
+    const trackingNumbers = parsed.rows.map((row) => row.tracking_number.toLowerCase());
+    const existingSameDayImeis = imeis.length
+      ? await queryOpsDb(
+          `SELECT imei
+           FROM ops_returns
+           WHERE imei = ANY($1::text[])
+             AND received_at >= date_trunc('day', NOW())
+             AND received_at < date_trunc('day', NOW()) + INTERVAL '1 day'`,
+          [imeis]
+        )
       : { rows: [] };
-    const existingImeis = new Set((existing.rows as ImeiRow[]).map((row) => row.imei));
-    const rowsToInsert = parsed.rows.filter((row) => !existingImeis.has(row.imei));
+    const existingTrackingNumbers = trackingNumbers.length
+      ? await queryOpsDb(
+          'SELECT tracking_number FROM ops_returns WHERE LOWER(tracking_number) = ANY($1::text[])',
+          [trackingNumbers]
+        )
+      : { rows: [] };
+    const sameDayImeis = new Set((existingSameDayImeis.rows as ImeiRow[]).map((row) => row.imei));
+    const usedTrackingNumbers = new Set((existingTrackingNumbers.rows as TrackingRow[]).map((row) => row.tracking_number.toLowerCase()));
+    const seenTrackingNumbers = new Set<string>();
+    const duplicateTrackingNumbersInCsv = new Set<string>();
+
+    for (const row of parsed.rows) {
+      if (seenTrackingNumbers.has(row.tracking_number)) {
+        duplicateTrackingNumbersInCsv.add(row.tracking_number);
+      }
+      seenTrackingNumbers.add(row.tracking_number);
+    }
+
+    const rowsToInsert = parsed.rows.filter((row) =>
+      !sameDayImeis.has(row.imei)
+      && !usedTrackingNumbers.has(row.tracking_number.toLowerCase())
+      && !duplicateTrackingNumbersInCsv.has(row.tracking_number)
+    );
     const rejected = [
       ...parsed.rejected,
       ...parsed.rows
-        .filter((row) => existingImeis.has(row.imei))
-        .map((row) => ({ row: null, reason: 'IMEI already exists in returns database', imei: row.imei })),
+        .filter((row) => sameDayImeis.has(row.imei))
+        .map((row) => ({ row: null, reason: 'IMEI already exists in a return uploaded today', imei: row.imei })),
+      ...parsed.rows
+        .filter((row) => usedTrackingNumbers.has(row.tracking_number.toLowerCase()))
+        .map((row) => ({ row: null, reason: 'Tracking number already exists in returns database', imei: row.imei })),
+      ...parsed.rows
+        .filter((row) => duplicateTrackingNumbersInCsv.has(row.tracking_number))
+        .map((row) => ({ row: null, reason: 'Duplicate tracking number in this CSV', imei: row.imei })),
     ];
 
     const batchUuid = crypto.randomUUID();
