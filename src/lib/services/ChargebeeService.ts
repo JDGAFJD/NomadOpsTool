@@ -7,6 +7,16 @@ type ChargebeeSubscriptionLookup = {
   [key: string]: unknown;
 };
 
+type ChargebeeListItem<T> = {
+  subscription?: T;
+  invoice?: T;
+  comment?: T;
+  transaction?: T;
+  credit_note?: T;
+};
+
+const RETURN_LOOKUP_SUBSCRIPTION_STATUSES = ['active', 'in_trial', 'paused', 'future'];
+
 export class ChargebeeService {
   private site: string;
   private apiKey: string;
@@ -61,9 +71,10 @@ export class ChargebeeService {
       'cf_modem_imei',
     ];
     const matches = new Map<string, ChargebeeSubscriptionLookup>();
+    const statusFilter = `status[in]=${encodeURIComponent(RETURN_LOOKUP_SUBSCRIPTION_STATUSES.join(','))}`;
 
     for (const field of customFieldCandidates) {
-      const data = await this.fetchApi(`/subscriptions?${field}[is]=${encodeURIComponent(imei)}&limit=10`);
+      const data = await this.fetchApi(`/subscriptions?${field}[is]=${encodeURIComponent(imei)}&${statusFilter}&limit=10`);
       for (const item of data?.list || []) {
         if (item.subscription?.id) {
           matches.set(item.subscription.id, item.subscription);
@@ -198,7 +209,7 @@ export class ChargebeeService {
       const cust = item.customer;
       
       const subsData = await this.fetchApi(`/subscriptions?customer_id[is]=${cust.id}&limit=50&sort_by[desc]=created_at`);
-      const subscriptions = (subsData?.list || []).map((subItem: any) => subItem.subscription);
+      const subscriptions = (subsData?.list || []).map((subItem: ChargebeeListItem<unknown>) => subItem.subscription);
       
       compiledCustomers.push({
         id: cust.id,
@@ -226,7 +237,7 @@ export class ChargebeeService {
     }
     
     const data = await this.fetchApi(path);
-    return (data?.list || []).map((item: any) => item.invoice);
+    return (data?.list || []).map((item: ChargebeeListItem<unknown>) => item.invoice);
   }
 
   async generatePaymentLink(customerId: string) {
@@ -313,9 +324,9 @@ export class ChargebeeService {
 
     return {
       success: true,
-      comments: (commentsReq?.list || []).map((c: any) => c.comment),
-      transactions: (transactionsReq?.list || []).map((t: any) => t.transaction),
-      creditNotes: (creditNotesReq?.list || []).map((cn: any) => cn.credit_note),
+      comments: (commentsReq?.list || []).map((c: ChargebeeListItem<unknown>) => c.comment),
+      transactions: (transactionsReq?.list || []).map((t: ChargebeeListItem<unknown>) => t.transaction),
+      creditNotes: (creditNotesReq?.list || []).map((cn: ChargebeeListItem<unknown>) => cn.credit_note),
       invoices: invoicesData || []
     };
   }
