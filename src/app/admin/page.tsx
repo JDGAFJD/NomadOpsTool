@@ -7,6 +7,7 @@ export default function AdminPage() {
   const [formData, setFormData] = useState({
     freescout_api_url: '',
     freescout_api_key: '',
+    callback_freescout_mailbox_id: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -21,6 +22,7 @@ export default function AdminPage() {
           setFormData({
             freescout_api_url: data.settings.freescout_api_url || '',
             freescout_api_key: data.settings.freescout_api_key || '',
+            callback_freescout_mailbox_id: data.settings.callback_freescout_mailbox_id || '',
           });
         }
       } catch (err) {
@@ -100,6 +102,22 @@ export default function AdminPage() {
               value={formData.freescout_api_key}
               onChange={(e) => setFormData({...formData, freescout_api_key: e.target.value})}
             />
+          </div>
+
+          <div style={{ marginBottom: '32px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '14px' }}>
+              Callback FreeScout Mailbox ID
+            </label>
+            <input
+              type="number"
+              className="input-field"
+              placeholder="Example: 3"
+              value={formData.callback_freescout_mailbox_id}
+              onChange={(e) => setFormData({...formData, callback_freescout_mailbox_id: e.target.value})}
+            />
+            <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
+              Used to create a new conversation when an unanswered callback has no existing FreeScout ticket.
+            </p>
           </div>
 
           <div style={{ height: '1px', backgroundColor: 'var(--border)', margin: '32px 0' }}></div>

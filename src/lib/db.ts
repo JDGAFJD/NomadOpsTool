@@ -16,6 +16,7 @@ const ENV_FALLBACKS: Record<string, string> = {
   thingspace_password:      'THINGSPACE_PASSWORD',
   freescout_api_url:        'FREESCOUT_API_URL',
   freescout_api_key:        'FREESCOUT_API_KEY',
+  callback_freescout_mailbox_id: 'CALLBACK_FREESCOUT_MAILBOX_ID',
   shopify_admin_key:        'SHOPIFY_ADMIN_KEY',
   shopify_store_domain:     'SHOPIFY_STORE_DOMAIN',
   shipstation_api_key:      'SHIPSTATION_API_KEY',

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { LogOut, ShieldCheck, Loader2, Search, Package, Zap, CreditCard, Activity, ArrowRight, DollarSign, Calendar, Play, Pause, AlertCircle, Copy, RefreshCw, X, AlertTriangle, ShieldAlert, Check, Info, BarChart2, Sun, Moon, ClipboardList } from 'lucide-react';
+import { LogOut, ShieldCheck, Loader2, Search, Package, Zap, CreditCard, Activity, ArrowRight, DollarSign, Calendar, Play, Pause, AlertCircle, Copy, RefreshCw, X, AlertTriangle, ShieldAlert, Check, Info, BarChart2, Sun, Moon, ClipboardList, PhoneCall } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useTheme } from '@/components/ThemeProvider';
@@ -102,6 +102,33 @@ const REPLACEMENT_CHECKLIST_LABELS: { key: keyof ReplacementChecklist; label: st
 const POWER_REPLACEMENT_CHECKLIST_LABELS: { key: keyof ReplacementChecklist; label: string }[] = [
   { key: 'checkedOtherSockets', label: 'Did we check other sockets?' },
 ];
+
+const CALLBACK_CATEGORIES: Record<string, { value: string; label: string }[]> = {
+  sales: [
+    ['product_inquiry', 'Product inquiry'], ['recommendation', 'Recommendation'], ['pricing_promotion', 'Pricing or promotion'],
+    ['upgrade_additional_line', 'Upgrade or additional line'], ['order_assistance', 'Order assistance'], ['other', 'Other'],
+  ].map(([value, label]) => ({ value, label })),
+  internet: [
+    ['no_connectivity', 'No connectivity'], ['slow_intermittent', 'Slow or intermittent'], ['activation_setup', 'Activation or setup'],
+    ['coverage_signal', 'Coverage or signal'], ['device_troubleshooting', 'Device troubleshooting'], ['outage_follow_up', 'Outage follow-up'], ['other', 'Other'],
+  ].map(([value, label]) => ({ value, label })),
+  shipment: [
+    ['order_status', 'Order status'], ['tracking', 'Tracking'], ['delayed_lost', 'Delayed or lost'], ['address_correction', 'Address correction'],
+    ['damaged_missing_item', 'Damaged or missing item'], ['replacement_return_shipment', 'Replacement or return shipment'], ['other', 'Other'],
+  ].map(([value, label]) => ({ value, label })),
+  billing: [
+    ['payment_failure', 'Payment failure'], ['invoice_question', 'Invoice question'], ['incorrect_duplicate_charge', 'Incorrect or duplicate charge'],
+    ['refund_credit', 'Refund or credit'], ['pricing_change', 'Pricing change'], ['cancellation_billing', 'Cancellation billing'], ['other', 'Other'],
+  ].map(([value, label]) => ({ value, label })),
+  general_support: [
+    ['account_profile', 'Account or profile'], ['login', 'Login'], ['device_help', 'Device help'], ['documentation', 'Documentation'],
+    ['complaint_escalation', 'Complaint or escalation'], ['other', 'Other'],
+  ].map(([value, label]) => ({ value, label })),
+  cancellation: [
+    ['cancel_service', 'Cancel service'], ['retention_request', 'Retention request'], ['equipment_return', 'Equipment return'],
+    ['final_bill_refund', 'Final bill or refund'], ['pause_suspend', 'Pause or suspend'], ['other', 'Other'],
+  ].map(([value, label]) => ({ value, label })),
+};
 
 function formatCommerceAddress(addr: any) {
   if (!addr) return '';
@@ -254,7 +281,7 @@ export default function OpsDashboard() {
 
 function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible: boolean; onUpdateTitle: (title: string, error?: boolean) => void }) {
   const [mode, setMode] = useState<'search' | 'results'>('search');
-  const [activeTab, setActiveTab] = useState<'chargebee'|'stripe'|'network'|'commerce'|'support'|'returns'>('chargebee');
+  const [activeTab, setActiveTab] = useState<'chargebee'|'stripe'|'network'|'commerce'|'support'|'returns'|'callbacks'>('chargebee');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -295,6 +322,22 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
   const [returnsLoading, setReturnsLoading] = useState(false);
   const [returnsError, setReturnsError] = useState('');
   const [returnsData, setReturnsData] = useState<any[] | null>(null);
+
+  // Callback request state
+  const [callbackCustomerIndex, setCallbackCustomerIndex] = useState(0);
+  const [callbackPhoneChoice, setCallbackPhoneChoice] = useState<'on_file' | 'corrected'>('on_file');
+  const [callbackPrimaryPhone, setCallbackPrimaryPhone] = useState('');
+  const [callbackSecondaryPhone, setCallbackSecondaryPhone] = useState('');
+  const [callbackDepartment, setCallbackDepartment] = useState('');
+  const [callbackCategory, setCallbackCategory] = useState('');
+  const [callbackPreferredTime, setCallbackPreferredTime] = useState('');
+  const [callbackReason, setCallbackReason] = useState('');
+  const [callbackHistory, setCallbackHistory] = useState<any[]>([]);
+  const [callbackActive, setCallbackActive] = useState<any>(null);
+  const [callbackAgentEmail, setCallbackAgentEmail] = useState('');
+  const [callbackLoading, setCallbackLoading] = useState(false);
+  const [callbackError, setCallbackError] = useState('');
+  const [callbackSuccess, setCallbackSuccess] = useState('');
 
   // Returns Modal Logic
   const [returnsModal, setReturnsModal] = useState<{ imei: string; orderDate?: string } | null>(null);
@@ -338,6 +381,99 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
   };
 
   const ESCALATION_CHANNEL = '#0-urgent-live-calls'; // Escalations channel
+
+  const loadCallbackHistory = async () => {
+    if (!email) return;
+    try {
+      const res = await fetch(`/api/ops/callbacks?email=${encodeURIComponent(email)}`);
+      const data = await res.json();
+      if (res.ok) {
+        setCallbackAgentEmail(data.agentEmail || '');
+        setCallbackHistory(data.callbacks || []);
+        setCallbackActive(data.activeCallback || null);
+      }
+    } catch {
+      setCallbackError('Could not load callback history.');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'callbacks' || !email) return;
+    const selectedCustomer = chargebeeData[callbackCustomerIndex] || chargebeeData[0];
+    const latestOrder = [...commerceData].sort((a, b) => new Date(b.orderDate || 0).getTime() - new Date(a.orderDate || 0).getTime())[0];
+    const onFilePhone = selectedCustomer?.phone || latestOrder?.customerPhone || latestOrder?.shippingAddress?.phone || '';
+    if (callbackPhoneChoice === 'on_file') setCallbackPrimaryPhone(onFilePhone);
+    void loadCallbackHistory();
+  }, [activeTab, email, callbackCustomerIndex, chargebeeData, commerceData, callbackPhoneChoice]);
+
+  const submitCallbackRequest = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setCallbackError('');
+    setCallbackSuccess('');
+    const wordCount = callbackReason.trim().split(/\s+/).filter(Boolean).length;
+    if (wordCount < 25) {
+      setCallbackError(`Add at least 25 words. Current count: ${wordCount}.`);
+      return;
+    }
+    if (!callbackPrimaryPhone.trim() || !callbackDepartment || !callbackCategory || !callbackPreferredTime) {
+      setCallbackError('Complete the phone, department, category, and preferred time fields.');
+      return;
+    }
+
+    const customer = chargebeeData[callbackCustomerIndex] || chargebeeData[0] || {};
+    const latestOrder = [...commerceData].sort((a, b) => new Date(b.orderDate || 0).getTime() - new Date(a.orderDate || 0).getTime())[0] || null;
+    const subscriptions = customer.subscriptions || [];
+    const iccids = subscriptions.map((sub: any) => sub.cf_SIM_ID_ICCID || sub.cf_iccid).filter(Boolean);
+    const network = iccids.map((iccid: string) => thingspaceData[iccid]).filter(Boolean);
+    const latestFreeScout = [...freescoutData].sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
+
+    setCallbackLoading(true);
+    try {
+      const res = await fetch('/api/ops/callbacks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerEmail: customer.email || email,
+          customerId: customer.id || null,
+          customerName: `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || email,
+          primaryPhone: callbackPrimaryPhone,
+          secondaryPhone: callbackSecondaryPhone,
+          phoneSource: callbackPhoneChoice,
+          department: callbackDepartment,
+          category: callbackCategory,
+          preferredTime: callbackPreferredTime,
+          reason: callbackReason,
+          freescoutConversationId: latestFreeScout?.id || null,
+          accountSnapshot: {
+            customer,
+            subscriptions,
+            invoices: invoicesData[customer.id] || [],
+            transactions: transactionsData[customer.id] || [],
+            latestOrder,
+            network,
+            freescout: freescoutData,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCallbackError(data.error || 'Could not create callback request.');
+        if (data.activeCallback) setCallbackActive(data.activeCallback);
+        return;
+      }
+      setCallbackSuccess('Callback request created and added to the queue.');
+      setCallbackReason('');
+      setCallbackSecondaryPhone('');
+      setCallbackDepartment('');
+      setCallbackCategory('');
+      setCallbackPreferredTime('');
+      await loadCallbackHistory();
+    } catch {
+      setCallbackError('Network error while creating the callback request.');
+    } finally {
+      setCallbackLoading(false);
+    }
+  };
 
   const openReplacementModal = async (customer: any, subscription: any) => {
     const iccid = subscription?.cf_SIM_ID_ICCID || subscription?.cf_iccid;
@@ -1320,6 +1456,12 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                   style={{ background: activeTab === 'returns' ? 'rgba(234, 179, 8, 0.2)' : 'transparent', color: activeTab === 'returns' ? '#eab308' : '#9ca3af', border: `1px solid ${activeTab === 'returns' ? 'rgba(234, 179, 8, 0.4)' : 'transparent'}`, padding: '10px 20px', borderRadius: '100px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                   <Package size={16} /> Hardware Returns
+                </button>
+                <button
+                  onClick={() => setActiveTab('callbacks')}
+                  style={{ background: activeTab === 'callbacks' ? 'rgba(20,184,166,0.18)' : 'transparent', color: activeTab === 'callbacks' ? '#2dd4bf' : '#9ca3af', border: `1px solid ${activeTab === 'callbacks' ? 'rgba(45,212,191,0.38)' : 'transparent'}`, padding: '10px 20px', borderRadius: '100px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <PhoneCall size={16} /> Call Back
                 </button>
               </div>
 
@@ -2522,6 +2664,145 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                 </div>
                 )}
                 
+
+                {/* Callback Column */}
+                {activeTab === 'callbacks' && (() => {
+                  const customer = chargebeeData[callbackCustomerIndex] || chargebeeData[0] || {};
+                  const subscriptions = customer.subscriptions || [];
+                  const latestOrder = [...commerceData].sort((a, b) => new Date(b.orderDate || 0).getTime() - new Date(a.orderDate || 0).getTime())[0];
+                  const onFilePhone = customer.phone || latestOrder?.customerPhone || latestOrder?.shippingAddress?.phone || '';
+                  const wordCount = callbackReason.trim().split(/\s+/).filter(Boolean).length;
+                  const latestSubscription = subscriptions[0];
+                  const customerInvoices = invoicesData[customer.id] || [];
+                  const latestInvoice = customerInvoices[0];
+                  const iccid = latestSubscription?.cf_SIM_ID_ICCID || latestSubscription?.cf_iccid;
+                  const network = iccid ? thingspaceData[iccid] : null;
+                  return (
+                    <div id="section-callbacks" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div>
+                          <h3 style={{ fontSize: 20, color: 'var(--ops-text)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <PhoneCall size={20} color="#2dd4bf" /> Request a Call Back
+                          </h3>
+                          <p style={{ color: 'var(--ops-text-muted)', fontSize: 13, margin: '6px 0 0' }}>Document the request carefully so the callback agent can act without repeating discovery.</p>
+                        </div>
+                        <button onClick={() => window.location.assign('/callbacks')} style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid var(--border)', background: 'var(--surface-200)', color: 'var(--ops-text)', borderRadius: 8, padding: '10px 14px', cursor: 'pointer', fontWeight: 700 }}>
+                          Open Callback Queue <ArrowRight size={15} />
+                        </button>
+                      </div>
+
+                      {chargebeeData.length > 1 && (
+                        <label style={{ display: 'grid', gap: 7, maxWidth: 520 }}>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--ops-text-muted)', textTransform: 'uppercase' }}>Customer account</span>
+                          <select value={callbackCustomerIndex} onChange={e => setCallbackCustomerIndex(Number(e.target.value))} style={{ padding: 12, borderRadius: 8 }}>
+                            {chargebeeData.map((item, index) => <option key={item.id || index} value={index}>{item.firstName} {item.lastName} · {item.id}</option>)}
+                          </select>
+                        </label>
+                      )}
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
+                        {[
+                          { label: 'Customer', value: `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || email, detail: customer.email || email },
+                          { label: 'Chargebee', value: latestSubscription?.status || 'No subscription', detail: latestSubscription?.id || customer.id || 'No account ID' },
+                          { label: 'Billing', value: latestInvoice?.status || `${customerInvoices.length} recent invoices`, detail: latestInvoice ? `Invoice ${latestInvoice.id || latestInvoice.invoice_number || 'available'}` : 'No recent invoice data' },
+                          { label: 'Shipment', value: latestOrder?.orderNumber || 'No Shopify order', detail: latestOrder?.tracking?.[0]?.status || latestOrder?.fulfillmentStatus || 'No tracking status' },
+                          { label: 'ThingSpace', value: network?.state || network?.status || 'No line data', detail: iccid || 'No ICCID' },
+                          { label: 'Requesting Agent', value: callbackAgentEmail || 'Authenticated agent', detail: 'Recorded when submitted' },
+                        ].map(item => (
+                          <div key={item.label} style={{ padding: 16, background: 'var(--ops-card-bg)', border: '1px solid var(--ops-card-border)', borderRadius: 8 }}>
+                            <div style={{ fontSize: 11, color: 'var(--ops-text-muted)', fontWeight: 800, textTransform: 'uppercase', marginBottom: 7 }}>{item.label}</div>
+                            <div style={{ fontWeight: 800, color: 'var(--ops-text)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.value}</div>
+                            <div style={{ color: 'var(--ops-text-muted)', fontSize: 12, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.detail}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {callbackActive && (
+                        <div style={{ padding: 16, border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.1)', borderRadius: 8, color: 'var(--ops-text)' }}>
+                          <strong style={{ color: '#f59e0b' }}>Active callback already exists.</strong> Request #{callbackActive.id} is {String(callbackActive.status).replace(/_/g, ' ')} and must be resolved before another can be created.
+                        </div>
+                      )}
+
+                      <form onSubmit={submitCallbackRequest} style={{ display: 'grid', gap: 20, padding: 22, background: 'var(--ops-card-bg)', border: '1px solid var(--ops-card-border)', borderRadius: 10 }}>
+                        <div style={{ padding: 14, borderRadius: 8, background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.22)', color: 'var(--ops-text)', lineHeight: 1.5 }}>
+                          <strong>Please take your time completing this request.</strong> Everything is recorded and may be used for review and evaluation purposes.
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--ops-text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Callback phone</div>
+                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+                            <button type="button" onClick={() => { setCallbackPhoneChoice('on_file'); setCallbackPrimaryPhone(onFilePhone); }} disabled={!onFilePhone} style={{ padding: '10px 13px', borderRadius: 8, border: `1px solid ${callbackPhoneChoice === 'on_file' ? 'var(--primary)' : 'var(--border)'}`, background: callbackPhoneChoice === 'on_file' ? 'var(--primary-light)' : 'var(--surface-200)', color: 'var(--ops-text)', cursor: onFilePhone ? 'pointer' : 'not-allowed' }}>
+                              Use number on file: {onFilePhone || 'Not found'}
+                            </button>
+                            <button type="button" onClick={() => { setCallbackPhoneChoice('corrected'); setCallbackPrimaryPhone(''); }} style={{ padding: '10px 13px', borderRadius: 8, border: `1px solid ${callbackPhoneChoice === 'corrected' ? 'var(--primary)' : 'var(--border)'}`, background: callbackPhoneChoice === 'corrected' ? 'var(--primary-light)' : 'var(--surface-200)', color: 'var(--ops-text)', cursor: 'pointer' }}>Use a different number</button>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                            <input value={callbackPrimaryPhone} onChange={e => setCallbackPrimaryPhone(e.target.value)} placeholder="Primary callback number" required style={{ padding: 12, borderRadius: 8 }} />
+                            <input value={callbackSecondaryPhone} onChange={e => setCallbackSecondaryPhone(e.target.value)} placeholder="Secondary number (optional)" style={{ padding: 12, borderRadius: 8 }} />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                          <label style={{ display: 'grid', gap: 7 }}>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--ops-text-muted)', textTransform: 'uppercase' }}>Department</span>
+                            <select value={callbackDepartment} onChange={e => { setCallbackDepartment(e.target.value); setCallbackCategory(''); }} required style={{ padding: 12, borderRadius: 8 }}>
+                              <option value="">Select department</option>
+                              <option value="sales">Sales</option><option value="internet">Internet</option><option value="shipment">Shipment</option>
+                              <option value="billing">Billing</option><option value="general_support">General Support</option><option value="cancellation">Cancellation</option>
+                            </select>
+                          </label>
+                          <label style={{ display: 'grid', gap: 7 }}>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--ops-text-muted)', textTransform: 'uppercase' }}>Category</span>
+                            <select value={callbackCategory} onChange={e => setCallbackCategory(e.target.value)} required disabled={!callbackDepartment} style={{ padding: 12, borderRadius: 8 }}>
+                              <option value="">Select category</option>
+                              {(CALLBACK_CATEGORIES[callbackDepartment] || []).map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                            </select>
+                          </label>
+                          <label style={{ display: 'grid', gap: 7 }}>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--ops-text-muted)', textTransform: 'uppercase' }}>Preferred time</span>
+                            <select value={callbackPreferredTime} onChange={e => setCallbackPreferredTime(e.target.value)} required style={{ padding: 12, borderRadius: 8 }}>
+                              <option value="">Select preference</option>
+                              <option value="morning">Morning</option><option value="afternoon">Afternoon</option><option value="working_hours">Any time during working hours</option>
+                            </select>
+                          </label>
+                        </div>
+
+                        <label style={{ display: 'grid', gap: 8 }}>
+                          <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12, fontWeight: 800, color: 'var(--ops-text-muted)', textTransform: 'uppercase' }}>
+                            Why is a callback needed? <span style={{ color: wordCount >= 25 ? '#10b981' : '#f59e0b' }}>{wordCount}/25 words</span>
+                          </span>
+                          <textarea value={callbackReason} onChange={e => setCallbackReason(e.target.value)} placeholder="Give the callback agent enough context to understand the issue, work already completed, customer expectations, and the desired outcome." style={{ minHeight: 150, resize: 'vertical', padding: 14, borderRadius: 8, lineHeight: 1.55 }} />
+                        </label>
+
+                        {callbackError && <div style={{ color: '#ef4444', padding: 12, borderRadius: 8, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>{callbackError}</div>}
+                        {callbackSuccess && <div style={{ color: '#10b981', padding: 12, borderRadius: 8, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>{callbackSuccess}</div>}
+
+                        <button type="submit" disabled={callbackLoading || Boolean(callbackActive)} style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: 8, padding: '12px 18px', border: 'none', borderRadius: 8, background: callbackLoading || callbackActive ? 'var(--surface-300)' : 'linear-gradient(135deg, var(--primary), #0d9488)', color: 'white', cursor: callbackLoading || callbackActive ? 'not-allowed' : 'pointer', fontWeight: 800 }}>
+                          {callbackLoading ? <Loader2 size={16} className="animate-spin" /> : <PhoneCall size={16} />} Request Call Back
+                        </button>
+                      </form>
+
+                      <div style={{ background: 'var(--ops-card-bg)', border: '1px solid var(--ops-card-border)', borderRadius: 10, overflow: 'hidden' }}>
+                        <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--border)', fontWeight: 800 }}>Previous Callbacks</div>
+                        {callbackHistory.length === 0 ? (
+                          <div style={{ padding: 24, color: 'var(--ops-text-muted)' }}>No previous callbacks found for this customer.</div>
+                        ) : callbackHistory.map(item => (
+                          <div key={item.id} style={{ padding: 16, borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 16 }}>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontWeight: 800, textTransform: 'capitalize' }}>{String(item.department).replace(/_/g, ' ')} · {String(item.category).replace(/_/g, ' ')}</div>
+                              <div style={{ color: 'var(--ops-text-muted)', fontSize: 13, marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.reason}</div>
+                              {item.outcome_notes && <div style={{ color: 'var(--ops-text-muted)', fontSize: 12, marginTop: 5 }}>Outcome: {item.outcome_notes}</div>}
+                            </div>
+                            <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--ops-text-muted)' }}>
+                              <div style={{ color: item.status === 'completed' ? '#10b981' : '#f59e0b', fontWeight: 800, textTransform: 'uppercase' }}>{String(item.status).replace(/_/g, ' ')}</div>
+                              <div style={{ marginTop: 5 }}>{new Date(item.created_at).toLocaleString()}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Returns Column */}
                 {activeTab === 'returns' && (

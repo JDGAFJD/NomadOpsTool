@@ -80,10 +80,14 @@ export class FreeScoutService {
       throw new Error(`FreeScout API error: ${res.status} ${err}`);
     }
 
-    // 204 No Content won't have JSON body
+    // Create endpoints may return the new ID in a header with no JSON body.
     if (res.status === 204) return null;
-
-    return res.json();
+    const text = await res.text();
+    if (!text) {
+      const resourceId = res.headers.get('Resource-ID');
+      return resourceId ? { id: Number(resourceId) } : null;
+    }
+    return JSON.parse(text);
   }
 
   async getMailboxes(): Promise<Mailbox[]> {
@@ -141,6 +145,35 @@ export class FreeScoutService {
       method: 'POST',
       body: JSON.stringify(payload)
     });
+  }
+
+  async createConversation(mailboxId: number, customerEmail: string, subject: string, text: string): Promise<number> {
+    if (!this.isConfigured()) {
+      throw new Error('FreeScout API is not configured.');
+    }
+
+    const data = await this.fetchApi('conversations', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'email',
+        mailboxId,
+        subject,
+        customer: { email: customerEmail },
+        threads: [{
+          type: 'message',
+          text,
+          user: this.defaultUserId,
+        }],
+        imported: false,
+        status: 'active',
+      }),
+    });
+
+    const conversationId = Number(data?.id || data?.conversation?.id);
+    if (!conversationId) {
+      throw new Error('FreeScout did not return a conversation ID.');
+    }
+    return conversationId;
   }
 
   async addNote(ticketId: number, text: string): Promise<void> {

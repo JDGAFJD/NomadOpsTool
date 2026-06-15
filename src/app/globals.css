@@ -746,4 +746,23 @@ button {
   .admin-shell main {
     padding: 24px !important;
   }
+
+  .callback-workspace-grid-open {
+    grid-template-columns: 1fr !important;
+  }
+
+  .callback-workspace-grid-open aside {
+    position: static !important;
+    max-height: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .callback-stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .callback-outcome-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
