@@ -755,6 +755,10 @@ button {
     position: static !important;
     max-height: none !important;
   }
+
+  .callback-filter-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
 }
 
 @media (max-width: 640px) {
@@ -764,5 +768,13 @@ button {
 
   .callback-outcome-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .callback-filter-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .callback-agent-label {
+    display: none !important;
   }
 }

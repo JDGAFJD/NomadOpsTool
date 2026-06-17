@@ -461,7 +461,9 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
         if (data.activeCallback) setCallbackActive(data.activeCallback);
         return;
       }
-      setCallbackSuccess('Callback request created and added to the queue.');
+      setCallbackSuccess(data.slackWarning
+        ? `Callback request created and added to the queue. Slack warning: ${data.slackWarning}`
+        : 'Callback request created and added to the queue. Slack notification sent.');
       setCallbackReason('');
       setCallbackSecondaryPhone('');
       setCallbackDepartment('');

@@ -4,12 +4,27 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, CalendarClock, CheckCircle2, Clock3, Headphones, History,
-  Inbox, Loader2, LogOut, Mail, Phone, PhoneCall, RefreshCw, RotateCcw,
+  Inbox, Loader2, LogOut, Mail, Phone, PhoneCall, RefreshCw, RotateCcw, Search,
   Sun, Moon, UserCheck, Voicemail, X,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
 type QueueTab = 'unassigned' | 'assigned' | 'history';
+const DEPARTMENT_OPTIONS = [
+  ['all', 'All departments'],
+  ['internet', 'Internet'],
+  ['shipment', 'Shipment'],
+  ['billing', 'Billing'],
+  ['sales', 'Sales'],
+  ['general_support', 'General Support'],
+  ['cancellation', 'Cancellation'],
+];
+const TIME_OPTIONS = [
+  ['all', 'Any time'],
+  ['morning', 'Morning'],
+  ['afternoon', 'Afternoon'],
+  ['working_hours', 'Working hours'],
+];
 type CallbackRecord = {
   id: number;
   customer_email: string;
@@ -63,12 +78,21 @@ export default function CallbacksPage() {
   const [selected, setSelected] = useState<CallbackRecord | null>(null);
   const [outcome, setOutcome] = useState<'completed' | 'left_voicemail' | 'no_answer' | null>(null);
   const [notes, setNotes] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [timeFilter, setTimeFilter] = useState('all');
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const loadQueue = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/ops/callbacks/queue?scope=${scope}`, { cache: 'no-store' });
+      const params = new URLSearchParams({ scope });
+      if (departmentFilter !== 'all') params.set('department', departmentFilter);
+      if (timeFilter !== 'all') params.set('preferredTime', timeFilter);
+      if (overdueOnly) params.set('overdue', 'true');
+      if (searchTerm.trim()) params.set('search', searchTerm.trim());
+      const res = await fetch(`/api/ops/callbacks/queue?${params.toString()}`, { cache: 'no-store' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not load callback queue.');
       setAgentEmail(data.agentEmail);
@@ -85,7 +109,7 @@ export default function CallbacksPage() {
     } finally {
       setLoading(false);
     }
-  }, [scope, selected?.id]);
+  }, [scope, departmentFilter, timeFilter, overdueOnly, searchTerm, selected?.id]);
 
   useEffect(() => {
     void loadQueue();
@@ -115,6 +139,13 @@ export default function CallbacksPage() {
   };
 
   const records = useMemo(() => tab === 'unassigned' ? unassigned : tab === 'assigned' ? assigned : history, [tab, unassigned, assigned, history]);
+  const hasActiveFilters = departmentFilter !== 'all' || timeFilter !== 'all' || overdueOnly || Boolean(searchTerm.trim());
+  const clearFilters = () => {
+    setDepartmentFilter('all');
+    setTimeFilter('all');
+    setOverdueOnly(false);
+    setSearchTerm('');
+  };
   const snapshot = selected?.account_snapshot || {};
   const latestSubscription = snapshot.subscriptions?.[0];
   const latestOrder = snapshot.latestOrder;
@@ -132,7 +163,7 @@ export default function CallbacksPage() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ color: 'var(--ops-text-muted)', fontSize: 13 }}>{agentEmail}</span>
+          <span className="callback-agent-label" style={{ color: 'var(--ops-text-muted)', fontSize: 13 }}>{agentEmail}</span>
           <button title="Toggle theme" onClick={toggle} className="ops-icon-button" style={{ width: 40, height: 40, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button>
           <button title="Sign out" onClick={async () => { await fetch('/api/ops/logout', { method: 'POST' }); router.push('/ops/login'); }} className="ops-icon-button" style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><LogOut size={17} /></button>
         </div>
@@ -173,6 +204,41 @@ export default function CallbacksPage() {
             )}
             <button onClick={() => void loadQueue()} disabled={loading} className="ops-secondary-button" style={{ padding: '9px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}><RefreshCw size={15} /> Refresh</button>
           </div>
+        </div>
+
+        <div style={{ marginBottom: 16, padding: 14, border: '1px solid var(--ops-card-border)', background: 'var(--ops-card-bg)', borderRadius: 8, display: 'grid', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) repeat(3, minmax(150px, auto)) auto', gap: 10, alignItems: 'center' }} className="callback-filter-grid">
+            <label style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <Search size={16} style={{ position: 'absolute', left: 12, color: 'var(--ops-text-muted)' }} />
+              <input
+                value={searchTerm}
+                onChange={event => setSearchTerm(event.target.value)}
+                placeholder="Search customer, phone, reason, agent, or ID..."
+                style={{ width: '100%', padding: '11px 12px 11px 36px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-200)', color: 'var(--ops-text)' }}
+              />
+            </label>
+            <select value={departmentFilter} onChange={event => setDepartmentFilter(event.target.value)} style={{ padding: 11, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-200)', color: 'var(--ops-text)' }}>
+              {DEPARTMENT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <select value={timeFilter} onChange={event => setTimeFilter(event.target.value)} style={{ padding: 11, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-200)', color: 'var(--ops-text)' }}>
+              {TIME_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 12px', borderRadius: 8, border: '1px solid var(--border)', background: overdueOnly ? 'rgba(239,68,68,0.1)' : 'var(--surface-200)', color: overdueOnly ? '#ef4444' : 'var(--ops-text)', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <input type="checkbox" checked={overdueOnly} onChange={event => setOverdueOnly(event.target.checked)} style={{ accentColor: '#ef4444' }} />
+              Overdue only
+            </label>
+            <button onClick={clearFilters} disabled={!hasActiveFilters} style={{ padding: '11px 13px', borderRadius: 8, border: '1px solid var(--border)', background: hasActiveFilters ? 'var(--surface-200)' : 'transparent', color: hasActiveFilters ? 'var(--ops-text)' : 'var(--ops-text-muted)', cursor: hasActiveFilters ? 'pointer' : 'not-allowed', fontWeight: 800 }}>
+              Reset
+            </button>
+          </div>
+          {hasActiveFilters && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {searchTerm.trim() && <span style={{ padding: '4px 9px', borderRadius: 999, background: 'var(--primary-light)', color: 'var(--primary)', fontSize: 12, fontWeight: 800 }}>Search: {searchTerm.trim()}</span>}
+              {departmentFilter !== 'all' && <span style={{ padding: '4px 9px', borderRadius: 999, background: 'var(--primary-light)', color: 'var(--primary)', fontSize: 12, fontWeight: 800 }}>{humanize(departmentFilter)}</span>}
+              {timeFilter !== 'all' && <span style={{ padding: '4px 9px', borderRadius: 999, background: 'var(--primary-light)', color: 'var(--primary)', fontSize: 12, fontWeight: 800 }}>{humanize(timeFilter)}</span>}
+              {overdueOnly && <span style={{ padding: '4px 9px', borderRadius: 999, background: 'rgba(239,68,68,0.12)', color: '#ef4444', fontSize: 12, fontWeight: 800 }}>Overdue</span>}
+            </div>
+          )}
         </div>
 
         {error && <div style={{ marginBottom: 14, padding: 12, color: '#ef4444', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8 }}>{error}</div>}

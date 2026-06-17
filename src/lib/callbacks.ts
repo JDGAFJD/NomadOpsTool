@@ -44,6 +44,9 @@ export async function ensureCallbackTables() {
       assigned_to TEXT,
       account_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
       freescout_conversation_id BIGINT,
+      slack_channel TEXT,
+      slack_ts TEXT,
+      slack_error TEXT,
       due_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '24 hours'),
       assigned_at TIMESTAMPTZ,
       completed_at TIMESTAMPTZ,
@@ -63,6 +66,9 @@ export async function ensureCallbackTables() {
     )
   `);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_callbacks_status_created ON ops_callbacks(status, created_at)`);
+  await queryOpsDb(`ALTER TABLE ops_callbacks ADD COLUMN IF NOT EXISTS slack_channel TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_callbacks ADD COLUMN IF NOT EXISTS slack_ts TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_callbacks ADD COLUMN IF NOT EXISTS slack_error TEXT`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_callbacks_assignee_status ON ops_callbacks(assigned_to, status)`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_callbacks_customer_status ON ops_callbacks(customer_email, status)`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_callbacks_due_at ON ops_callbacks(due_at)`);
