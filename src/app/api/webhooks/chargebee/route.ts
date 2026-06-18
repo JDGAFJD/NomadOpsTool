@@ -4,6 +4,8 @@ import {
   isChargebeeWebhookPayload,
   recordChargebeeWebhook,
 } from '@/lib/chargebeeWebhooks';
+import { processChargebeeCollectionsEvent } from '@/lib/collections';
+import { queryOpsDb } from '@/lib/opsDb';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -64,6 +66,30 @@ export async function POST(request: Request) {
 
   try {
     const recorded = await recordChargebeeWebhook(payload);
+    try {
+      await queryOpsDb(
+        `UPDATE ops_chargebee_webhook_events
+         SET processing_status = 'processing', processing_attempts = processing_attempts + 1,
+             processing_error = NULL
+         WHERE id = $1`,
+        [recorded.databaseId]
+      );
+      await processChargebeeCollectionsEvent(payload);
+      await queryOpsDb(
+        `UPDATE ops_chargebee_webhook_events
+         SET processing_status = 'processed', processed_at = NOW(), processing_error = NULL
+         WHERE id = $1`,
+        [recorded.databaseId]
+      );
+    } catch (processingError: any) {
+      await queryOpsDb(
+        `UPDATE ops_chargebee_webhook_events
+         SET processing_status = 'failed', processing_error = $1
+         WHERE id = $2`,
+        [processingError?.message || 'Collections processing failed', recorded.databaseId]
+      ).catch(() => undefined);
+      throw processingError;
+    }
     return NextResponse.json({
       ok: true,
       eventId: payload.id,

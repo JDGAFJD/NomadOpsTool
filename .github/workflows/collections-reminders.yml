@@ -1,0 +1,20 @@
+name: Collections Due Reminders
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify due collection follow-ups
+        env:
+          COLLECTIONS_SCHEDULER_SECRET: ${{ secrets.COLLECTIONS_SCHEDULER_SECRET }}
+        run: |
+          test -n "$COLLECTIONS_SCHEDULER_SECRET"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $COLLECTIONS_SCHEDULER_SECRET" \
+            https://nomad-ops-tool.vercel.app/api/ops/collections/scheduler

@@ -1465,6 +1465,12 @@ function WorkspaceTab({ id, isVisible, onUpdateTitle }: { id: string; isVisible:
                 >
                   <PhoneCall size={16} /> Call Back
                 </button>
+                <button
+                  onClick={() => window.location.assign('/collections')}
+                  style={{ background: 'transparent', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.32)', padding: '10px 20px', borderRadius: '100px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <DollarSign size={16} /> Collections
+                </button>
               </div>
 
               {/* Data Stack */}

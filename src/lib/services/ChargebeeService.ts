@@ -240,6 +240,12 @@ export class ChargebeeService {
     return (data?.list || []).map((item: ChargebeeListItem<unknown>) => item.invoice);
   }
 
+  async getInvoice(invoiceId: string) {
+    if (!this.isConfigured() || !invoiceId) return null;
+    const data = await this.fetchApi(`/invoices/${encodeURIComponent(invoiceId)}`);
+    return data?.invoice || null;
+  }
+
   async generatePaymentLink(customerId: string) {
     if (!this.isConfigured()) return { url: null, error: 'Not configured' };
 

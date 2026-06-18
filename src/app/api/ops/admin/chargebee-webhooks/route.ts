@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
         `SELECT
            id, chargebee_event_id, event_type, api_version, source, occurred_at,
            customer_id, subscription_id, invoice_id, payload, processing_status,
+           processing_attempts, processing_error, processed_at,
            duplicate_count, received_at, last_received_at
          FROM ops_chargebee_webhook_events
          ${clause}

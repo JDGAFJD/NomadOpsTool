@@ -23,6 +23,9 @@ export async function ensureChargebeeWebhookTable() {
       invoice_id TEXT,
       payload JSONB NOT NULL,
       processing_status TEXT NOT NULL DEFAULT 'received',
+      processing_attempts INTEGER NOT NULL DEFAULT 0,
+      processing_error TEXT,
+      processed_at TIMESTAMPTZ,
       duplicate_count INTEGER NOT NULL DEFAULT 0,
       received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       last_received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -44,6 +47,9 @@ export async function ensureChargebeeWebhookTable() {
     CREATE INDEX IF NOT EXISTS idx_chargebee_webhooks_subscription
     ON ops_chargebee_webhook_events(subscription_id)
   `);
+  await queryOpsDb(`ALTER TABLE ops_chargebee_webhook_events ADD COLUMN IF NOT EXISTS processing_attempts INTEGER NOT NULL DEFAULT 0`);
+  await queryOpsDb(`ALTER TABLE ops_chargebee_webhook_events ADD COLUMN IF NOT EXISTS processing_error TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_chargebee_webhook_events ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ`);
 }
 
 function nestedRecord(value: unknown): Record<string, unknown> | null {
@@ -115,6 +121,7 @@ export async function recordChargebeeWebhook(payload: ChargebeeWebhookPayload) {
 
   const row = result.rows[0];
   return {
+    databaseId: Number(row.id),
     id: row.id,
     duplicate: Number(row.duplicate_count) > 0,
     duplicateCount: Number(row.duplicate_count),
