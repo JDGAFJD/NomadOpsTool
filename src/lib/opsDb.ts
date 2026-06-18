@@ -8,9 +8,9 @@ const opsDbPool = new Pool({
   host:     process.env.OPS_DB_HOST,
   port:     Number(process.env.OPS_DB_PORT) || 25060,
   database: process.env.OPS_DB_NAME,
-  ssl: {
-    rejectUnauthorized: false
-  },
+  ssl: process.env.OPS_DB_SSL === 'false'
+    ? false
+    : { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,
 });

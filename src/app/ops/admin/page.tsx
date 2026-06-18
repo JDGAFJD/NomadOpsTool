@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import {
   ShieldAlert, Server, UserPlus, Activity, Database,
   Loader2, ArrowLeft, Shield, User, Trash2, ChevronDown,
-  ChevronUp, RefreshCw, Check, X as XIcon, TrendingUp, AlertCircle, Package
+  ChevronUp, RefreshCw, Check, X as XIcon, TrendingUp, AlertCircle, Package,
+  Webhook, Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -71,6 +72,31 @@ type ReplacementStats = {
   byAgent: { agent_email: string; count: string }[];
   byType: { replacement_type: string; count: string }[];
   byIssue: { issue_branch: string; count: string }[];
+};
+type ChargebeeWebhookEvent = {
+  id: number;
+  chargebee_event_id: string;
+  event_type: string;
+  api_version: string | null;
+  source: string | null;
+  occurred_at: string | null;
+  customer_id: string | null;
+  subscription_id: string | null;
+  invoice_id: string | null;
+  payload: Record<string, unknown>;
+  processing_status: string;
+  duplicate_count: number;
+  received_at: string;
+  last_received_at: string;
+};
+type ChargebeeWebhookStats = {
+  total: string;
+  duplicates: string;
+  last_24_hours: string;
+};
+type ChargebeeWebhookType = {
+  event_type: string;
+  count: string;
 };
 
 const ACTION_COLOR: Record<string, string> = {
@@ -177,7 +203,7 @@ export default function AdminControlPanel() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   // Active section tab
-  const [activeSection, setActiveSection] = useState<'analytics' | 'users' | 'escalations' | 'visitors' | 'replacements'>('analytics');
+  const [activeSection, setActiveSection] = useState<'analytics' | 'users' | 'escalations' | 'visitors' | 'replacements' | 'chargebee_webhooks'>('analytics');
 
   // Analytics
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
@@ -196,6 +222,14 @@ export default function AdminControlPanel() {
   // Replacement requests
   const [replacements, setReplacements] = useState<ReplacementRecord[]>([]);
   const [replacementStats, setReplacementStats] = useState<ReplacementStats | null>(null);
+
+  // Chargebee webhooks
+  const [chargebeeWebhooks, setChargebeeWebhooks] = useState<ChargebeeWebhookEvent[]>([]);
+  const [chargebeeWebhookStats, setChargebeeWebhookStats] = useState<ChargebeeWebhookStats | null>(null);
+  const [chargebeeWebhookTypes, setChargebeeWebhookTypes] = useState<ChargebeeWebhookType[]>([]);
+  const [chargebeeWebhookSearch, setChargebeeWebhookSearch] = useState('');
+  const [chargebeeWebhookType, setChargebeeWebhookType] = useState('all');
+  const [expandedChargebeeWebhook, setExpandedChargebeeWebhook] = useState<number | null>(null);
 
   // Users
   const [users, setUsers] = useState<OpsUser[]>([]);
@@ -220,12 +254,13 @@ export default function AdminControlPanel() {
   const bootstrap = async () => {
     setLoading(true);
     try {
-      const [logsRes, usersRes, escalationsRes, visitorsRes, replacementsRes] = await Promise.all([
+      const [logsRes, usersRes, escalationsRes, visitorsRes, replacementsRes, chargebeeWebhooksRes] = await Promise.all([
         fetch('/api/ops/admin/logs'),
         fetch('/api/ops/admin/users'),
         fetch('/api/ops/admin/escalations'),
         fetch('/api/ops/visitor-log'),
         fetch('/api/ops/admin/replacements'),
+        fetch('/api/ops/admin/chargebee-webhooks'),
       ]);
 
       if (logsRes.status === 403 || logsRes.status === 401) {
@@ -258,6 +293,12 @@ export default function AdminControlPanel() {
       if (!visitorsData.error) {
         setVisitorLogs(visitorsData.logs || []);
         setVisitorStats(visitorsData.stats || null);
+      }
+      const chargebeeWebhooksData = await chargebeeWebhooksRes.json().catch(() => ({}));
+      if (chargebeeWebhooksData.success) {
+        setChargebeeWebhooks(chargebeeWebhooksData.events || []);
+        setChargebeeWebhookStats(chargebeeWebhooksData.stats || null);
+        setChargebeeWebhookTypes(chargebeeWebhooksData.eventTypes || []);
       }
     } catch (err: any) {
       showToast(err.message || 'Bootstrap failure', 'error');
@@ -378,7 +419,7 @@ export default function AdminControlPanel() {
 
       {/* Section Nav */}
       <div style={{ display: 'flex', gap: 0, padding: '0 40px', borderBottom: '1px solid var(--ops-card-border)', backgroundColor: 'rgba(255,255,255,0.32)', overflowX: 'auto' }}>
-        {(['analytics', 'escalations', 'replacements', 'visitors', 'users'] as const).map(s => (
+        {(['analytics', 'escalations', 'replacements', 'chargebee_webhooks', 'visitors', 'users'] as const).map(s => (
           <button
             key={s}
             onClick={() => setActiveSection(s)}
@@ -390,8 +431,8 @@ export default function AdminControlPanel() {
               transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 8,
             }}
           >
-            {s === 'analytics' ? <Activity size={14} /> : s === 'escalations' ? <ShieldAlert size={14} /> : s === 'replacements' ? <Package size={14} /> : s === 'visitors' ? <Database size={14} /> : <User size={14} />}
-            {s === 'analytics' ? 'Activity Logs' : s === 'escalations' ? 'Escalations' : s === 'replacements' ? 'Replacements' : s === 'visitors' ? 'Visitor Logs' : 'Manage Users'}
+            {s === 'analytics' ? <Activity size={14} /> : s === 'escalations' ? <ShieldAlert size={14} /> : s === 'replacements' ? <Package size={14} /> : s === 'chargebee_webhooks' ? <Webhook size={14} /> : s === 'visitors' ? <Database size={14} /> : <User size={14} />}
+            {s === 'analytics' ? 'Activity Logs' : s === 'escalations' ? 'Escalations' : s === 'replacements' ? 'Replacements' : s === 'chargebee_webhooks' ? 'Chargebee Webhooks' : s === 'visitors' ? 'Visitor Logs' : 'Manage Users'}
           </button>
         ))}
       </div>
@@ -764,6 +805,189 @@ export default function AdminControlPanel() {
                         {replacements.length === 0 && (
                           <tr>
                             <td colSpan={6} style={{ padding: '48px 24px', color: '#6b7280', textAlign: 'center' }}>No replacement requests recorded yet.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── CHARGEBEE WEBHOOKS TAB ── */}
+          {activeSection === 'chargebee_webhooks' && (
+            <motion.div key="chargebee-webhooks" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 18 }}>
+                  {[
+                    { label: 'UNIQUE EVENTS', value: chargebeeWebhookStats?.total || 0, color: '#2563eb' },
+                    { label: 'LAST 24 HOURS', value: chargebeeWebhookStats?.last_24_hours || 0, color: '#0f766e' },
+                    { label: 'DUPLICATE DELIVERIES', value: chargebeeWebhookStats?.duplicates || 0, color: '#d97706' },
+                  ].map(stat => (
+                    <div key={stat.label} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: 22 }}>
+                      <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 10, fontWeight: 700, letterSpacing: '0.6px' }}>{stat.label}</div>
+                      <div style={{ fontSize: 34, fontWeight: 800, color: stat.color }}>{stat.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', flex: '1 1 320px', minWidth: 0 }}>
+                    <Search size={16} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: '#6b7280', pointerEvents: 'none' }} />
+                    <input
+                      value={chargebeeWebhookSearch}
+                      onChange={event => setChargebeeWebhookSearch(event.target.value)}
+                      placeholder="Search event, customer, subscription, or invoice ID"
+                      style={{ width: '100%', padding: '11px 14px 11px 40px', borderRadius: 8, boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <select
+                    value={chargebeeWebhookType}
+                    onChange={event => setChargebeeWebhookType(event.target.value)}
+                    style={{ minWidth: 240, padding: '11px 14px', borderRadius: 8 }}
+                  >
+                    <option value="all">All event types</option>
+                    {chargebeeWebhookTypes.map(type => (
+                      <option key={type.event_type} value={type.event_type}>
+                        {type.event_type} ({type.count})
+                      </option>
+                    ))}
+                  </select>
+                  {(chargebeeWebhookSearch || chargebeeWebhookType !== 'all') && (
+                    <button
+                      onClick={() => { setChargebeeWebhookSearch(''); setChargebeeWebhookType('all'); }}
+                      className="ops-secondary-button"
+                      style={{ padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--ops-text-muted)' }}
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+
+                <div style={adminTableCard}>
+                  <div style={{ padding: '22px 24px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+                    <div>
+                      <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Chargebee Event Inbox</h3>
+                      <p style={{ color: '#9ca3af', margin: '5px 0 0', fontSize: 13 }}>Permanent event records received from the live Chargebee site</p>
+                    </div>
+                    <span style={{ color: '#6b7280', fontSize: 12 }}>
+                      {chargebeeWebhooks.filter(event => {
+                        const search = chargebeeWebhookSearch.trim().toLowerCase();
+                        const typeMatches = chargebeeWebhookType === 'all' || event.event_type === chargebeeWebhookType;
+                        const searchMatches = !search || [
+                          event.chargebee_event_id,
+                          event.event_type,
+                          event.customer_id,
+                          event.subscription_id,
+                          event.invoice_id,
+                        ].some(value => value?.toLowerCase().includes(search));
+                        return typeMatches && searchMatches;
+                      }).length} shown
+                    </span>
+                  </div>
+                  <div style={adminTableScroll}>
+                    <table style={{ ...adminTable, minWidth: 1080 }}>
+                      <colgroup>
+                        <col style={{ width: '24%' }} />
+                        <col style={{ width: '18%' }} />
+                        <col style={{ width: '28%' }} />
+                        <col style={{ width: '12%' }} />
+                        <col style={{ width: '14%' }} />
+                        <col style={{ width: '4%' }} />
+                      </colgroup>
+                      <thead>
+                        <tr style={{ textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <th style={adminTh}>EVENT</th>
+                          <th style={adminTh}>STATUS</th>
+                          <th style={adminTh}>REFERENCES</th>
+                          <th style={adminTh}>SOURCE</th>
+                          <th style={adminTh}>RECEIVED</th>
+                          <th style={adminTh}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {chargebeeWebhooks
+                          .filter(event => {
+                            const search = chargebeeWebhookSearch.trim().toLowerCase();
+                            const typeMatches = chargebeeWebhookType === 'all' || event.event_type === chargebeeWebhookType;
+                            const searchMatches = !search || [
+                              event.chargebee_event_id,
+                              event.event_type,
+                              event.customer_id,
+                              event.subscription_id,
+                              event.invoice_id,
+                            ].some(value => value?.toLowerCase().includes(search));
+                            return typeMatches && searchMatches;
+                          })
+                          .map(event => {
+                            const isOpen = expandedChargebeeWebhook === event.id;
+                            return (
+                              <Fragment key={event.id}>
+                                <tr
+                                  onClick={() => setExpandedChargebeeWebhook(isOpen ? null : event.id)}
+                                  style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer' }}
+                                >
+                                  <td style={adminTd}>
+                                    <div title={event.event_type} style={{ ...adminCellTruncate, fontWeight: 700 }}>{event.event_type}</div>
+                                    <div title={event.chargebee_event_id} style={{ ...adminCellTruncate, color: '#6b7280', fontFamily: 'monospace', fontSize: 11, marginTop: 4 }}>{event.chargebee_event_id}</div>
+                                  </td>
+                                  <td style={adminTd}>
+                                    <span style={{ display: 'inline-block', background: '#0f766e22', color: '#0f766e', border: '1px solid #0f766e44', padding: '4px 9px', borderRadius: 6, fontSize: 11, fontWeight: 800, textTransform: 'uppercase' }}>
+                                      {event.processing_status}
+                                    </span>
+                                    {Number(event.duplicate_count) > 0 && (
+                                      <div style={{ color: '#d97706', fontSize: 11, marginTop: 5 }}>{event.duplicate_count} duplicate{Number(event.duplicate_count) === 1 ? '' : 's'}</div>
+                                    )}
+                                  </td>
+                                  <td style={adminTd}>
+                                    <div style={{ ...adminCellTruncate, fontSize: 12 }}>Customer: {event.customer_id || '—'}</div>
+                                    <div style={{ ...adminCellTruncate, fontSize: 12, color: '#6b7280', marginTop: 3 }}>Subscription: {event.subscription_id || '—'}</div>
+                                    {event.invoice_id && <div style={{ ...adminCellTruncate, fontSize: 12, color: '#6b7280', marginTop: 3 }}>Invoice: {event.invoice_id}</div>}
+                                  </td>
+                                  <td style={adminTd}>
+                                    <div style={{ textTransform: 'capitalize' }}>{event.source || 'Unknown'}</div>
+                                    <div style={{ color: '#6b7280', fontSize: 11, marginTop: 4 }}>{event.api_version || 'No API version'}</div>
+                                  </td>
+                                  <td style={{ ...adminTd, color: '#6b7280', fontSize: 12, whiteSpace: 'normal' }}>
+                                    {new Date(event.received_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                  </td>
+                                  <td style={{ ...adminTd, textAlign: 'right' }}>{isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</td>
+                                </tr>
+                                {isOpen && (
+                                  <tr>
+                                    <td colSpan={6} style={{ padding: '20px 24px', background: 'rgba(0,0,0,0.22)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 16 }}>
+                                        <div><span style={{ color: '#6b7280', fontSize: 11 }}>CHARGEBEE OCCURRED</span><div style={{ marginTop: 4, fontSize: 13 }}>{event.occurred_at ? new Date(event.occurred_at).toLocaleString() : 'Not provided'}</div></div>
+                                        <div><span style={{ color: '#6b7280', fontSize: 11 }}>LAST DELIVERY</span><div style={{ marginTop: 4, fontSize: 13 }}>{new Date(event.last_received_at).toLocaleString()}</div></div>
+                                        <div><span style={{ color: '#6b7280', fontSize: 11 }}>DATABASE ID</span><div style={{ marginTop: 4, fontSize: 13, fontFamily: 'monospace' }}>{event.id}</div></div>
+                                      </div>
+                                      <pre style={{ margin: 0, padding: 16, borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.35)', overflowX: 'auto', color: '#cbd5e1', fontSize: 11, lineHeight: 1.55, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                                        {JSON.stringify(event.payload, null, 2)}
+                                      </pre>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        {chargebeeWebhooks.filter(event => {
+                          const search = chargebeeWebhookSearch.trim().toLowerCase();
+                          const typeMatches = chargebeeWebhookType === 'all' || event.event_type === chargebeeWebhookType;
+                          const searchMatches = !search || [
+                            event.chargebee_event_id,
+                            event.event_type,
+                            event.customer_id,
+                            event.subscription_id,
+                            event.invoice_id,
+                          ].some(value => value?.toLowerCase().includes(search));
+                          return typeMatches && searchMatches;
+                        }).length === 0 && (
+                          <tr>
+                            <td colSpan={6} style={{ padding: '54px 24px', textAlign: 'center', color: '#6b7280' }}>
+                              <Webhook size={28} style={{ display: 'block', margin: '0 auto 10px' }} />
+                              No Chargebee webhook events match these filters.
+                            </td>
                           </tr>
                         )}
                       </tbody>
