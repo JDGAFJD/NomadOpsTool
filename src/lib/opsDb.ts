@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 
 // All connection params come from environment variables.
 // Set these in Vercel Dashboard → Settings → Environment Variables.
@@ -20,6 +20,21 @@ export async function queryOpsDb(text: string, params?: any[]) {
   try {
     const res = await client.query(text, params);
     return res;
+  } finally {
+    client.release();
+  }
+}
+
+export async function withOpsDbTransaction<T>(work: (client: PoolClient) => Promise<T>) {
+  const client = await opsDbPool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await work(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
   } finally {
     client.release();
   }

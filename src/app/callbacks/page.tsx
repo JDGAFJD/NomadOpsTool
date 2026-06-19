@@ -8,6 +8,13 @@ import {
   Sun, Moon, UserCheck, Voicemail, X,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
+import {
+  AdminQueueActionButtons,
+  AdminQueueDialog,
+  AdminQueueToolbar,
+  type OpsUserOption,
+} from '@/components/AdminQueueControls';
+import type { AdminQueueAction } from '@/lib/adminQueueActions';
 
 type QueueTab = 'unassigned' | 'assigned' | 'history';
 const DEPARTMENT_OPTIONS = [
@@ -45,6 +52,10 @@ type CallbackRecord = {
   assigned_at: string | null;
   completed_at: string | null;
   outcome_notes: string | null;
+  admin_disposition?: string | null;
+  admin_actor?: string | null;
+  admin_note?: string | null;
+  admin_action_at?: string | null;
   created_at: string;
   overdue?: boolean;
   events?: any[];
@@ -71,6 +82,8 @@ export default function CallbacksPage() {
   const [workingId, setWorkingId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [agentEmail, setAgentEmail] = useState('');
+  const [viewerRole, setViewerRole] = useState('');
+  const [users, setUsers] = useState<OpsUserOption[]>([]);
   const [unassigned, setUnassigned] = useState<CallbackRecord[]>([]);
   const [assigned, setAssigned] = useState<CallbackRecord[]>([]);
   const [history, setHistory] = useState<CallbackRecord[]>([]);
@@ -82,6 +95,11 @@ export default function CallbacksPage() {
   const [timeFilter, setTimeFilter] = useState('all');
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [adminAction, setAdminAction] = useState<AdminQueueAction | null>(null);
+  const [adminTargetIds, setAdminTargetIds] = useState<number[]>([]);
+  const [adminWorking, setAdminWorking] = useState(false);
+  const [adminNotice, setAdminNotice] = useState('');
 
   const loadQueue = useCallback(async () => {
     setLoading(true);
@@ -96,6 +114,8 @@ export default function CallbacksPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not load callback queue.');
       setAgentEmail(data.agentEmail);
+      setViewerRole(data.viewerRole || '');
+      setUsers(data.users || []);
       setUnassigned(data.unassigned || []);
       setAssigned(data.assigned || []);
       setHistory(data.history || []);
@@ -139,6 +159,9 @@ export default function CallbacksPage() {
   };
 
   const records = useMemo(() => tab === 'unassigned' ? unassigned : tab === 'assigned' ? assigned : history, [tab, unassigned, assigned, history]);
+  const isAdmin = viewerRole === 'admin';
+  const selectableRecords = tab === 'history' ? [] : records;
+  const allVisibleSelected = selectableRecords.length > 0 && selectableRecords.every(record => selectedIds.includes(record.id));
   const hasActiveFilters = departmentFilter !== 'all' || timeFilter !== 'all' || overdueOnly || Boolean(searchTerm.trim());
   const clearFilters = () => {
     setDepartmentFilter('all');
@@ -150,6 +173,43 @@ export default function CallbacksPage() {
   const latestSubscription = snapshot.subscriptions?.[0];
   const latestOrder = snapshot.latestOrder;
   const network = snapshot.network?.[0];
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [tab, scope, departmentFilter, timeFilter, overdueOnly, searchTerm]);
+
+  const toggleSelected = (id: number) => {
+    setSelectedIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
+  };
+
+  const openAdminAction = (action: AdminQueueAction, ids: number[]) => {
+    setAdminTargetIds(ids);
+    setAdminAction(action);
+    setAdminNotice('');
+  };
+
+  const submitAdminAction = async (action: AdminQueueAction, note: string, assignee?: string) => {
+    setAdminWorking(true);
+    setError('');
+    try {
+      const res = await fetch('/api/ops/callbacks/bulk', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: adminTargetIds, action, note, assignee }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Administrative action failed.');
+      setAdminNotice(`${data.updated} callback${data.updated === 1 ? '' : 's'} updated${data.skipped ? `; ${data.skipped} skipped because they changed or were no longer active` : ''}.`);
+      setAdminAction(null);
+      setAdminTargetIds([]);
+      setSelectedIds([]);
+      await loadQueue();
+    } catch (err: any) {
+      setError(err.message || 'Administrative action failed.');
+    } finally {
+      setAdminWorking(false);
+    }
+  };
 
   return (
     <div className="ops-app-shell" style={{ minHeight: '100vh', color: 'var(--ops-text)' }}>
@@ -242,15 +302,37 @@ export default function CallbacksPage() {
         </div>
 
         {error && <div style={{ marginBottom: 14, padding: 12, color: '#ef4444', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8 }}>{error}</div>}
+        {adminNotice && <div className="admin-queue-notice">{adminNotice}</div>}
+        {isAdmin && <AdminQueueToolbar count={selectedIds.length} onClear={() => setSelectedIds([])} onAction={action => openAdminAction(action, selectedIds)} />}
 
         <div className={selected ? 'callback-workspace-grid callback-workspace-grid-open' : 'callback-workspace-grid'} style={{ display: 'grid', gridTemplateColumns: selected ? 'minmax(0, 1fr) minmax(360px, 0.7fr)' : '1fr', gap: 18, alignItems: 'start' }}>
           <section style={{ display: 'grid', gap: 10 }}>
+            {isAdmin && selectableRecords.length > 0 && (
+              <label className="admin-select-all">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={() => setSelectedIds(allVisibleSelected ? [] : selectableRecords.map(record => record.id))}
+                />
+                Select all {selectableRecords.length} visible callbacks
+              </label>
+            )}
             {loading && records.length === 0 ? (
               <div style={{ minHeight: 300, display: 'grid', placeItems: 'center', color: 'var(--ops-text-muted)' }}><Loader2 className="animate-spin" /></div>
             ) : records.length === 0 ? (
               <div style={{ padding: 50, textAlign: 'center', color: 'var(--ops-text-muted)', background: 'var(--ops-card-bg)', border: '1px dashed var(--border)', borderRadius: 8 }}>No callbacks in this queue.</div>
             ) : records.map(record => (
-              <article key={record.id} onClick={() => setSelected(record)} style={{ padding: 18, border: `1px solid ${record.overdue ? 'rgba(239,68,68,0.5)' : selected?.id === record.id ? 'var(--primary)' : 'var(--ops-card-border)'}`, borderLeft: record.overdue ? '4px solid #ef4444' : '1px solid var(--ops-card-border)', background: 'var(--ops-card-bg)', borderRadius: 8, cursor: 'pointer', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 18 }}>
+              <article className={isAdmin && tab !== 'history' ? 'callback-row-admin' : ''} key={record.id} onClick={() => setSelected(record)} style={{ padding: 18, border: `1px solid ${record.overdue ? 'rgba(239,68,68,0.5)' : selected?.id === record.id ? 'var(--primary)' : 'var(--ops-card-border)'}`, borderLeft: record.overdue ? '4px solid #ef4444' : '1px solid var(--ops-card-border)', background: 'var(--ops-card-bg)', borderRadius: 8, cursor: 'pointer', display: 'grid', gridTemplateColumns: isAdmin && tab !== 'history' ? 'auto minmax(0, 1fr) auto' : 'minmax(0, 1fr) auto', gap: 18 }}>
+                {isAdmin && tab !== 'history' && (
+                  <input
+                    className="admin-row-checkbox"
+                    type="checkbox"
+                    checked={selectedIds.includes(record.id)}
+                    onClick={event => event.stopPropagation()}
+                    onChange={() => toggleSelected(record.id)}
+                    aria-label={`Select callback ${record.id}`}
+                  />
+                )}
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     <strong>{record.customer_name || record.customer_email}</strong>
@@ -314,7 +396,14 @@ export default function CallbacksPage() {
                     <button onClick={() => void mutate(selected, 'release')} style={{ padding: 10, borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--ops-text-muted)', cursor: 'pointer', fontWeight: 800 }}><RotateCcw size={15} /> Return to Unassigned</button>
                   </div>
                 )}
+                {isAdmin && ['unassigned', 'assigned'].includes(selected.status) && (
+                  <section className="admin-record-controls">
+                    <div><strong>Administrator controls</strong><span>Every action requires a permanent audit note.</span></div>
+                    <AdminQueueActionButtons onAction={action => openAdminAction(action, [selected.id])} />
+                  </section>
+                )}
                 {selected.outcome_notes && <div style={{ padding: 12, background: 'var(--surface-200)', borderRadius: 7 }}><strong>Outcome:</strong> {selected.outcome_notes}</div>}
+                {selected.admin_note && <div className="admin-record-note"><strong>Administrative note:</strong> {selected.admin_note}<span>{selected.admin_actor} · {selected.admin_action_at ? new Date(selected.admin_action_at).toLocaleString() : ''}</span></div>}
               </div>
             </aside>
           )}
@@ -331,6 +420,14 @@ export default function CallbacksPage() {
           </div>
         </div>
       )}
+      <AdminQueueDialog
+        action={adminAction}
+        count={adminTargetIds.length}
+        users={users}
+        working={adminWorking}
+        onClose={() => setAdminAction(null)}
+        onSubmit={submitAdminAction}
+      />
     </div>
   );
 }

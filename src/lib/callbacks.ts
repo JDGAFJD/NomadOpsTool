@@ -11,7 +11,7 @@ export const CALLBACK_DEPARTMENTS = {
 
 export const CALLBACK_TIME_PREFERENCES = ['morning', 'afternoon', 'working_hours'] as const;
 export const CALLBACK_ACTIVE_STATUSES = ['unassigned', 'assigned'] as const;
-export const CALLBACK_TERMINAL_STATUSES = ['completed', 'left_voicemail', 'no_answer'] as const;
+export const CALLBACK_TERMINAL_STATUSES = ['completed', 'left_voicemail', 'no_answer', 'closed_by_admin'] as const;
 
 export function countWords(value: string) {
   return value.trim().split(/\s+/).filter(Boolean).length;
@@ -69,6 +69,10 @@ export async function ensureCallbackTables() {
   await queryOpsDb(`ALTER TABLE ops_callbacks ADD COLUMN IF NOT EXISTS slack_channel TEXT`);
   await queryOpsDb(`ALTER TABLE ops_callbacks ADD COLUMN IF NOT EXISTS slack_ts TEXT`);
   await queryOpsDb(`ALTER TABLE ops_callbacks ADD COLUMN IF NOT EXISTS slack_error TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_callbacks ADD COLUMN IF NOT EXISTS admin_disposition TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_callbacks ADD COLUMN IF NOT EXISTS admin_actor TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_callbacks ADD COLUMN IF NOT EXISTS admin_note TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_callbacks ADD COLUMN IF NOT EXISTS admin_action_at TIMESTAMPTZ`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_callbacks_assignee_status ON ops_callbacks(assigned_to, status)`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_callbacks_customer_status ON ops_callbacks(customer_email, status)`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_callbacks_due_at ON ops_callbacks(due_at)`);

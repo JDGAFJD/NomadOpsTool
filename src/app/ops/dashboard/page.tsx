@@ -189,8 +189,8 @@ export default function OpsDashboard() {
     <style dangerouslySetInnerHTML={{__html: ".cb-tab-bar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; } .cb-tab-bar::-webkit-scrollbar { display: none; } .cb-customer-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); } .cb-customer-header-actions { display: flex; gap: 8px; flex-wrap: wrap; } .cb-sub-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; } .cb-network-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 12px; margin-bottom: 16px; } .cb-action-buttons { display: flex; gap: 8px; flex-wrap: wrap; } .cb-action-buttons > button { flex: 1; min-width: 120px; } @media (max-width: 768px) {  .cb-network-grid { grid-template-columns: 1fr 1fr; }  .cb-customer-header { flex-direction: column; align-items: flex-start; }  .cb-sub-header { flex-direction: column; }  .cb-action-buttons { flex-direction: column; }  .cb-action-buttons > button { width: 100%; min-width: unset; } } @media (max-width: 480px) { .cb-network-grid { grid-template-columns: 1fr; } }"}} />
     <div className="ops-app-shell" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', color: 'var(--ops-text)' }}>
       {/* Global Header */}
-      <header className="ops-topbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 32px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--ops-header-bg)', backdropFilter: 'blur(18px)', zIndex: 100 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <header className="ops-topbar ops-dashboard-global-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 32px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--ops-header-bg)', backdropFilter: 'blur(18px)', zIndex: 100 }}>
+        <div className="ops-dashboard-brand" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div className="brand-mark">N</div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
              <div style={{ fontSize: '22px', fontWeight: 800, letterSpacing: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -208,7 +208,7 @@ export default function OpsDashboard() {
         </div>
         
         {/* Tab Strip Navigation */}
-        <div style={{ flex: 1, margin: '0 40px', display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <div className="ops-dashboard-tabs" style={{ flex: 1, margin: '0 40px', display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
           {tabs.map(tab => (
             <div 
               key={tab.id}
@@ -239,7 +239,17 @@ export default function OpsDashboard() {
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="ops-dashboard-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <nav className="ops-dashboard-quick-links" aria-label="Operations queues">
+            <button type="button" onClick={() => router.push('/callbacks')} title="Open callback operations">
+              <PhoneCall size={15} />
+              <span>Callbacks</span>
+            </button>
+            <button type="button" onClick={() => router.push('/collections')} title="Open collections">
+              <DollarSign size={15} />
+              <span>Collections</span>
+            </button>
+          </nav>
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
@@ -248,7 +258,7 @@ export default function OpsDashboard() {
             style={{ background: 'var(--surface-200)', border: '1px solid var(--border)', color: 'var(--text-secondary)', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, transition: 'all 0.2s' }}
           >
             {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
-            {theme === 'light' ? 'Dark' : 'Light'}
+            <span>{theme === 'light' ? 'Dark' : 'Light'}</span>
           </button>
 
           <button 
@@ -257,7 +267,7 @@ export default function OpsDashboard() {
             className="ops-secondary-button"
             style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}
           >
-            {loggingOut ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />} Disconnect
+            {loggingOut ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />} <span>Disconnect</span>
           </button>
         </div>
       </header>

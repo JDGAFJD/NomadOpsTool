@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     const historyFilters = buildCallbackFilters(searchParams);
     const countsFilters = buildCallbackFilters(searchParams);
 
-    const [unassigned, assigned, history, counts] = await Promise.all([
+    const [unassigned, assigned, history, counts, users] = await Promise.all([
     queryOpsDb(`
       SELECT c.*, NOW() > c.due_at AS overdue,
         COALESCE((SELECT json_agg(e ORDER BY e.created_at) FROM ops_callback_events e WHERE e.callback_id = c.id), '[]'::json) AS events
@@ -75,7 +75,7 @@ export async function GET(request: Request) {
       SELECT c.*,
         COALESCE((SELECT json_agg(e ORDER BY e.created_at) FROM ops_callback_events e WHERE e.callback_id = c.id), '[]'::json) AS events
       FROM ops_callbacks c
-      WHERE c.status IN ('completed', 'left_voicemail', 'no_answer') ${historyFilters.clause}
+      WHERE c.status IN ('completed', 'left_voicemail', 'no_answer', 'closed_by_admin') ${historyFilters.clause}
       ORDER BY c.completed_at DESC NULLS LAST
       LIMIT 200
     `, historyFilters.params),
@@ -87,11 +87,16 @@ export async function GET(request: Request) {
       FROM ops_callbacks c
       WHERE 1 = 1 ${countsFilters.clause}
     `, countsFilters.params),
+    session.role === 'admin'
+      ? queryOpsDb('SELECT id, email, role FROM ops_users ORDER BY email ASC')
+      : Promise.resolve({ rows: [] }),
     ]);
 
     return NextResponse.json({
       success: true,
       agentEmail: session.email,
+      viewerRole: session.role,
+      users: users.rows,
       unassigned: unassigned.rows,
       assigned: assigned.rows,
       history: history.rows,

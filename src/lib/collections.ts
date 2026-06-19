@@ -12,6 +12,7 @@ export const COLLECTIONS_ACTIVE_STATUSES = [
   'awaiting_payment_confirmation',
   'paused',
 ] as const;
+export const COLLECTIONS_ADMIN_TERMINAL_STATUSES = ['completed_by_admin', 'closed_by_admin'] as const;
 
 type JsonRecord = Record<string, any>;
 
@@ -114,6 +115,10 @@ export async function ensureCollectionsTables() {
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_collection_cases_assignee ON ops_collection_cases(assigned_to, status)`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_collection_cases_customer ON ops_collection_cases(customer_email)`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_collection_invoices_invoice ON ops_collection_invoices(invoice_id)`);
+  await queryOpsDb(`ALTER TABLE ops_collection_cases ADD COLUMN IF NOT EXISTS admin_disposition TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_collection_cases ADD COLUMN IF NOT EXISTS admin_actor TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_collection_cases ADD COLUMN IF NOT EXISTS admin_note TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_collection_cases ADD COLUMN IF NOT EXISTS admin_action_at TIMESTAMPTZ`);
   await queryOpsDb(`CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_webhook_event ON ops_collection_events(source_webhook_id, event_type) WHERE source_webhook_id IS NOT NULL`);
   await queryOpsDb(`ALTER TABLE ops_chargebee_webhook_events ADD COLUMN IF NOT EXISTS processing_attempts INTEGER NOT NULL DEFAULT 0`);
   await queryOpsDb(`ALTER TABLE ops_chargebee_webhook_events ADD COLUMN IF NOT EXISTS processing_error TEXT`);
@@ -268,7 +273,7 @@ async function handlePaymentFailed(payload: ChargebeeWebhookPayload) {
   const existingResult = await queryOpsDb('SELECT * FROM ops_collection_cases WHERE case_key = $1 LIMIT 1', [details.caseKey]);
   const existing = existingResult.rows[0];
 
-  if (existing?.status === 'canceled') {
+  if (existing?.status === 'canceled' || existing?.subscription_status === 'canceled') {
     await addCollectionEvent(existing.id, 'chargebee', 'failed_payment_ignored_canceled', { invoiceId: details.invoiceId }, payload.id);
     return existing.id;
   }
@@ -291,12 +296,13 @@ async function handlePaymentFailed(payload: ChargebeeWebhookPayload) {
     );
     caseRow = inserted.rows[0];
     created = true;
-  } else if (['collected', 'exhausted'].includes(caseRow.status)) {
+  } else if (['collected', 'exhausted', ...COLLECTIONS_ADMIN_TERMINAL_STATUSES].includes(caseRow.status)) {
     const reopened = await queryOpsDb(
       `UPDATE ops_collection_cases SET
         status = 'unassigned', assigned_to = NULL, assigned_at = NULL, current_attempt = 0,
         next_attempt_at = NULL, awaiting_amount = NULL, close_reason = NULL, collected_by = NULL,
-        collected_at = NULL, reopened_count = reopened_count + 1,
+        collected_at = NULL, admin_disposition = NULL, admin_actor = NULL, admin_note = NULL,
+        admin_action_at = NULL, reopened_count = reopened_count + 1,
         customer_id = COALESCE($2, customer_id), customer_name = COALESCE($3, customer_name),
         customer_email = COALESCE($4, customer_email), customer_phone = COALESCE($5, customer_phone),
         subscription_status = COALESCE($6, subscription_status), plan_id = COALESCE($7, plan_id),
@@ -337,7 +343,9 @@ async function handlePaymentFailed(payload: ChargebeeWebhookPayload) {
     amountDue: details.amountDue,
     currencyCode: details.currencyCode,
   }, payload.id);
-  if (created || ['collected', 'exhausted'].includes(existing?.status)) await notifyNewCase(caseRow, details.invoiceId);
+  if (created || ['collected', 'exhausted', ...COLLECTIONS_ADMIN_TERMINAL_STATUSES].includes(existing?.status)) {
+    await notifyNewCase(caseRow, details.invoiceId);
+  }
   return caseRow.id;
 }
 
@@ -370,7 +378,7 @@ async function handlePaymentSucceeded(payload: ChargebeeWebhookPayload) {
     [remaining, details.amountPaid, text(details.invoice.status) || (remaining === 0 ? 'paid' : current.invoice_status), JSON.stringify(details.invoice), current.collection_invoice_row_id]
   );
   const caseRow = await recalculateCaseBalance(current.collection_case_id);
-  if (Number(caseRow.total_amount_due) === 0) {
+  if (Number(caseRow.total_amount_due) === 0 && !COLLECTIONS_ADMIN_TERMINAL_STATUSES.includes(caseRow.status)) {
     await queryOpsDb(
       `UPDATE ops_collection_cases SET status = 'collected', close_reason = 'Chargebee confirmed invoice paid',
        collected_by = COALESCE(assigned_to, collected_by), collected_at = NOW(), next_attempt_at = NULL,
@@ -378,6 +386,11 @@ async function handlePaymentSucceeded(payload: ChargebeeWebhookPayload) {
       [current.collection_case_id]
     );
     await addCollectionEvent(current.collection_case_id, 'chargebee', 'invoice_paid_case_collected', { invoiceId: details.invoiceId }, payload.id);
+  } else if (Number(caseRow.total_amount_due) === 0) {
+    await addCollectionEvent(current.collection_case_id, 'chargebee', 'invoice_paid_after_admin_closure', {
+      invoiceId: details.invoiceId,
+      caseStatus: caseRow.status,
+    }, payload.id);
   } else {
     await addCollectionEvent(current.collection_case_id, 'chargebee', 'partial_payment_received', {
       invoiceId: details.invoiceId, remainingAmount: Number(caseRow.total_amount_due),
@@ -392,6 +405,18 @@ async function handleSubscriptionState(payload: ChargebeeWebhookPayload, state: 
   const result = await queryOpsDb('SELECT * FROM ops_collection_cases WHERE case_key = $1 LIMIT 1', [`subscription:${details.subscriptionId}`]);
   const caseRow = result.rows[0];
   if (!caseRow) return null;
+
+  if (COLLECTIONS_ADMIN_TERMINAL_STATUSES.includes(caseRow.status) && state !== 'canceled') {
+    await queryOpsDb(
+      `UPDATE ops_collection_cases SET subscription_status = $1, updated_at = NOW() WHERE id = $2`,
+      [state === 'resumed' ? 'active' : state, caseRow.id]
+    );
+    await addCollectionEvent(caseRow.id, 'chargebee', `subscription_${state}_after_admin_closure`, {
+      subscriptionId: details.subscriptionId,
+      caseStatus: caseRow.status,
+    }, payload.id);
+    return caseRow.id;
+  }
 
   if (state === 'paused') {
     await queryOpsDb(`UPDATE ops_collection_cases SET status = 'paused', subscription_status = 'paused', next_attempt_at = NULL, updated_at = NOW() WHERE id = $1`, [caseRow.id]);

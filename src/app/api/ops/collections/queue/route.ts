@@ -46,22 +46,29 @@ export async function GET(request: NextRequest) {
     const baseParams: unknown[] = [];
     const clause = filters(request, baseParams);
     const clone = () => [...baseParams];
-    const [unassigned, mine, due, closed, collected, counts, owners] = await Promise.all([
+    const [unassigned, mine, allActive, due, closed, collected, counts, owners, users] = await Promise.all([
       queryOpsDb(`${SELECT} FROM ops_collection_cases c WHERE c.status='unassigned' ${clause} ORDER BY c.created_at ASC LIMIT 200`, clone()),
       queryOpsDb(`${SELECT} FROM ops_collection_cases c WHERE c.assigned_to=$${baseParams.length + 1} AND c.status IN ('assigned','follow_up_pending','awaiting_payment_confirmation','paused') ${clause} ORDER BY c.next_attempt_at ASC NULLS LAST`, [...clone(), session.email]),
+      session.role === 'admin'
+        ? queryOpsDb(`${SELECT} FROM ops_collection_cases c WHERE c.status IN ('unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused') ${clause} ORDER BY c.next_attempt_at ASC NULLS LAST, c.created_at ASC LIMIT 200`, clone())
+        : Promise.resolve({ rows: [] }),
       queryOpsDb(`${SELECT} FROM ops_collection_cases c WHERE c.assigned_to=$${baseParams.length + 1} AND c.status IN ('assigned','follow_up_pending','awaiting_payment_confirmation') AND c.next_attempt_at<=NOW() ${clause} ORDER BY c.next_attempt_at ASC`, [...clone(), session.email]),
-      queryOpsDb(`${SELECT} FROM ops_collection_cases c WHERE c.status IN ('exhausted','canceled') ${clause} ORDER BY c.updated_at DESC LIMIT 200`, clone()),
+      queryOpsDb(`${SELECT} FROM ops_collection_cases c WHERE c.status IN ('exhausted','canceled','completed_by_admin','closed_by_admin') ${clause} ORDER BY c.updated_at DESC LIMIT 200`, clone()),
       queryOpsDb(`${SELECT} FROM ops_collection_cases c WHERE c.status='collected' ${clause} ORDER BY c.collected_at DESC LIMIT 200`, clone()),
       queryOpsDb(`SELECT COUNT(*) FILTER(WHERE status='unassigned') unassigned,
         COUNT(*) FILTER(WHERE assigned_to=$1 AND status IN ('assigned','follow_up_pending','awaiting_payment_confirmation','paused')) mine,
         COUNT(*) FILTER(WHERE assigned_to=$1 AND status IN ('assigned','follow_up_pending','awaiting_payment_confirmation') AND next_attempt_at<=NOW()) due,
+        COUNT(*) FILTER(WHERE status IN ('unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused')) active,
         COUNT(*) FILTER(WHERE status='collected') collected FROM ops_collection_cases`, [session.email]),
       queryOpsDb(`SELECT DISTINCT assigned_to FROM ops_collection_cases WHERE assigned_to IS NOT NULL ORDER BY assigned_to`),
+      session.role === 'admin'
+        ? queryOpsDb('SELECT id, email, role FROM ops_users ORDER BY email ASC')
+        : Promise.resolve({ rows: [] }),
     ]);
     const decorate = (rows: any[]) => rows.map(row => ({ ...row, chargebeeUrl: chargebeeProfileUrl(row.subscription_id, row.customer_id) }));
     return NextResponse.json({
-      success: true, agentEmail: session.email,
-      unassigned: decorate(unassigned.rows), mine: decorate(mine.rows), due: decorate(due.rows),
+      success: true, agentEmail: session.email, viewerRole: session.role, users: users.rows,
+      unassigned: decorate(unassigned.rows), mine: decorate(mine.rows), allActive: decorate(allActive.rows), due: decorate(due.rows),
       closed: decorate(closed.rows), collected: decorate(collected.rows),
       counts: counts.rows[0], owners: owners.rows.map(row => row.assigned_to),
     });

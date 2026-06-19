@@ -8,8 +8,15 @@ import {
   PhoneCall, RefreshCw, Search, Sun, UserCheck, Voicemail, X,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
+import {
+  AdminQueueActionButtons,
+  AdminQueueDialog,
+  AdminQueueToolbar,
+  type OpsUserOption,
+} from '@/components/AdminQueueControls';
+import type { AdminQueueAction } from '@/lib/adminQueueActions';
 
-type View = 'unassigned' | 'mine' | 'due' | 'closed' | 'collected';
+type View = 'unassigned' | 'mine' | 'all' | 'due' | 'closed' | 'collected';
 type CollectionCase = {
   id: number; customer_id: string | null; customer_name: string | null; customer_email: string | null;
   customer_phone: string | null; subscription_id: string | null; subscription_status: string | null;
@@ -18,9 +25,11 @@ type CollectionCase = {
   total_amount_due: number; currency_code: string; close_reason: string | null; collected_by: string | null;
   collected_at: string | null; reopened_count: number; created_at: string; updated_at: string;
   chargebeeUrl: string | null; due_now: boolean; invoices: any[]; attempts: any[]; events: any[];
+  admin_disposition?: string | null; admin_actor?: string | null; admin_note?: string | null; admin_action_at?: string | null;
 };
 
-const STATUS_OPTIONS = ['all','unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused','collected','exhausted','canceled'];
+const STATUS_OPTIONS = ['all','unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused','collected','exhausted','canceled','completed_by_admin','closed_by_admin'];
+const ACTIVE_STATUSES = ['unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused'];
 const REASONS = [
   ['insufficient_funds','Insufficient funds'], ['expired_replaced_card','Expired or replaced card'],
   ['bank_decline','Bank decline'], ['payday_timing','Payday timing'], ['forgot','Forgot to pay'],
@@ -44,7 +53,9 @@ export default function CollectionsPage() {
   const { theme, toggle } = useTheme();
   const [view, setView] = useState<View>('unassigned');
   const [agentEmail, setAgentEmail] = useState('');
-  const [queues, setQueues] = useState<Record<View, CollectionCase[]>>({ unassigned: [], mine: [], due: [], closed: [], collected: [] });
+  const [viewerRole, setViewerRole] = useState('');
+  const [users, setUsers] = useState<OpsUserOption[]>([]);
+  const [queues, setQueues] = useState<Record<View, CollectionCase[]>>({ unassigned: [], mine: [], all: [], due: [], closed: [], collected: [] });
   const [counts, setCounts] = useState<any>({});
   const [owners, setOwners] = useState<string[]>([]);
   const [selected, setSelected] = useState<CollectionCase | null>(null);
@@ -66,6 +77,11 @@ export default function CollectionsPage() {
   const [collected, setCollected] = useState(false);
   const [claimedAmount, setClaimedAmount] = useState('');
   const [reasonCategory, setReasonCategory] = useState('');
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [adminAction, setAdminAction] = useState<AdminQueueAction | null>(null);
+  const [adminTargetIds, setAdminTargetIds] = useState<number[]>([]);
+  const [adminWorking, setAdminWorking] = useState(false);
+  const [adminNotice, setAdminNotice] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -82,8 +98,9 @@ export default function CollectionsPage() {
       const res = await fetch(`/api/ops/collections/queue?${params}`, { cache: 'no-store' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not load collections.');
-      setAgentEmail(data.agentEmail); setCounts(data.counts || {}); setOwners(data.owners || []);
-      const nextQueues = { unassigned: data.unassigned || [], mine: data.mine || [], due: data.due || [], closed: data.closed || [], collected: data.collected || [] };
+      setAgentEmail(data.agentEmail); setViewerRole(data.viewerRole || ''); setUsers(data.users || []);
+      setCounts(data.counts || {}); setOwners(data.owners || []);
+      const nextQueues = { unassigned: data.unassigned || [], mine: data.mine || [], all: data.allActive || [], due: data.due || [], closed: data.closed || [], collected: data.collected || [] };
       setQueues(nextQueues);
       if (selected) setSelected(Object.values(nextQueues).flat().find(item => item.id === selected.id) || null);
     } catch (e: any) { setError(e.message); }
@@ -97,13 +114,21 @@ export default function CollectionsPage() {
   }, [load]);
 
   const records = queues[view];
+  const isAdmin = viewerRole === 'admin';
   const tabs = [
     ['unassigned','Unassigned',Inbox,counts.unassigned || 0],
     ['mine','My Cases',UserCheck,counts.mine || 0],
+    ...(isAdmin ? [['all','All Active',UserCheck,counts.active || 0] as const] : []),
     ['due','Due Follow-ups',CalendarClock,counts.due || 0],
     ['closed','Closed',FileText,''],
     ['collected','Successful Collections',CircleDollarSign,counts.collected || 0],
   ] as const;
+  const selectableRecords = ['unassigned','mine','all','due'].includes(view) ? records.filter(item => ACTIVE_STATUSES.includes(item.status)) : [];
+  const allVisibleSelected = selectableRecords.length > 0 && selectableRecords.every(item => selectedIds.includes(item.id));
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [view, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate]);
 
   async function mutate(action: string, body: any = {}, target: CollectionCase | null = selected) {
     if (!target) return;
@@ -132,6 +157,35 @@ export default function CollectionsPage() {
       setLiveInvoices(data.invoices || []); setExpandedInvoice(true);
     } catch (e: any) { setError(e.message); }
     finally { setWorking(false); }
+  }
+
+  const toggleSelected = (id: number) => {
+    setSelectedIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
+  };
+
+  const openAdminAction = (action: AdminQueueAction, ids: number[]) => {
+    setAdminTargetIds(ids);
+    setAdminAction(action);
+    setAdminNotice('');
+  };
+
+  async function submitAdminAction(action: AdminQueueAction, note: string, assignee?: string) {
+    setAdminWorking(true); setError('');
+    try {
+      const res = await fetch('/api/ops/collections/bulk', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: adminTargetIds, action, note, assignee }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Administrative action failed.');
+      setAdminNotice(`${data.updated} collection case${data.updated === 1 ? '' : 's'} updated${data.skipped ? `; ${data.skipped} skipped because they changed or were no longer active` : ''}.`);
+      setAdminAction(null); setAdminTargetIds([]); setSelectedIds([]);
+      await load();
+    } catch (e: any) {
+      setError(e.message || 'Administrative action failed.');
+    } finally {
+      setAdminWorking(false);
+    }
   }
 
   return (
@@ -168,11 +222,15 @@ export default function CollectionsPage() {
         </section>
 
         {error && <div className="collections-error">{error}</div>}
+        {adminNotice && <div className="admin-queue-notice">{adminNotice}</div>}
+        {isAdmin && <AdminQueueToolbar count={selectedIds.length} onClear={() => setSelectedIds([])} onAction={action => openAdminAction(action, selectedIds)} />}
         <div className={`collections-workspace ${selected ? 'is-open' : ''}`}>
           <section className="collections-list">
+            {isAdmin && selectableRecords.length > 0 && <label className="admin-select-all"><input type="checkbox" checked={allVisibleSelected} onChange={()=>setSelectedIds(allVisibleSelected ? [] : selectableRecords.map(item=>item.id))}/>Select all {selectableRecords.length} visible collection cases</label>}
             {loading && records.length===0 ? <div className="collections-empty"><Loader2 className="animate-spin"/></div> :
              records.length===0 ? <div className="collections-empty">No collection cases in this view.</div> :
-             records.map(item => <article key={item.id} className={`collection-row ${item.due_now?'is-due':''} ${selected?.id===item.id?'is-selected':''}`} onClick={()=>{setSelected(item);setLiveInvoices(null);setExpandedInvoice(false);}}>
+             records.map(item => <article key={item.id} className={`collection-row ${item.due_now?'is-due':''} ${selected?.id===item.id?'is-selected':''} ${isAdmin&&selectableRecords.some(record=>record.id===item.id)?'has-admin-select':''}`} onClick={()=>{setSelected(item);setLiveInvoices(null);setExpandedInvoice(false);}}>
+               {isAdmin&&selectableRecords.some(record=>record.id===item.id)&&<input className="admin-row-checkbox" type="checkbox" checked={selectedIds.includes(item.id)} onClick={e=>e.stopPropagation()} onChange={()=>toggleSelected(item.id)} aria-label={`Select collection case ${item.id}`}/>}
                <div className="collection-row-main">
                  <div className="collection-row-heading"><strong>{item.customer_name || item.customer_email || item.customer_id || 'Unknown customer'}</strong><span>{humanize(item.status)}</span>{item.reopened_count>0&&<em>Reopened {item.reopened_count}x</em>}</div>
                  <div className="collection-row-meta"><span>{item.subscription_id || 'Invoice-only case'}</span><span>Attempt {Number(item.current_attempt)+1} of 3</span><span><Clock3 size={12}/>{when(item.next_attempt_at)}</span></div>
@@ -207,7 +265,9 @@ export default function CollectionsPage() {
                 <button onClick={()=>setOutcome('left_voicemail')}><Voicemail size={15}/>Voicemail</button>
                 <button onClick={()=>setOutcome('no_answer')}><PhoneCall size={15}/>No Answer</button>
               </div>}
+              {isAdmin&&ACTIVE_STATUSES.includes(selected.status)&&<section className="admin-record-controls"><div><strong>Administrator controls</strong><span>Administrative completion never marks an invoice paid.</span></div><AdminQueueActionButtons onAction={action=>openAdminAction(action,[selected.id])}/></section>}
               {selected.close_reason&&<div className="collections-note"><strong>Closed:</strong> {selected.close_reason}</div>}
+              {selected.admin_note&&<div className="admin-record-note"><strong>Administrative note:</strong> {selected.admin_note}<span>{selected.admin_actor} · {selected.admin_action_at?when(selected.admin_action_at):''}</span></div>}
             </div>
           </aside>}
         </div>
@@ -222,6 +282,7 @@ export default function CollectionsPage() {
         <label><span>Required notes</span><textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Document what happened, customer commitments, and next steps."/></label>
         <div className="collections-modal-actions"><button onClick={()=>setOutcome(null)} className="ops-secondary-button">Cancel</button><button disabled={working||!notes.trim()||(outcome==='completed'&&!reasonCategory)||(collected&&!claimedAmount)} onClick={()=>void mutate(outcome,{notes,collected,claimedAmount,reasonCategory})} className="ops-primary-button">{working?'Saving...':'Save Attempt'}</button></div>
       </div></div>}
+      <AdminQueueDialog action={adminAction} count={adminTargetIds.length} users={users} working={adminWorking} onClose={()=>setAdminAction(null)} onSubmit={submitAdminAction}/>
     </div>
   );
 }
