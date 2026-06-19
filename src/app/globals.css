@@ -822,7 +822,7 @@ button {
 .collections-tabs { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 16px; }
 .collections-tabs button { padding: 10px 14px; display: flex; align-items: center; gap: 7px; font-weight: 800; white-space: nowrap; }
 .collections-tabs button span { background: var(--surface-200); padding: 2px 7px; border-radius: 999px; font-size: 11px; }
-.collections-filters { display: grid; grid-template-columns: minmax(260px,1fr) repeat(3,minmax(130px,auto)) 90px 90px 135px 135px auto; gap: 9px; padding: 13px; border: 1px solid var(--ops-card-border); background: var(--ops-card-bg); border-radius: 8px; margin-bottom: 16px; }
+.collections-filters { display: grid; grid-template-columns: minmax(260px,1fr) repeat(4,minmax(130px,auto)) 90px 90px 135px 135px auto; gap: 9px; padding: 13px; border: 1px solid var(--ops-card-border); background: var(--ops-card-bg); border-radius: 8px; margin-bottom: 16px; }
 .collections-filters input,.collections-filters select { min-width: 0; padding: 10px 11px; }
 .collections-search { position: relative; display: flex; align-items: center; }
 .collections-search svg { position: absolute; left: 11px; color: var(--ops-text-muted); }
@@ -834,13 +834,17 @@ button {
 .collections-empty { min-height: 280px; display: grid; place-items: center; color: var(--ops-text-muted); border: 1px dashed var(--border); background: var(--ops-card-bg); border-radius: 8px; }
 .collection-row { padding: 17px; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 18px; align-items: center; background: var(--ops-card-bg); border: 1px solid var(--ops-card-border); border-radius: 8px; cursor: pointer; }
 .collection-row.has-admin-select { grid-template-columns: auto minmax(0,1fr) auto; }
-.collection-row.is-due { border-left: 4px solid #ef4444; }
+.collection-row.is-due { border-left: 4px solid #d97706; }
+.collection-row.is-sla-breached { border-color: rgba(220,38,38,.42); border-left: 5px solid #dc2626; background: linear-gradient(90deg, rgba(220,38,38,.1), var(--ops-card-bg) 34%); }
 .collection-row.is-selected { border-color: var(--primary); }
 .collection-row-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .collection-row-heading span,.collection-row-heading em { padding: 3px 7px; border-radius: 5px; background: var(--surface-200); color: var(--ops-text-muted); font-size: 11px; font-style: normal; font-weight: 800; }
 .collection-row-heading em { color: #d97706; }
+.collection-row-heading .collection-sla-badge { padding: 3px 7px; border-radius: 5px; background: rgba(220,38,38,.14); color: #dc2626; font-size: 11px; font-weight: 900; text-transform: uppercase; }
 .collection-row-meta { flex-wrap: wrap; margin-top: 8px; color: var(--ops-text-muted); font-size: 12px; }
 .collection-row-meta span { display: flex; align-items: center; gap: 4px; }
+.collection-age { font-weight: 800; }
+.collection-age.is-breached { color: #dc2626; }
 .collection-row-amount { display: grid; justify-items: end; gap: 6px; }
 .collection-row-amount strong { font-size: 18px; }
 .collection-row-amount small { color: var(--ops-text-muted); }
@@ -864,6 +868,9 @@ button {
 .collections-grid div { padding: 10px; border: 1px solid var(--border); border-radius: 7px; min-width: 0; }
 .collections-grid small { display: block; color: var(--ops-text-muted); font-weight: 800; text-transform: uppercase; }
 .collections-grid strong { display: block; margin-top: 4px; font-size: 12px; overflow-wrap: anywhere; }
+.collections-grid .collection-detail-age.is-breached { border-color: rgba(220,38,38,.36); background: rgba(220,38,38,.08); }
+.collection-detail-age.is-breached strong,.collection-detail-age.is-breached span { color: #dc2626; }
+.collection-detail-age span { display: block; margin-top: 4px; font-size: 10px; font-weight: 900; text-transform: uppercase; }
 .collections-actions { flex-wrap: wrap; }
 .collections-actions a,.collections-actions button { display: inline-flex; align-items: center; gap: 6px; padding: 9px 11px; text-decoration: none; }
 .collections-section-toggle { width: 100%; display: flex; justify-content: space-between; color: var(--ops-text); padding: 9px 0; font-weight: 800; }

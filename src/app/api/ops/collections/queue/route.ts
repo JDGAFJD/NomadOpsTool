@@ -38,44 +38,31 @@ function filters(request: NextRequest, params: unknown[]) {
 }
 
 const SELECT = `SELECT c.*, NOW() >= c.next_attempt_at AS due_now,
+  GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() - c.created_at))))::bigint AS age_seconds,
+  NOW() > c.created_at + INTERVAL '48 hours' AS sla_breached,
   COALESCE((SELECT json_agg(i ORDER BY i.failure_date DESC) FROM ops_collection_invoices i WHERE i.case_id=c.id), '[]'::json) AS invoices,
   COALESCE((SELECT json_agg(a ORDER BY a.created_at DESC) FROM ops_collection_attempts a WHERE a.case_id=c.id), '[]'::json) AS attempts,
   COALESCE((SELECT json_agg(e ORDER BY e.created_at DESC) FROM ops_collection_events e WHERE e.case_id=c.id), '[]'::json) AS events`;
 
 function viewQuery(view: CollectionView, session: any, params: unknown[]) {
   if (view === 'unassigned') {
-    return { where: `c.status='unassigned'`, order: 'c.created_at ASC, c.id ASC' };
+    return `c.status='unassigned'`;
   }
   if (view === 'mine') {
     params.push(session.email);
-    return {
-      where: `c.assigned_to=$${params.length} AND c.status IN ('assigned','follow_up_pending','awaiting_payment_confirmation','paused')`,
-      order: 'c.next_attempt_at ASC NULLS LAST, c.created_at ASC, c.id ASC',
-    };
+    return `c.assigned_to=$${params.length} AND c.status IN ('assigned','follow_up_pending','awaiting_payment_confirmation','paused')`;
   }
   if (view === 'all') {
-    return {
-      where: `c.status IN ('unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused')`,
-      order: 'c.next_attempt_at ASC NULLS LAST, c.created_at ASC, c.id ASC',
-    };
+    return `c.status IN ('unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused')`;
   }
   if (view === 'due') {
     params.push(session.email);
-    return {
-      where: `c.assigned_to=$${params.length} AND c.status IN ('assigned','follow_up_pending','awaiting_payment_confirmation') AND c.next_attempt_at<=NOW()`,
-      order: 'c.next_attempt_at ASC, c.id ASC',
-    };
+    return `c.assigned_to=$${params.length} AND c.status IN ('assigned','follow_up_pending','awaiting_payment_confirmation') AND c.next_attempt_at<=NOW()`;
   }
   if (view === 'closed') {
-    return {
-      where: `c.status IN ('exhausted','canceled','completed_by_admin','closed_by_admin')`,
-      order: 'c.updated_at DESC, c.id DESC',
-    };
+    return `c.status IN ('exhausted','canceled','completed_by_admin','closed_by_admin')`;
   }
-  return {
-    where: `c.status='collected'`,
-    order: 'c.collected_at DESC NULLS LAST, c.id DESC',
-  };
+  return `c.status='collected'`;
 }
 
 export async function GET(request: NextRequest) {
@@ -92,12 +79,13 @@ export async function GET(request: NextRequest) {
     }
     const requestedPage = Number(request.nextUrl.searchParams.get('page'));
     const pageCandidate = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+    const sort = request.nextUrl.searchParams.get('sort') === 'newest' ? 'newest' : 'oldest';
     const baseParams: unknown[] = [];
     const clause = filters(request, baseParams);
     const viewParams = [...baseParams];
-    const selectedView = viewQuery(view, session, viewParams);
+    const viewWhere = viewQuery(view, session, viewParams);
     const [total, counts, owners, users] = await Promise.all([
-      queryOpsDb(`SELECT COUNT(*)::int AS total FROM ops_collection_cases c WHERE ${selectedView.where} ${clause}`, viewParams),
+      queryOpsDb(`SELECT COUNT(*)::int AS total FROM ops_collection_cases c WHERE ${viewWhere} ${clause}`, viewParams),
       queryOpsDb(`SELECT COUNT(*) FILTER(WHERE status='unassigned') unassigned,
         COUNT(*) FILTER(WHERE assigned_to=$1 AND status IN ('assigned','follow_up_pending','awaiting_payment_confirmation','paused')) mine,
         COUNT(*) FILTER(WHERE assigned_to=$1 AND status IN ('assigned','follow_up_pending','awaiting_payment_confirmation') AND next_attempt_at<=NOW()) due,
@@ -116,8 +104,10 @@ export async function GET(request: NextRequest) {
     const records = await queryOpsDb(
       `${SELECT}
        FROM ops_collection_cases c
-       WHERE ${selectedView.where} ${clause}
-       ORDER BY ${selectedView.order}
+       WHERE ${viewWhere} ${clause}
+       ORDER BY (NOW() > c.created_at + INTERVAL '48 hours') DESC,
+         c.created_at ${sort === 'newest' ? 'DESC' : 'ASC'},
+         c.id ${sort === 'newest' ? 'DESC' : 'ASC'}
        LIMIT $${recordParams.length - 1} OFFSET $${recordParams.length}`,
       recordParams
     );
@@ -129,6 +119,7 @@ export async function GET(request: NextRequest) {
       success: true, agentEmail: session.email, viewerRole: session.role, users: users.rows,
       records: decoratedRecords,
       pagination: { page, pageSize: PAGE_SIZE, totalRecords, totalPages },
+      sort,
       counts: counts.rows[0], owners: owners.rows.map(row => row.assigned_to),
     });
   } catch (error: any) {

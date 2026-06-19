@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, BadgeDollarSign, CalendarClock, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
@@ -25,7 +25,8 @@ type CollectionCase = {
   status: string; assigned_to: string | null; current_attempt: number; next_attempt_at: string | null;
   total_amount_due: number; currency_code: string; close_reason: string | null; collected_by: string | null;
   collected_at: string | null; reopened_count: number; created_at: string; updated_at: string;
-  chargebeeUrl: string | null; due_now: boolean; invoices: any[]; attempts: any[]; events: any[];
+  chargebeeUrl: string | null; due_now: boolean; age_seconds: number | string; sla_breached: boolean;
+  invoices: any[]; attempts: any[]; events: any[];
   admin_disposition?: string | null; admin_actor?: string | null; admin_note?: string | null; admin_action_at?: string | null;
 };
 
@@ -48,6 +49,15 @@ function money(value: number, currency = 'USD') {
 function when(value: string | null) {
   return value ? new Date(value).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not scheduled';
 }
+function ageLabel(value: number | string) {
+  const seconds = Math.max(0, Number(value) || 0);
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
 
 export default function CollectionsPage() {
   const router = useRouter();
@@ -68,6 +78,7 @@ export default function CollectionsPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [owner, setOwner] = useState('all');
+  const [sort, setSort] = useState<'oldest'|'newest'>('oldest');
   const [attempt, setAttempt] = useState('all');
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
@@ -85,11 +96,26 @@ export default function CollectionsPage() {
   const [adminTargetIds, setAdminTargetIds] = useState<number[]>([]);
   const [adminWorking, setAdminWorking] = useState(false);
   const [adminNotice, setAdminNotice] = useState('');
+  const selectedIdRef = useRef<number | null>(null);
+  const requestIdRef = useRef(0);
+  const requestControllerRef = useRef<AbortController | null>(null);
+
+  const selectCase = useCallback((record: CollectionCase | null) => {
+    selectedIdRef.current = record?.id ?? null;
+    setSelected(record);
+    setLiveInvoices(null);
+    setExpandedInvoice(false);
+  }, []);
 
   const load = useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    requestControllerRef.current?.abort();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
     setLoading(true); setError('');
     try {
-      const params = new URLSearchParams({ view, page: String(page) });
+      const params = new URLSearchParams({ view, page: String(page), sort });
       if (search.trim()) params.set('search', search.trim());
       if (status !== 'all') params.set('status', status);
       if (owner !== 'all') params.set('owner', owner);
@@ -98,8 +124,9 @@ export default function CollectionsPage() {
       if (maxAmount) params.set('maxAmount', maxAmount);
       if (fromDate) params.set('from', fromDate);
       if (toDate) params.set('to', toDate);
-      const res = await fetch(`/api/ops/collections/queue?${params}`, { cache: 'no-store' });
+      const res = await fetch(`/api/ops/collections/queue?${params}`, { cache: 'no-store', signal: controller.signal });
       const data = await res.json();
+      if (requestId !== requestIdRef.current) return;
       if (!res.ok) throw new Error(data.error || 'Could not load collections.');
       setAgentEmail(data.agentEmail); setViewerRole(data.viewerRole || ''); setUsers(data.users || []);
       setCounts(data.counts || {}); setOwners(data.owners || []);
@@ -108,15 +135,26 @@ export default function CollectionsPage() {
       setRecords(nextRecords);
       setPagination(nextPagination);
       if (nextPagination.page !== page) setPage(nextPagination.page);
-      if (selected) setSelected(nextRecords.find((item: CollectionCase) => item.id === selected.id) || null);
-    } catch (e: any) { setError(e.message); }
-    finally { setLoading(false); }
-  }, [view, page, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate, selected?.id]);
+      const selectedId = selectedIdRef.current;
+      if (selectedId !== null) {
+        const updatedSelection = nextRecords.find((item: CollectionCase) => item.id === selectedId) || null;
+        selectedIdRef.current = updatedSelection?.id ?? null;
+        setSelected(updatedSelection);
+      }
+    } catch (e: any) {
+      if (e?.name !== 'AbortError' && requestId === requestIdRef.current) setError(e.message);
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false);
+    }
+  }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate]);
 
   useEffect(() => {
     void load();
     const timer = window.setInterval(() => void load(), 60_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      requestControllerRef.current?.abort();
+    };
   }, [load]);
 
   const isAdmin = viewerRole === 'admin';
@@ -133,7 +171,7 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     setSelectedIds([]);
-  }, [view, page, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate]);
+  }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate]);
 
   async function mutate(action: string, body: any = {}, target: CollectionCase | null = selected) {
     if (!target) return;
@@ -147,7 +185,7 @@ export default function CollectionsPage() {
       if (!res.ok) throw new Error(data.error || 'Update failed.');
       setOutcome(null); setNotes(''); setCollected(false); setClaimedAmount(''); setReasonCategory('');
       if (action === 'claim') {
-        setSelected(null);
+        selectCase(null);
         setPage(1);
         setView('mine');
       } else {
@@ -216,13 +254,17 @@ export default function CollectionsPage() {
 
       <main className="collections-main">
         <div className="collections-tabs">
-          {tabs.map(([id,label,Icon,count]) => <button key={id} onClick={() => { setView(id); setPage(1); setSelected(null); }} className="ops-tab" data-active={view===id}><Icon size={15}/>{label}{count !== '' && <span>{count}</span>}</button>)}
+          {tabs.map(([id,label,Icon,count]) => <button key={id} onClick={() => { setView(id); setPage(1); selectCase(null); }} className="ops-tab" data-active={view===id}><Icon size={15}/>{label}{count !== '' && <span>{count}</span>}</button>)}
         </div>
 
         <section className="collections-filters">
           <label className="collections-search"><Search size={16}/><input value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} placeholder="Search customer, case, invoice, or subscription"/></label>
           <select value={status} onChange={e=>{setStatus(e.target.value);setPage(1);}}>{STATUS_OPTIONS.map(v=><option key={v} value={v}>{v==='all'?'All statuses':humanize(v)}</option>)}</select>
           <select value={owner} onChange={e=>{setOwner(e.target.value);setPage(1);}}><option value="all">All owners</option>{owners.map(v=><option key={v} value={v}>{v}</option>)}</select>
+          <select aria-label="Sort collection cases" value={sort} onChange={e=>{setSort(e.target.value as 'oldest'|'newest');setPage(1);}}>
+            <option value="oldest">Oldest first</option>
+            <option value="newest">Newest first</option>
+          </select>
           <select value={attempt} onChange={e=>{setAttempt(e.target.value);setPage(1);}}><option value="all">Any attempt</option><option value="0">Not attempted</option><option value="1">Attempt 1</option><option value="2">Attempt 2</option><option value="3">Attempt 3</option></select>
           <input type="number" min="0" value={minAmount} onChange={e=>{setMinAmount(e.target.value);setPage(1);}} placeholder="Min $"/>
           <input type="number" min="0" value={maxAmount} onChange={e=>{setMaxAmount(e.target.value);setPage(1);}} placeholder="Max $"/>
@@ -239,13 +281,13 @@ export default function CollectionsPage() {
             {isAdmin && selectableRecords.length > 0 && <label className="admin-select-all"><input type="checkbox" checked={allVisibleSelected} onChange={()=>setSelectedIds(allVisibleSelected ? [] : selectableRecords.map(item=>item.id))}/>Select all {selectableRecords.length} visible collection cases</label>}
             {loading && records.length===0 ? <div className="collections-empty"><Loader2 className="animate-spin"/></div> :
              records.length===0 ? <div className="collections-empty">No collection cases in this view.</div> :
-             records.map(item => <article key={item.id} className={`collection-row ${item.due_now?'is-due':''} ${selected?.id===item.id?'is-selected':''} ${isAdmin&&selectableRecords.some(record=>record.id===item.id)?'has-admin-select':''}`} onClick={()=>{setSelected(item);setLiveInvoices(null);setExpandedInvoice(false);}}>
+             records.map(item => <article key={item.id} className={`collection-row ${item.due_now?'is-due':''} ${item.sla_breached?'is-sla-breached':''} ${selected?.id===item.id?'is-selected':''} ${isAdmin&&selectableRecords.some(record=>record.id===item.id)?'has-admin-select':''}`} onClick={()=>selectCase(item)}>
                {isAdmin&&selectableRecords.some(record=>record.id===item.id)&&<input className="admin-row-checkbox" type="checkbox" checked={selectedIds.includes(item.id)} onClick={e=>e.stopPropagation()} onChange={()=>toggleSelected(item.id)} aria-label={`Select collection case ${item.id}`}/>}
                <div className="collection-row-main">
-                 <div className="collection-row-heading"><strong>{item.customer_name || item.customer_email || item.customer_id || 'Unknown customer'}</strong><span>{humanize(item.status)}</span>{item.reopened_count>0&&<em>Reopened {item.reopened_count}x</em>}</div>
-                 <div className="collection-row-meta"><span>{item.subscription_id || 'Invoice-only case'}</span><span>Attempt {Number(item.current_attempt)+1} of 3</span><span><Clock3 size={12}/>{when(item.next_attempt_at)}</span></div>
+                 <div className="collection-row-heading"><strong>{item.customer_name || item.customer_email || item.customer_id || 'Unknown customer'}</strong><span>{humanize(item.status)}</span>{item.sla_breached&&<b className="collection-sla-badge">48h SLA breached</b>}{item.reopened_count>0&&<em>Reopened {item.reopened_count}x</em>}</div>
+                 <div className="collection-row-meta"><span>{item.subscription_id || 'Invoice-only case'}</span><span>Attempt {Number(item.current_attempt)+1} of 3</span><span><Clock3 size={12}/>{when(item.next_attempt_at)}</span><span className={item.sla_breached?'collection-age is-breached':'collection-age'}>Age: {ageLabel(item.age_seconds)}</span></div>
                </div>
-               <div className="collection-row-amount"><strong>{money(item.total_amount_due,item.currency_code)}</strong><small>#{item.id}</small>{view==='unassigned'&&<button onClick={e=>{e.stopPropagation();setSelected(item);void mutate('claim',{},item);}} className="ops-primary-button">Claim</button>}</div>
+               <div className="collection-row-amount"><strong>{money(item.total_amount_due,item.currency_code)}</strong><small>#{item.id}</small>{view==='unassigned'&&<button onClick={e=>{e.stopPropagation();selectCase(item);void mutate('claim',{},item);}} className="ops-primary-button">Claim</button>}</div>
              </article>)}
             <nav className="collections-pagination" aria-label="Collections pagination">
               <div>
@@ -253,14 +295,14 @@ export default function CollectionsPage() {
                 <span>{pagination.totalRecords === 0 ? 'Showing 0 records' : `Showing ${(pagination.page - 1) * pagination.pageSize + 1}-${Math.min(pagination.page * pagination.pageSize, pagination.totalRecords)} of ${pagination.totalRecords}`}</span>
               </div>
               <div>
-                <button type="button" className="ops-secondary-button" disabled={pagination.page <= 1 || loading} onClick={()=>{setSelected(null);setPage(current=>Math.max(1,current-1));}}><ChevronLeft size={15}/>Previous</button>
-                <button type="button" className="ops-secondary-button" disabled={pagination.page >= pagination.totalPages || loading} onClick={()=>{setSelected(null);setPage(current=>Math.min(pagination.totalPages,current+1));}}>Next<ChevronRight size={15}/></button>
+                <button type="button" className="ops-secondary-button" disabled={pagination.page <= 1 || loading} onClick={()=>{selectCase(null);setPage(current=>Math.max(1,current-1));}}><ChevronLeft size={15}/>Previous</button>
+                <button type="button" className="ops-secondary-button" disabled={pagination.page >= pagination.totalPages || loading} onClick={()=>{selectCase(null);setPage(current=>Math.min(pagination.totalPages,current+1));}}>Next<ChevronRight size={15}/></button>
               </div>
             </nav>
           </section>
 
           {selected && <aside className="collections-detail">
-            <div className="collections-detail-head"><div><small>Collections Case #{selected.id}</small><h2>{selected.customer_name || selected.customer_email || 'Customer'}</h2></div><button onClick={()=>setSelected(null)} className="ops-icon-button"><X size={17}/></button></div>
+            <div className="collections-detail-head"><div><small>Collections Case #{selected.id}</small><h2>{selected.customer_name || selected.customer_email || 'Customer'}</h2></div><button onClick={()=>selectCase(null)} className="ops-icon-button"><X size={17}/></button></div>
             <div className="collections-detail-body">
               <div className="collections-balance"><span>Total outstanding</span><strong>{money(selected.total_amount_due,selected.currency_code)}</strong><em>{humanize(selected.status)}</em></div>
               <div className="collections-grid">
@@ -270,6 +312,7 @@ export default function CollectionsPage() {
                 <div><small>Status</small><strong>{selected.subscription_status || 'Unknown'}</strong></div>
                 <div><small>Plan</small><strong>{selected.plan_id || 'Unknown'}</strong></div>
                 <div><small>Next attempt</small><strong>{when(selected.next_attempt_at)}</strong></div>
+                <div className={selected.sla_breached?'collection-detail-age is-breached':'collection-detail-age'}><small>Case age</small><strong>{ageLabel(selected.age_seconds)}</strong>{selected.sla_breached&&<span>48h SLA breached</span>}</div>
               </div>
               <div className="collections-actions">
                 {selected.chargebeeUrl&&<a href={selected.chargebeeUrl} target="_blank" rel="noreferrer" className="ops-secondary-button">Chargebee Profile <ExternalLink size={14}/></a>}

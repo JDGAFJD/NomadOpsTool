@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, CalendarClock, CheckCircle2, Clock3, Headphones, History,
@@ -100,8 +100,21 @@ export default function CallbacksPage() {
   const [adminTargetIds, setAdminTargetIds] = useState<number[]>([]);
   const [adminWorking, setAdminWorking] = useState(false);
   const [adminNotice, setAdminNotice] = useState('');
+  const selectedIdRef = useRef<number | null>(null);
+  const requestIdRef = useRef(0);
+  const requestControllerRef = useRef<AbortController | null>(null);
+
+  const selectCallback = useCallback((record: CallbackRecord | null) => {
+    selectedIdRef.current = record?.id ?? null;
+    setSelected(record);
+  }, []);
 
   const loadQueue = useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    requestControllerRef.current?.abort();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
     setLoading(true);
     setError('');
     try {
@@ -110,8 +123,9 @@ export default function CallbacksPage() {
       if (timeFilter !== 'all') params.set('preferredTime', timeFilter);
       if (overdueOnly) params.set('overdue', 'true');
       if (searchTerm.trim()) params.set('search', searchTerm.trim());
-      const res = await fetch(`/api/ops/callbacks/queue?${params.toString()}`, { cache: 'no-store' });
+      const res = await fetch(`/api/ops/callbacks/queue?${params.toString()}`, { cache: 'no-store', signal: controller.signal });
       const data = await res.json();
+      if (requestId !== requestIdRef.current) return;
       if (!res.ok) throw new Error(data.error || 'Could not load callback queue.');
       setAgentEmail(data.agentEmail);
       setViewerRole(data.viewerRole || '');
@@ -120,21 +134,28 @@ export default function CallbacksPage() {
       setAssigned(data.assigned || []);
       setHistory(data.history || []);
       setCounts(data.counts || { unassigned: '0', assigned: '0', overdue: '0' });
-      if (selected) {
-        const updated = [...(data.unassigned || []), ...(data.assigned || []), ...(data.history || [])].find((item: CallbackRecord) => item.id === selected.id);
-        setSelected(updated || null);
+      const selectedId = selectedIdRef.current;
+      if (selectedId !== null) {
+        const updated = [...(data.unassigned || []), ...(data.assigned || []), ...(data.history || [])].find((item: CallbackRecord) => item.id === selectedId) || null;
+        selectedIdRef.current = updated?.id ?? null;
+        setSelected(updated);
       }
     } catch (err: any) {
-      setError(err.message || 'Could not load callback queue.');
+      if (err?.name !== 'AbortError' && requestId === requestIdRef.current) {
+        setError(err.message || 'Could not load callback queue.');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [scope, departmentFilter, timeFilter, overdueOnly, searchTerm, selected?.id]);
+  }, [scope, departmentFilter, timeFilter, overdueOnly, searchTerm]);
 
   useEffect(() => {
     void loadQueue();
     const timer = window.setInterval(() => void loadQueue(), 60_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      requestControllerRef.current?.abort();
+    };
   }, [loadQueue]);
 
   const mutate = async (record: CallbackRecord, action: string, outcomeNotes?: string) => {
@@ -250,7 +271,7 @@ export default function CallbacksPage() {
               { id: 'assigned' as const, label: 'Assigned', icon: UserCheck },
               { id: 'history' as const, label: 'History', icon: History },
             ].map(item => (
-              <button key={item.id} onClick={() => setTab(item.id)} className="ops-tab" data-active={tab === item.id} style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontWeight: 800 }}>
+              <button key={item.id} onClick={() => { setTab(item.id); selectCallback(null); }} className="ops-tab" data-active={tab === item.id} style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontWeight: 800 }}>
                 <item.icon size={15} /> {item.label}
               </button>
             ))}
@@ -322,7 +343,7 @@ export default function CallbacksPage() {
             ) : records.length === 0 ? (
               <div style={{ padding: 50, textAlign: 'center', color: 'var(--ops-text-muted)', background: 'var(--ops-card-bg)', border: '1px dashed var(--border)', borderRadius: 8 }}>No callbacks in this queue.</div>
             ) : records.map(record => (
-              <article className={isAdmin && tab !== 'history' ? 'callback-row-admin' : ''} key={record.id} onClick={() => setSelected(record)} style={{ padding: 18, border: `1px solid ${record.overdue ? 'rgba(239,68,68,0.5)' : selected?.id === record.id ? 'var(--primary)' : 'var(--ops-card-border)'}`, borderLeft: record.overdue ? '4px solid #ef4444' : '1px solid var(--ops-card-border)', background: 'var(--ops-card-bg)', borderRadius: 8, cursor: 'pointer', display: 'grid', gridTemplateColumns: isAdmin && tab !== 'history' ? 'auto minmax(0, 1fr) auto' : 'minmax(0, 1fr) auto', gap: 18 }}>
+              <article className={isAdmin && tab !== 'history' ? 'callback-row-admin' : ''} key={record.id} onClick={() => selectCallback(record)} style={{ padding: 18, border: `1px solid ${record.overdue ? 'rgba(239,68,68,0.5)' : selected?.id === record.id ? 'var(--primary)' : 'var(--ops-card-border)'}`, borderLeft: record.overdue ? '4px solid #ef4444' : '1px solid var(--ops-card-border)', background: 'var(--ops-card-bg)', borderRadius: 8, cursor: 'pointer', display: 'grid', gridTemplateColumns: isAdmin && tab !== 'history' ? 'auto minmax(0, 1fr) auto' : 'minmax(0, 1fr) auto', gap: 18 }}>
                 {isAdmin && tab !== 'history' && (
                   <input
                     className="admin-row-checkbox"
@@ -349,7 +370,7 @@ export default function CallbacksPage() {
                 <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--ops-text-muted)' }}>
                   <div>#{record.id}</div>
                   <div style={{ marginTop: 6 }}>{record.assigned_to || record.requested_by}</div>
-                  {tab === 'unassigned' && <button onClick={event => { event.stopPropagation(); void mutate(record, 'claim'); }} disabled={workingId === record.id} className="ops-primary-button" style={{ marginTop: 10, padding: '8px 12px', cursor: 'pointer', fontWeight: 800 }}>{workingId === record.id ? 'Claiming...' : 'Claim'}</button>}
+                  {tab === 'unassigned' && <button onClick={event => { event.stopPropagation(); selectCallback(record); void mutate(record, 'claim'); }} disabled={workingId === record.id} className="ops-primary-button" style={{ marginTop: 10, padding: '8px 12px', cursor: 'pointer', fontWeight: 800 }}>{workingId === record.id ? 'Claiming...' : 'Claim'}</button>}
                 </div>
               </article>
             ))}
@@ -359,7 +380,7 @@ export default function CallbacksPage() {
             <aside style={{ position: 'sticky', top: 90, maxHeight: 'calc(100vh - 112px)', overflowY: 'auto', background: 'var(--ops-card-bg)', border: '1px solid var(--ops-card-border)', borderRadius: 8 }}>
               <div style={{ padding: 18, borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                 <div><div style={{ color: 'var(--primary)', fontSize: 11, fontWeight: 900, textTransform: 'uppercase' }}>Callback #{selected.id}</div><h2 style={{ margin: '4px 0 0', fontSize: 19 }}>{selected.customer_name || selected.customer_email}</h2></div>
-                <button title="Close details" onClick={() => setSelected(null)} className="ops-icon-button" style={{ width: 36, height: 36, cursor: 'pointer' }}><X size={17} /></button>
+                <button title="Close details" onClick={() => selectCallback(null)} className="ops-icon-button" style={{ width: 36, height: 36, cursor: 'pointer' }}><X size={17} /></button>
               </div>
               <div style={{ padding: 18, display: 'grid', gap: 18 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
