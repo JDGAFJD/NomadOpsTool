@@ -6,6 +6,13 @@ export interface Mailbox {
   email: string;
 }
 
+export interface FreeScoutUser {
+  id: number;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+}
+
 export interface Ticket {
   id: number;
   number: string;
@@ -99,6 +106,44 @@ export class FreeScoutService {
     return data._embedded?.mailboxes || [];
   }
 
+  async findMailboxByName(name: string): Promise<Mailbox> {
+    const mailboxes = await this.getMailboxes();
+    const normalizedName = name.trim().toLowerCase();
+    const mailbox = mailboxes.find(item => item.name?.trim().toLowerCase() === normalizedName);
+    if (!mailbox) {
+      throw new Error(`FreeScout mailbox "${name}" was not found.`);
+    }
+    return mailbox;
+  }
+
+  async findUserByEmail(email: string): Promise<FreeScoutUser> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedIdentity = normalizedEmail.split('@')[0].replace(/[^a-z0-9]/g, '');
+    const users: FreeScoutUser[] = [];
+    let page = 1;
+    while (page <= 100) {
+      const data = await this.fetchApi(`users?page=${page}&pageSize=100`);
+      const pageUsers: FreeScoutUser[] = data?._embedded?.users || [];
+      users.push(...pageUsers);
+      const user = pageUsers.find(item => item.email?.trim().toLowerCase() === normalizedEmail);
+      if (user) return user;
+      const totalPages = Number(data?.page?.totalPages || page);
+      if (page >= totalPages || pageUsers.length === 0) break;
+      page += 1;
+    }
+
+    const identityMatches = users.filter(user => {
+      const emailIdentity = user.email?.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+      const nameIdentity = `${user.firstName || ''}${user.lastName || ''}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return normalizedIdentity && (emailIdentity === normalizedIdentity || nameIdentity === normalizedIdentity);
+    });
+    if (identityMatches.length === 1) return identityMatches[0];
+    if (identityMatches.length > 1) {
+      throw new Error(`Multiple FreeScout agents match ${email}. Update the OPS agent email to match FreeScout exactly.`);
+    }
+    throw new Error(`No FreeScout agent matches ${email}.`);
+  }
+
   /**
    * Fetches ONE open ticket from a specific mailbox.
    */
@@ -133,7 +178,7 @@ export class FreeScoutService {
     return data._embedded?.threads || [];
   }
 
-  async addReply(ticketId: number, text: string, status?: string): Promise<void> {
+  async addReply(ticketId: number, text: string, status?: string, userId = this.defaultUserId): Promise<void> {
     if (!this.isConfigured()) {
       throw new Error('FreeScout API is not configured.');
     }
@@ -141,7 +186,7 @@ export class FreeScoutService {
     const payload: any = {
       type: 'message',
       text, // Must be text, not body
-      user: this.defaultUserId
+      user: userId
     };
     if (status) payload.status = status;
 
@@ -151,7 +196,14 @@ export class FreeScoutService {
     });
   }
 
-  async createConversation(mailboxId: number, customerEmail: string, subject: string, text: string): Promise<number> {
+  async createConversation(
+    mailboxId: number,
+    customerEmail: string,
+    subject: string,
+    text: string,
+    userId = this.defaultUserId,
+    assigneeId?: number
+  ): Promise<number> {
     if (!this.isConfigured()) {
       throw new Error('FreeScout API is not configured.');
     }
@@ -166,10 +218,11 @@ export class FreeScoutService {
         threads: [{
           type: 'message',
           text,
-          user: this.defaultUserId,
+          user: userId,
         }],
         imported: false,
         status: 'active',
+        ...(assigneeId ? { assignTo: assigneeId } : {}),
       }),
     });
 
@@ -178,6 +231,17 @@ export class FreeScoutService {
       throw new Error('FreeScout did not return a conversation ID.');
     }
     return conversationId;
+  }
+
+  async assignConversation(ticketId: number, mailboxId: number, assigneeId: number, byUserId: number): Promise<void> {
+    await this.fetchApi(`conversations/${ticketId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        mailboxId,
+        assignTo: assigneeId,
+        byUser: byUserId,
+      }),
+    });
   }
 
   async addNote(ticketId: number, text: string): Promise<void> {

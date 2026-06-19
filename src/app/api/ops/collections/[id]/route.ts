@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
-import { getSetting } from '@/lib/db';
 import { ChargebeeService } from '@/lib/services/ChargebeeService';
 import { FreeScoutService } from '@/lib/services/FreeScoutService';
 import { addCollectionEvent, ensureCollectionsTables, followUpWindow, nextCollectionWindow } from '@/lib/collections';
 import { logActivity, queryOpsDb } from '@/lib/opsDb';
 
 const REASONS = ['insufficient_funds','expired_replaced_card','bank_decline','payday_timing','forgot','billing_dispute','financial_hardship','technical_issue','refused_payment','promised_later','other'];
+const COLLECTIONS_MAILBOX_NAME = 'Compliance';
 
 function missedEmail(row: any, paymentUrl: string | null) {
   const amount = new Intl.NumberFormat('en-US', { style: 'currency', currency: row.currency_code || 'USD' }).format(Number(row.total_amount_due) / 100);
@@ -57,12 +57,23 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const link = row.customer_id ? await chargebee.generatePaymentLink(row.customer_id) : { url: null };
     const message = missedEmail(row, link.url);
     const freescout = new FreeScoutService();
-    if (conversationId) await freescout.addReply(conversationId, message, 'active');
-    else {
-      const mailboxId = Number(getSetting('callback_freescout_mailbox_id'));
-      if (!mailboxId) return NextResponse.json({ error: 'CALLBACK_FREESCOUT_MAILBOX_ID is not configured.' }, { status: 503 });
+    const [complianceMailbox, agent] = await Promise.all([
+      freescout.findMailboxByName(COLLECTIONS_MAILBOX_NAME),
+      freescout.findUserByEmail(session.email),
+    ]);
+    if (conversationId) {
+      await freescout.assignConversation(conversationId, complianceMailbox.id, agent.id, agent.id);
+      await freescout.addReply(conversationId, message, 'active', agent.id);
+    } else {
       if (!row.customer_email) return NextResponse.json({ error: 'Customer email is unavailable.' }, { status: 400 });
-      conversationId = await freescout.createConversation(mailboxId, row.customer_email, 'Nomad Internet payment follow-up', message);
+      conversationId = await freescout.createConversation(
+        complianceMailbox.id,
+        row.customer_email,
+        'Nomad Internet payment follow-up',
+        message,
+        agent.id,
+        agent.id
+      );
     }
   }
 
