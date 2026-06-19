@@ -111,10 +111,42 @@ export async function ensureCollectionsTables() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await queryOpsDb(`ALTER TABLE ops_collection_attempts ADD COLUMN IF NOT EXISTS client_request_key TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_collection_attempts ADD COLUMN IF NOT EXISTS email_delivery_status TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_collection_attempts ADD COLUMN IF NOT EXISTS email_delivery_error TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_collection_attempts ADD COLUMN IF NOT EXISTS email_delivered_at TIMESTAMPTZ`);
+  await queryOpsDb(`
+    CREATE TABLE IF NOT EXISTS ops_collection_email_jobs (
+      id BIGSERIAL PRIMARY KEY,
+      case_id BIGINT NOT NULL REFERENCES ops_collection_cases(id) ON DELETE CASCADE,
+      attempt_id BIGINT NOT NULL REFERENCES ops_collection_attempts(id) ON DELETE CASCADE,
+      client_request_key TEXT NOT NULL UNIQUE,
+      agent_email TEXT NOT NULL,
+      customer_email TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      freescout_conversation_id BIGINT,
+      mailbox_id BIGINT,
+      freescout_user_id BIGINT,
+      status TEXT NOT NULL DEFAULT 'queued',
+      retry_count INTEGER NOT NULL DEFAULT 0,
+      max_retries INTEGER NOT NULL DEFAULT 3,
+      next_retry_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      sent_at TIMESTAMPTZ,
+      dismissed_at TIMESTAMPTZ,
+      UNIQUE(attempt_id)
+    )
+  `);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_collection_cases_status_due ON ops_collection_cases(status, next_attempt_at)`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_collection_cases_assignee ON ops_collection_cases(assigned_to, status)`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_collection_cases_customer ON ops_collection_cases(customer_email)`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_collection_invoices_invoice ON ops_collection_invoices(invoice_id)`);
+  await queryOpsDb(`CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_attempt_request_key ON ops_collection_attempts(client_request_key) WHERE client_request_key IS NOT NULL`);
+  await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_collection_email_jobs_due ON ops_collection_email_jobs(status, next_retry_at)`);
+  await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_collection_email_jobs_agent ON ops_collection_email_jobs(agent_email, status)`);
   await queryOpsDb(`ALTER TABLE ops_collection_cases ADD COLUMN IF NOT EXISTS admin_disposition TEXT`);
   await queryOpsDb(`ALTER TABLE ops_collection_cases ADD COLUMN IF NOT EXISTS admin_actor TEXT`);
   await queryOpsDb(`ALTER TABLE ops_collection_cases ADD COLUMN IF NOT EXISTS admin_note TEXT`);

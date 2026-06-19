@@ -116,6 +116,23 @@ export class FreeScoutService {
     return mailbox;
   }
 
+  async findComplianceMailbox(): Promise<Mailbox> {
+    const mailboxes = await this.getMailboxes();
+    const normalize = (value: string | undefined) => value?.trim().toLowerCase() || '';
+    const exactEmail = mailboxes.find(item => normalize(item.email) === 'compliance@nomadinternet.com');
+    if (exactEmail) return exactEmail;
+
+    const exactName = mailboxes.find(item => normalize(item.name) === 'nomad internet compliance');
+    if (exactName) return exactName;
+
+    const containing = mailboxes.filter(item => normalize(item.name).includes('compliance'));
+    if (containing.length === 1) return containing[0];
+    if (containing.length > 1) {
+      throw new Error('Multiple FreeScout mailboxes contain "compliance". Configure a unique Compliance mailbox email or name.');
+    }
+    throw new Error('FreeScout Compliance mailbox was not found. Expected compliance@nomadinternet.com or Nomad Internet Compliance.');
+  }
+
   async findUserByEmail(email: string): Promise<FreeScoutUser> {
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedIdentity = normalizedEmail.split('@')[0].replace(/[^a-z0-9]/g, '');

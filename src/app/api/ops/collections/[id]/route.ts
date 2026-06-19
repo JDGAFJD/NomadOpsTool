@@ -1,21 +1,40 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
-import { ChargebeeService } from '@/lib/services/ChargebeeService';
-import { FreeScoutService } from '@/lib/services/FreeScoutService';
-import { addCollectionEvent, ensureCollectionsTables, followUpWindow, nextCollectionWindow } from '@/lib/collections';
-import { logActivity, queryOpsDb } from '@/lib/opsDb';
+import { processCollectionEmailJob } from '@/lib/collectionEmailJobs';
+import { ensureCollectionsTables, followUpWindow, nextCollectionWindow } from '@/lib/collections';
+import { logActivity, queryOpsDb, withOpsDbTransaction } from '@/lib/opsDb';
 
 const REASONS = ['insufficient_funds','expired_replaced_card','bank_decline','payday_timing','forgot','billing_dispute','financial_hardship','technical_issue','refused_payment','promised_later','other'];
-const COLLECTIONS_MAILBOX_NAME = 'Compliance';
+const MISSED_ACTIONS = ['left_voicemail', 'no_answer'];
 
-function missedEmail(row: any, paymentUrl: string | null) {
-  const amount = new Intl.NumberFormat('en-US', { style: 'currency', currency: row.currency_code || 'USD' }).format(Number(row.total_amount_due) / 100);
-  return `Hello ${row.customer_name || 'there'},\n\nOur Collections team attempted to reach you regarding ${amount} currently due on your Nomad Internet account.\n\nInvoice reference: ${row.invoices?.[0]?.invoice_id || 'See your account'}${paymentUrl ? `\nSecure payment link: ${paymentUrl}` : ''}\n\nPlease complete payment or reply to this email if you need assistance.\n\nThank you,\nNomad Internet Collections`;
+class RequestError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
+
+function nextCaseState(attemptNumber: number, collected: boolean) {
+  if (collected) {
+    return {
+      status: 'awaiting_payment_confirmation',
+      nextAttempt: nextCollectionWindow(new Date()),
+      closeReason: null,
+    };
+  }
+  if (attemptNumber >= 3) {
+    return { status: 'exhausted', nextAttempt: null, closeReason: 'Attempts exhausted' };
+  }
+  return {
+    status: 'follow_up_pending',
+    nextAttempt: followUpWindow(new Date(), attemptNumber + 1),
+    closeReason: null,
+  };
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await verifyAuth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
     await ensureCollectionsTables();
     const id = Number((await context.params).id);
@@ -23,108 +42,202 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const body = await request.json();
     const action = String(body.action || '');
 
-  if (action === 'claim') {
-    const result = await queryOpsDb(
-      `UPDATE ops_collection_cases SET status='assigned', assigned_to=$1, assigned_at=NOW(),
-       next_attempt_at=NOW(), updated_at=NOW() WHERE id=$2 AND status='unassigned' RETURNING *`,
-      [session.email, id]
-    );
-    if (!result.rows[0]) return NextResponse.json({ error: 'Case already claimed.' }, { status: 409 });
-    await addCollectionEvent(id, session.email, 'claimed', { attemptDue: new Date().toISOString() });
-    await logActivity(session.email, 'claim_collection_case', String(id), request);
-    return NextResponse.json({ success: true, case: result.rows[0] });
-  }
+    if (action === 'claim') {
+      const result = await queryOpsDb(
+        `UPDATE ops_collection_cases SET status='assigned', assigned_to=$1, assigned_at=NOW(),
+         next_attempt_at=NOW(), updated_at=NOW() WHERE id=$2 AND status='unassigned' RETURNING *`,
+        [session.email, id]
+      );
+      if (!result.rows[0]) return NextResponse.json({ error: 'Case already claimed.' }, { status: 409 });
+      await queryOpsDb(
+        `INSERT INTO ops_collection_events (case_id,actor_email,event_type,details)
+         VALUES ($1,$2,'claimed',$3::jsonb)`,
+        [id, session.email, JSON.stringify({ attemptDue: new Date().toISOString() })]
+      );
+      await logActivity(session.email, 'claim_collection_case', String(id), request);
+      return NextResponse.json({ success: true, case: result.rows[0] });
+    }
 
-  const result = await queryOpsDb(
-    `SELECT c.*, COALESCE((SELECT json_agg(i ORDER BY i.failure_date DESC) FROM ops_collection_invoices i WHERE i.case_id=c.id),'[]'::json) invoices
-     FROM ops_collection_cases c WHERE c.id=$1`,
-    [id]
-  );
-  const row = result.rows[0];
-  if (!row) return NextResponse.json({ error: 'Case not found.' }, { status: 404 });
-  if (row.assigned_to !== session.email) return NextResponse.json({ error: 'Only the case owner can update it.' }, { status: 403 });
-  if (!['completed','left_voicemail','no_answer'].includes(action)) return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });
-  if (Number(row.current_attempt) >= 3) return NextResponse.json({ error: 'This case has exhausted all attempts.' }, { status: 409 });
+    if (!['completed', ...MISSED_ACTIONS].includes(action)) {
+      return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });
+    }
+    const notes = String(body.notes || '').trim();
+    if (!notes) return NextResponse.json({ error: 'Attempt notes are required.' }, { status: 400 });
 
-  const notes = String(body.notes || '').trim();
-  if (!notes) return NextResponse.json({ error: 'Attempt notes are required.' }, { status: 400 });
-  const attemptNumber = Number(row.current_attempt) + 1;
-  const scheduledFor = row.next_attempt_at;
-  let conversationId = row.latest_freescout_conversation_id ? Number(row.latest_freescout_conversation_id) : null;
+    if (MISSED_ACTIONS.includes(action)) {
+      const requestKey = String(body.requestKey || '').trim();
+      if (!requestKey || requestKey.length > 100) {
+        return NextResponse.json({ error: 'A valid request key is required.' }, { status: 400 });
+      }
 
-  if (action !== 'completed') {
-    const chargebee = new ChargebeeService();
-    const link = row.customer_id ? await chargebee.generatePaymentLink(row.customer_id) : { url: null };
-    const message = missedEmail(row, link.url);
-    const freescout = new FreeScoutService();
-    const [complianceMailbox, agent] = await Promise.all([
-      freescout.findMailboxByName(COLLECTIONS_MAILBOX_NAME),
-      freescout.findUserByEmail(session.email),
-    ]);
-    if (conversationId) {
-      await freescout.assignConversation(conversationId, complianceMailbox.id, agent.id, agent.id);
-      await freescout.addReply(conversationId, message, 'active', agent.id);
-    } else {
-      if (!row.customer_email) return NextResponse.json({ error: 'Customer email is unavailable.' }, { status: 400 });
-      conversationId = await freescout.createConversation(
-        complianceMailbox.id,
-        row.customer_email,
-        'Nomad Internet payment follow-up',
-        message,
-        agent.id,
-        agent.id
+      const queued = await withOpsDbTransaction(async client => {
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [requestKey]);
+        const duplicate = await client.query(
+          `SELECT j.id AS job_id, j.status AS job_status, a.case_id
+           FROM ops_collection_email_jobs j
+           JOIN ops_collection_attempts a ON a.id=j.attempt_id
+           WHERE j.client_request_key=$1 AND j.agent_email=$2
+           LIMIT 1`,
+          [requestKey, session.email]
+        );
+        if (duplicate.rows[0]) {
+          if (Number(duplicate.rows[0].case_id) !== id) {
+            throw new RequestError('This request key belongs to another collection case.', 409);
+          }
+          return {
+            duplicate: true,
+            jobId: Number(duplicate.rows[0].job_id),
+            jobStatus: duplicate.rows[0].job_status,
+            case: null,
+          };
+        }
+
+        const result = await client.query(
+          `SELECT c.*, COALESCE((
+             SELECT json_agg(i ORDER BY i.failure_date DESC)
+             FROM ops_collection_invoices i WHERE i.case_id=c.id
+           ), '[]'::json) invoices
+           FROM ops_collection_cases c
+           WHERE c.id=$1
+           FOR UPDATE`,
+          [id]
+        );
+        const row = result.rows[0];
+        if (!row) throw new RequestError('Case not found.', 404);
+        if (row.assigned_to !== session.email) throw new RequestError('Only the case owner can update it.', 403);
+        if (Number(row.current_attempt) >= 3) throw new RequestError('This case has exhausted all attempts.', 409);
+        if (!row.customer_email) throw new RequestError('Customer email is unavailable.', 400);
+
+        const attemptNumber = Number(row.current_attempt) + 1;
+        const state = nextCaseState(attemptNumber, false);
+        const attempt = await client.query(
+          `INSERT INTO ops_collection_attempts (
+             case_id,attempt_number,agent_email,outcome,notes,collected,scheduled_for,
+             client_request_key,email_delivery_status
+           ) VALUES ($1,$2,$3,$4,$5,false,$6,$7,'queued')
+           RETURNING *`,
+          [id, attemptNumber, session.email, action, notes, row.next_attempt_at, requestKey]
+        );
+        const latestInvoice = row.invoices?.[0];
+        const job = await client.query(
+          `INSERT INTO ops_collection_email_jobs (
+             case_id,attempt_id,client_request_key,agent_email,customer_email,subject,payload,
+             freescout_conversation_id
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8)
+           RETURNING *`,
+          [
+            id,
+            attempt.rows[0].id,
+            requestKey,
+            session.email,
+            row.customer_email,
+            'Nomad Internet payment follow-up',
+            JSON.stringify({
+              customerId: row.customer_id,
+              customerName: row.customer_name,
+              amountDue: Number(row.total_amount_due),
+              currencyCode: row.currency_code || 'USD',
+              invoiceId: latestInvoice?.invoice_id || null,
+            }),
+            row.latest_freescout_conversation_id,
+          ]
+        );
+        const updated = await client.query(
+          `UPDATE ops_collection_cases SET
+             status=$1,current_attempt=$2,next_attempt_at=$3,awaiting_amount=NULL,
+             close_reason=$4,updated_at=NOW()
+           WHERE id=$5 RETURNING *`,
+          [state.status, attemptNumber, state.nextAttempt, state.closeReason, id]
+        );
+        await client.query(
+          `INSERT INTO ops_collection_events (case_id,actor_email,event_type,details)
+           VALUES ($1,$2,$3,$4::jsonb)`,
+          [id, session.email, `attempt_${action}`, JSON.stringify({
+            attemptNumber,
+            notes,
+            nextAttemptAt: state.nextAttempt?.toISOString() || null,
+            emailJobId: Number(job.rows[0].id),
+            emailDeliveryStatus: 'queued',
+          })]
+        );
+        return {
+          duplicate: false,
+          jobId: Number(job.rows[0].id),
+          jobStatus: 'queued',
+          case: updated.rows[0],
+        };
+      });
+
+      after(async () => {
+        await Promise.allSettled([
+          processCollectionEmailJob(queued.jobId),
+          logActivity(session.email, `collection_${action}`, String(id), request),
+        ]);
+      });
+      return NextResponse.json(
+        {
+          success: true,
+          queued: true,
+          duplicate: queued.duplicate,
+          job: { id: queued.jobId, status: queued.jobStatus },
+          case: queued.case,
+        },
+        { status: 202 }
       );
     }
-  }
 
-  const collected = action === 'completed' ? Boolean(body.collected) : false;
-  const claimedAmount = collected ? Math.round(Number(body.claimedAmount) * 100) : null;
-  const reasonCategory = String(body.reasonCategory || '');
-  if (action === 'completed') {
-    if (!REASONS.includes(reasonCategory)) return NextResponse.json({ error: 'Select a valid payment reason.' }, { status: 400 });
-    if (collected && (!Number.isFinite(claimedAmount) || Number(claimedAmount) <= 0)) return NextResponse.json({ error: 'Enter the amount collected.' }, { status: 400 });
-  }
+    const collected = Boolean(body.collected);
+    const claimedAmount = collected ? Math.round(Number(body.claimedAmount) * 100) : null;
+    const reasonCategory = String(body.reasonCategory || '');
+    if (!REASONS.includes(reasonCategory)) {
+      return NextResponse.json({ error: 'Select a valid payment reason.' }, { status: 400 });
+    }
+    if (collected && (!Number.isFinite(claimedAmount) || Number(claimedAmount) <= 0)) {
+      return NextResponse.json({ error: 'Enter the amount collected.' }, { status: 400 });
+    }
 
-  await queryOpsDb(
-    `INSERT INTO ops_collection_attempts (case_id,attempt_number,agent_email,outcome,notes,collected,claimed_amount,reason_category,freescout_conversation_id,scheduled_for)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-    [id, attemptNumber, session.email, action, notes, collected, claimedAmount, reasonCategory || null, conversationId, scheduledFor]
-  );
+    const completed = await withOpsDbTransaction(async client => {
+      const result = await client.query('SELECT * FROM ops_collection_cases WHERE id=$1 FOR UPDATE', [id]);
+      const row = result.rows[0];
+      if (!row) throw new RequestError('Case not found.', 404);
+      if (row.assigned_to !== session.email) throw new RequestError('Only the case owner can update it.', 403);
+      if (Number(row.current_attempt) >= 3) throw new RequestError('This case has exhausted all attempts.', 409);
 
-  let status: string;
-  let nextAttempt: Date | null = null;
-  let closeReason: string | null = null;
-  if (collected) {
-    status = 'awaiting_payment_confirmation';
-    nextAttempt = nextCollectionWindow(new Date());
-  } else if (attemptNumber >= 3) {
-    status = 'exhausted';
-    closeReason = 'Attempts exhausted';
-  } else {
-    status = 'follow_up_pending';
-    nextAttempt = followUpWindow(new Date(), attemptNumber + 1);
-  }
-  const updated = await queryOpsDb(
-    `UPDATE ops_collection_cases SET status=$1,current_attempt=$2,next_attempt_at=$3,awaiting_amount=$4,
-     close_reason=$5,latest_freescout_conversation_id=COALESCE($6,latest_freescout_conversation_id),updated_at=NOW()
-     WHERE id=$7 RETURNING *`,
-    [status, attemptNumber, nextAttempt, claimedAmount, closeReason, conversationId, id]
-  );
-  await addCollectionEvent(id, session.email, `attempt_${action}`, {
-    attemptNumber, notes, collected, claimedAmount, reasonCategory, nextAttemptAt: nextAttempt?.toISOString() || null,
-  });
-  await logActivity(session.email, `collection_${action}`, String(id), request);
-    return NextResponse.json({ success: true, case: updated.rows[0] });
+      const attemptNumber = Number(row.current_attempt) + 1;
+      const state = nextCaseState(attemptNumber, collected);
+      await client.query(
+        `INSERT INTO ops_collection_attempts (
+           case_id,attempt_number,agent_email,outcome,notes,collected,claimed_amount,reason_category,scheduled_for
+         ) VALUES ($1,$2,$3,'completed',$4,$5,$6,$7,$8)`,
+        [id, attemptNumber, session.email, notes, collected, claimedAmount, reasonCategory, row.next_attempt_at]
+      );
+      const updated = await client.query(
+        `UPDATE ops_collection_cases SET status=$1,current_attempt=$2,next_attempt_at=$3,awaiting_amount=$4,
+         close_reason=$5,updated_at=NOW() WHERE id=$6 RETURNING *`,
+        [state.status, attemptNumber, state.nextAttempt, claimedAmount, state.closeReason, id]
+      );
+      await client.query(
+        `INSERT INTO ops_collection_events (case_id,actor_email,event_type,details)
+         VALUES ($1,$2,'attempt_completed',$3::jsonb)`,
+        [id, session.email, JSON.stringify({
+          attemptNumber,
+          notes,
+          collected,
+          claimedAmount,
+          reasonCategory,
+          nextAttemptAt: state.nextAttempt?.toISOString() || null,
+        })]
+      );
+      return updated.rows[0];
+    });
+    await logActivity(session.email, 'collection_completed', String(id), request);
+    return NextResponse.json({ success: true, case: completed });
   } catch (error: any) {
     console.error('Collection attempt update failed:', error);
-    const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+    const status = error instanceof RequestError ? error.status : 500;
     return NextResponse.json(
-      {
-        error: timedOut
-          ? 'The customer email service timed out. Please try saving the attempt again.'
-          : error?.message || 'The collection attempt could not be saved.',
-      },
-      { status: timedOut ? 504 : 502 }
+      { error: error?.message || 'The collection attempt could not be saved.' },
+      { status }
     );
   }
 }

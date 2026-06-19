@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  AlertCircle,
   ArrowLeft, BadgeDollarSign, CalendarClock, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
   CircleDollarSign, Clock3, ExternalLink, FileText, Inbox, Loader2, LogOut, Moon,
-  PhoneCall, RefreshCw, Search, Sun, UserCheck, Voicemail, X,
+  Mail, PhoneCall, RefreshCw, RotateCcw, Search, Sun, UserCheck, Voicemail, X,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import {
@@ -18,6 +19,12 @@ import type { AdminQueueAction } from '@/lib/adminQueueActions';
 
 type View = 'unassigned' | 'mine' | 'all' | 'due' | 'closed' | 'collected';
 type Pagination = { page: number; pageSize: number; totalRecords: number; totalPages: number };
+type EmailJob = {
+  id: number; case_id: number; attempt_id: number; status: 'queued'|'sending'|'failed';
+  retry_count: number; max_retries: number; next_retry_at: string; last_error: string | null;
+  created_at: string; customer_name: string | null; customer_email: string | null;
+  outcome: string; attempt_number: number;
+};
 type CollectionCase = {
   id: number; customer_id: string | null; customer_name: string | null; customer_email: string | null;
   customer_phone: string | null; subscription_id: string | null; subscription_status: string | null;
@@ -92,6 +99,10 @@ export default function CollectionsPage() {
   const [collected, setCollected] = useState(false);
   const [claimedAmount, setClaimedAmount] = useState('');
   const [reasonCategory, setReasonCategory] = useState('');
+  const [emailJobs, setEmailJobs] = useState<EmailJob[]>([]);
+  const [jobsCollapsed, setJobsCollapsed] = useState(false);
+  const [jobWorking, setJobWorking] = useState<number | null>(null);
+  const [requestKey, setRequestKey] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [adminAction, setAdminAction] = useState<AdminQueueAction | null>(null);
   const [adminTargetIds, setAdminTargetIds] = useState<number[]>([]);
@@ -108,7 +119,7 @@ export default function CollectionsPage() {
     setExpandedInvoice(false);
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<CollectionCase[]> => {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     requestControllerRef.current?.abort();
@@ -127,7 +138,7 @@ export default function CollectionsPage() {
       if (toDate) params.set('to', toDate);
       const res = await fetch(`/api/ops/collections/queue?${params}`, { cache: 'no-store', signal: controller.signal });
       const data = await res.json();
-      if (requestId !== requestIdRef.current) return;
+      if (requestId !== requestIdRef.current) return [];
       if (!res.ok) throw new Error(data.error || 'Could not load collections.');
       setAgentEmail(data.agentEmail); setViewerRole(data.viewerRole || ''); setUsers(data.users || []);
       setCounts(data.counts || {}); setOwners(data.owners || []);
@@ -142,12 +153,22 @@ export default function CollectionsPage() {
         selectedIdRef.current = updatedSelection?.id ?? null;
         setSelected(updatedSelection);
       }
+      return nextRecords;
     } catch (e: any) {
       if (e?.name !== 'AbortError' && requestId === requestIdRef.current) setError(e.message);
+      return [];
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate]);
+
+  const loadEmailJobs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/ops/collections/email-jobs', { cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok) setEmailJobs(data.jobs || []);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     void load();
@@ -157,6 +178,12 @@ export default function CollectionsPage() {
       requestControllerRef.current?.abort();
     };
   }, [load]);
+
+  useEffect(() => {
+    void loadEmailJobs();
+    const timer = window.setInterval(() => void loadEmailJobs(), 10_000);
+    return () => window.clearInterval(timer);
+  }, [loadEmailJobs]);
 
   const isAdmin = viewerRole === 'admin';
   const tabs = [
@@ -191,10 +218,16 @@ export default function CollectionsPage() {
       }
       if (!res.ok) throw new Error(data.error || 'Update failed.');
       setOutcome(null); setNotes(''); setCollected(false); setClaimedAmount(''); setReasonCategory('');
+      setRequestKey('');
       if (action === 'claim') {
         selectCase(null);
         setPage(1);
         setView('mine');
+      } else if (action === 'left_voicemail' || action === 'no_answer') {
+        selectCase(null);
+        const nextRecords = await load();
+        selectCase(nextRecords.find(item => item.id !== target.id) || null);
+        await loadEmailJobs();
       } else {
         await load();
       }
@@ -204,6 +237,30 @@ export default function CollectionsPage() {
       else setError(message);
     }
     finally { setWorking(false); }
+  }
+
+  const openOutcome = (nextOutcome: 'completed'|'left_voicemail'|'no_answer') => {
+    setOutcomeError('');
+    setRequestKey(nextOutcome === 'completed' ? '' : crypto.randomUUID());
+    setOutcome(nextOutcome);
+  };
+
+  async function updateEmailJob(id: number, action: 'retry'|'dismiss') {
+    setJobWorking(id);
+    try {
+      const res = await fetch(`/api/ops/collections/email-jobs/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not update the email task.');
+      await loadEmailJobs();
+    } catch (e: any) {
+      setError(e.message || 'Could not update the email task.');
+    } finally {
+      setJobWorking(null);
+    }
   }
 
   async function loadInvoices() {
@@ -332,12 +389,12 @@ export default function CollectionsPage() {
               <section><button className="collections-section-toggle" onClick={()=>setExpandedInvoice(!expandedInvoice)}><span>Invoices ({(liveInvoices||selected.invoices||[]).length})</span>{expandedInvoice?<ChevronUp size={16}/>:<ChevronDown size={16}/>}</button>
                 {expandedInvoice&&<div className="collections-invoices">{(liveInvoices||selected.invoices||[]).map((invoice:any)=><div key={invoice.id||invoice.invoice_id}><strong>{invoice.id||invoice.invoice_id}</strong><span>{invoice.status||invoice.invoice_status||'Unknown'}</span><span>{money(invoice.amount_due??0,invoice.currency_code||selected.currency_code)}</span></div>)}</div>}
               </section>
-              <section><h3>Attempt history</h3>{selected.attempts?.length?<div className="collections-timeline">{selected.attempts.map((a:any)=><div key={a.id}><strong>Attempt {a.attempt_number}: {humanize(a.outcome)}</strong><span>{a.agent_email} · {when(a.created_at)}</span><p>{a.notes}</p></div>)}</div>:<p className="collections-muted">No attempts recorded.</p>}</section>
+              <section><h3>Attempt history</h3>{selected.attempts?.length?<div className="collections-timeline">{selected.attempts.map((a:any)=><div key={a.id}><strong>Attempt {a.attempt_number}: {humanize(a.outcome)}</strong><span>{a.agent_email} · {when(a.created_at)}{a.email_delivery_status?` · Email ${humanize(a.email_delivery_status)}`:''}</span><p>{a.notes}</p>{a.email_delivery_error&&<small className="collection-email-error">{a.email_delivery_error}</small>}</div>)}</div>:<p className="collections-muted">No attempts recorded.</p>}</section>
               {selected.status==='unassigned'&&<button onClick={()=>void mutate('claim')} disabled={working} className="ops-primary-button collections-full">Claim Collection Case</button>}
               {selected.assigned_to===agentEmail&&['assigned','follow_up_pending','awaiting_payment_confirmation'].includes(selected.status)&&<div className="collections-outcomes">
-                <button onClick={()=>{setOutcomeError('');setOutcome('completed');}}><CheckCircle2 size={15}/>Completed</button>
-                <button onClick={()=>{setOutcomeError('');setOutcome('left_voicemail');}}><Voicemail size={15}/>Voicemail</button>
-                <button onClick={()=>{setOutcomeError('');setOutcome('no_answer');}}><PhoneCall size={15}/>No Answer</button>
+                <button onClick={()=>openOutcome('completed')}><CheckCircle2 size={15}/>Completed</button>
+                <button onClick={()=>openOutcome('left_voicemail')}><Voicemail size={15}/>Voicemail</button>
+                <button onClick={()=>openOutcome('no_answer')}><PhoneCall size={15}/>No Answer</button>
               </div>}
               {isAdmin&&ACTIVE_STATUSES.includes(selected.status)&&<section className="admin-record-controls"><div><strong>Administrator controls</strong><span>Administrative completion never marks an invoice paid.</span></div><AdminQueueActionButtons onAction={action=>openAdminAction(action,[selected.id])}/></section>}
               {selected.close_reason&&<div className="collections-note"><strong>Closed:</strong> {selected.close_reason}</div>}
@@ -349,14 +406,27 @@ export default function CollectionsPage() {
 
       {outcome&&selected&&<div className="collections-modal-backdrop"><div className="collections-modal">
         <div className="collections-modal-head"><div><small>Attempt {Number(selected.current_attempt)+1} of 3</small><h2>{humanize(outcome)}</h2></div><button disabled={working} onClick={()=>{setOutcome(null);setOutcomeError('');}} className="ops-icon-button"><X size={17}/></button></div>
-        {outcome!=='completed'&&<div className="collections-info">A FreeScout email with the amount due, invoice reference, and Chargebee payment link will be sent. The attempt is not saved if email delivery fails.</div>}
+        {outcome!=='completed'&&<div className="collections-info">The call attempt will save immediately. The Compliance email will continue in the background, so you can move directly to the next case.</div>}
         {outcomeError&&<div className="collections-modal-error" role="alert">{outcomeError}</div>}
         {outcome==='completed'&&<label className="collections-check"><input type="checkbox" checked={collected} onChange={e=>setCollected(e.target.checked)}/> Were you able to collect payment?</label>}
         {outcome==='completed'&&collected&&<label><span>Amount collected</span><input type="number" min="0.01" step="0.01" value={claimedAmount} onChange={e=>setClaimedAmount(e.target.value)} placeholder="0.00"/></label>}
         {outcome==='completed'&&<label><span>{collected?'Why was payment late?':'Why were you unable to collect?'}</span><select value={reasonCategory} onChange={e=>setReasonCategory(e.target.value)}><option value="">Select a reason</option>{REASONS.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>}
         <label><span>Required notes</span><textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Document what happened, customer commitments, and next steps."/></label>
-        <div className="collections-modal-actions"><button disabled={working} onClick={()=>{setOutcome(null);setOutcomeError('');}} className="ops-secondary-button">Cancel</button><button disabled={working||!notes.trim()||(outcome==='completed'&&!reasonCategory)||(collected&&!claimedAmount)} onClick={()=>void mutate(outcome,{notes,collected,claimedAmount,reasonCategory})} className="ops-primary-button">{working?(outcome==='completed'?'Saving...':'Sending email...'):'Save Attempt'}</button></div>
+        <div className="collections-modal-actions"><button disabled={working} onClick={()=>{setOutcome(null);setOutcomeError('');setRequestKey('');}} className="ops-secondary-button">Cancel</button><button disabled={working||!notes.trim()||(outcome==='completed'&&!reasonCategory)||(collected&&!claimedAmount)} onClick={()=>void mutate(outcome,{notes,collected,claimedAmount,reasonCategory,requestKey})} className="ops-primary-button">{working?(outcome==='completed'?'Saving...':'Queuing...'):(outcome==='completed'?'Save Attempt':'Save and continue')}</button></div>
       </div></div>}
+      {emailJobs.length>0&&<aside className={`collection-email-tray ${jobsCollapsed?'is-collapsed':''}`}>
+        <button className="collection-email-tray-head" onClick={()=>setJobsCollapsed(value=>!value)} aria-expanded={!jobsCollapsed}>
+          <span><Mail size={16}/><strong>Background emails</strong><b>{emailJobs.length}</b></span>
+          {jobsCollapsed?<ChevronUp size={16}/>:<ChevronDown size={16}/>}
+        </button>
+        {!jobsCollapsed&&<div className="collection-email-tray-list">
+          {emailJobs.map(job=><div key={job.id} className={`collection-email-job is-${job.status}`}>
+            <div className="collection-email-job-icon">{job.status==='failed'?<AlertCircle size={16}/>:job.status==='sending'?<Loader2 className="animate-spin" size={16}/>:<Clock3 size={16}/>}</div>
+            <div><strong>{job.customer_name||job.customer_email||`Case #${job.case_id}`}</strong><span>Attempt {job.attempt_number} · {job.status==='queued'?'Queued':job.status==='sending'?'Sending':'Delivery failed'}</span>{job.last_error&&<p>{job.last_error}</p>}</div>
+            {job.status==='failed'&&<div className="collection-email-job-actions"><button title="Retry email" disabled={jobWorking===job.id} onClick={()=>void updateEmailJob(job.id,'retry')}><RotateCcw size={14}/></button><button title="Dismiss task" disabled={jobWorking===job.id} onClick={()=>void updateEmailJob(job.id,'dismiss')}><X size={14}/></button></div>}
+          </div>)}
+        </div>}
+      </aside>}
       <AdminQueueDialog action={adminAction} count={adminTargetIds.length} users={users} working={adminWorking} onClose={()=>setAdminAction(null)} onSubmit={submitAdminAction}/>
     </div>
   );
