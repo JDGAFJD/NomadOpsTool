@@ -46,7 +46,8 @@ export class ChargebeeService {
         'Accept': 'application/json',
         ...(options.headers || {}),
       },
-      cache: 'no-store'
+      cache: 'no-store',
+      signal: options.signal || AbortSignal.timeout(15000),
     });
 
     if (!res.ok) {

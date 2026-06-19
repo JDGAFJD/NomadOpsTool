@@ -60,8 +60,9 @@ export class FreeScoutService {
       throw new Error('FreeScout API is not configured.');
     }
 
-    // Ensure we don't end up with /api//mailboxes
-    const safeBaseUrl = this.apiUrl.endsWith('/') ? this.apiUrl.slice(0, -1) : this.apiUrl;
+    // Accept either the FreeScout origin or an API URL ending in /api.
+    const trimmedBaseUrl = this.apiUrl.replace(/\/+$/, '');
+    const safeBaseUrl = trimmedBaseUrl.endsWith('/api') ? trimmedBaseUrl.slice(0, -4) : trimmedBaseUrl;
 
     const res = await fetch(`${safeBaseUrl}/api/${path}`, {
       ...options,
@@ -73,6 +74,7 @@ export class FreeScoutService {
       },
       // Avoid caching real ticket requests for support workflows
       cache: 'no-store',
+      signal: options.signal || AbortSignal.timeout(15000),
     });
 
     if (!res.ok) {
@@ -132,7 +134,9 @@ export class FreeScoutService {
   }
 
   async addReply(ticketId: number, text: string, status?: string): Promise<void> {
-    if (!this.isConfigured()) return;
+    if (!this.isConfigured()) {
+      throw new Error('FreeScout API is not configured.');
+    }
     
     const payload: any = {
       type: 'message',

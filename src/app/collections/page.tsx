@@ -88,6 +88,7 @@ export default function CollectionsPage() {
   const [liveInvoices, setLiveInvoices] = useState<any[] | null>(null);
   const [outcome, setOutcome] = useState<'completed'|'left_voicemail'|'no_answer'|null>(null);
   const [notes, setNotes] = useState('');
+  const [outcomeError, setOutcomeError] = useState('');
   const [collected, setCollected] = useState(false);
   const [claimedAmount, setClaimedAmount] = useState('');
   const [reasonCategory, setReasonCategory] = useState('');
@@ -175,13 +176,19 @@ export default function CollectionsPage() {
 
   async function mutate(action: string, body: any = {}, target: CollectionCase | null = selected) {
     if (!target) return;
-    setWorking(true); setError('');
+    setWorking(true); setError(''); setOutcomeError('');
     try {
       const res = await fetch(`/api/ops/collections/${target.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ...body }),
       });
-      const data = await res.json();
+      const responseText = await res.text();
+      let data: any = {};
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        throw new Error(res.ok ? 'The server returned an invalid response.' : `The attempt could not be saved (${res.status}).`);
+      }
       if (!res.ok) throw new Error(data.error || 'Update failed.');
       setOutcome(null); setNotes(''); setCollected(false); setClaimedAmount(''); setReasonCategory('');
       if (action === 'claim') {
@@ -191,7 +198,11 @@ export default function CollectionsPage() {
       } else {
         await load();
       }
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) {
+      const message = e.message || 'The attempt could not be saved.';
+      if (action === 'left_voicemail' || action === 'no_answer' || action === 'completed') setOutcomeError(message);
+      else setError(message);
+    }
     finally { setWorking(false); }
   }
 
@@ -324,9 +335,9 @@ export default function CollectionsPage() {
               <section><h3>Attempt history</h3>{selected.attempts?.length?<div className="collections-timeline">{selected.attempts.map((a:any)=><div key={a.id}><strong>Attempt {a.attempt_number}: {humanize(a.outcome)}</strong><span>{a.agent_email} · {when(a.created_at)}</span><p>{a.notes}</p></div>)}</div>:<p className="collections-muted">No attempts recorded.</p>}</section>
               {selected.status==='unassigned'&&<button onClick={()=>void mutate('claim')} disabled={working} className="ops-primary-button collections-full">Claim Collection Case</button>}
               {selected.assigned_to===agentEmail&&['assigned','follow_up_pending','awaiting_payment_confirmation'].includes(selected.status)&&<div className="collections-outcomes">
-                <button onClick={()=>setOutcome('completed')}><CheckCircle2 size={15}/>Completed</button>
-                <button onClick={()=>setOutcome('left_voicemail')}><Voicemail size={15}/>Voicemail</button>
-                <button onClick={()=>setOutcome('no_answer')}><PhoneCall size={15}/>No Answer</button>
+                <button onClick={()=>{setOutcomeError('');setOutcome('completed');}}><CheckCircle2 size={15}/>Completed</button>
+                <button onClick={()=>{setOutcomeError('');setOutcome('left_voicemail');}}><Voicemail size={15}/>Voicemail</button>
+                <button onClick={()=>{setOutcomeError('');setOutcome('no_answer');}}><PhoneCall size={15}/>No Answer</button>
               </div>}
               {isAdmin&&ACTIVE_STATUSES.includes(selected.status)&&<section className="admin-record-controls"><div><strong>Administrator controls</strong><span>Administrative completion never marks an invoice paid.</span></div><AdminQueueActionButtons onAction={action=>openAdminAction(action,[selected.id])}/></section>}
               {selected.close_reason&&<div className="collections-note"><strong>Closed:</strong> {selected.close_reason}</div>}
@@ -337,13 +348,14 @@ export default function CollectionsPage() {
       </main>
 
       {outcome&&selected&&<div className="collections-modal-backdrop"><div className="collections-modal">
-        <div className="collections-modal-head"><div><small>Attempt {Number(selected.current_attempt)+1} of 3</small><h2>{humanize(outcome)}</h2></div><button onClick={()=>setOutcome(null)} className="ops-icon-button"><X size={17}/></button></div>
+        <div className="collections-modal-head"><div><small>Attempt {Number(selected.current_attempt)+1} of 3</small><h2>{humanize(outcome)}</h2></div><button disabled={working} onClick={()=>{setOutcome(null);setOutcomeError('');}} className="ops-icon-button"><X size={17}/></button></div>
         {outcome!=='completed'&&<div className="collections-info">A FreeScout email with the amount due, invoice reference, and Chargebee payment link will be sent. The attempt is not saved if email delivery fails.</div>}
+        {outcomeError&&<div className="collections-modal-error" role="alert">{outcomeError}</div>}
         {outcome==='completed'&&<label className="collections-check"><input type="checkbox" checked={collected} onChange={e=>setCollected(e.target.checked)}/> Were you able to collect payment?</label>}
         {outcome==='completed'&&collected&&<label><span>Amount collected</span><input type="number" min="0.01" step="0.01" value={claimedAmount} onChange={e=>setClaimedAmount(e.target.value)} placeholder="0.00"/></label>}
         {outcome==='completed'&&<label><span>{collected?'Why was payment late?':'Why were you unable to collect?'}</span><select value={reasonCategory} onChange={e=>setReasonCategory(e.target.value)}><option value="">Select a reason</option>{REASONS.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>}
         <label><span>Required notes</span><textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Document what happened, customer commitments, and next steps."/></label>
-        <div className="collections-modal-actions"><button onClick={()=>setOutcome(null)} className="ops-secondary-button">Cancel</button><button disabled={working||!notes.trim()||(outcome==='completed'&&!reasonCategory)||(collected&&!claimedAmount)} onClick={()=>void mutate(outcome,{notes,collected,claimedAmount,reasonCategory})} className="ops-primary-button">{working?'Saving...':'Save Attempt'}</button></div>
+        <div className="collections-modal-actions"><button disabled={working} onClick={()=>{setOutcome(null);setOutcomeError('');}} className="ops-secondary-button">Cancel</button><button disabled={working||!notes.trim()||(outcome==='completed'&&!reasonCategory)||(collected&&!claimedAmount)} onClick={()=>void mutate(outcome,{notes,collected,claimedAmount,reasonCategory})} className="ops-primary-button">{working?(outcome==='completed'?'Saving...':'Sending email...'):'Save Attempt'}</button></div>
       </div></div>}
       <AdminQueueDialog action={adminAction} count={adminTargetIds.length} users={users} working={adminWorking} onClose={()=>setAdminAction(null)} onSubmit={submitAdminAction}/>
     </div>

@@ -16,11 +16,12 @@ function missedEmail(row: any, paymentUrl: string | null) {
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await verifyAuth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  await ensureCollectionsTables();
-  const id = Number((await context.params).id);
-  if (!Number.isInteger(id)) return NextResponse.json({ error: 'Invalid case ID' }, { status: 400 });
-  const body = await request.json();
-  const action = String(body.action || '');
+  try {
+    await ensureCollectionsTables();
+    const id = Number((await context.params).id);
+    if (!Number.isInteger(id)) return NextResponse.json({ error: 'Invalid case ID' }, { status: 400 });
+    const body = await request.json();
+    const action = String(body.action || '');
 
   if (action === 'claim') {
     const result = await queryOpsDb(
@@ -102,5 +103,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     attemptNumber, notes, collected, claimedAmount, reasonCategory, nextAttemptAt: nextAttempt?.toISOString() || null,
   });
   await logActivity(session.email, `collection_${action}`, String(id), request);
-  return NextResponse.json({ success: true, case: updated.rows[0] });
+    return NextResponse.json({ success: true, case: updated.rows[0] });
+  } catch (error: any) {
+    console.error('Collection attempt update failed:', error);
+    const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+    return NextResponse.json(
+      {
+        error: timedOut
+          ? 'The customer email service timed out. Please try saving the attempt again.'
+          : error?.message || 'The collection attempt could not be saved.',
+      },
+      { status: timedOut ? 504 : 502 }
+    );
+  }
 }

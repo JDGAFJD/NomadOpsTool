@@ -884,6 +884,7 @@ button {
 .collections-outcomes { display: grid; grid-template-columns: repeat(3,1fr); }
 .collections-outcomes button { padding: 10px 6px; display: grid; justify-items: center; gap: 5px; border: 1px solid var(--border); border-radius: 7px; color: var(--ops-text); font-size: 11px; font-weight: 800; }
 .collections-note,.collections-info { padding: 11px; background: var(--surface-200); border: 1px solid var(--border); border-radius: 7px; font-size: 13px; }
+.collections-modal-error { padding: 11px; border: 1px solid rgba(220,38,38,.35); border-radius: 7px; background: rgba(220,38,38,.1); color: #dc2626; font-size: 13px; line-height: 1.45; }
 .collections-modal-backdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 20px; background: rgba(0,0,0,.72); backdrop-filter: blur(8px); }
 .collections-modal { width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; background: var(--surface-100); border: 1px solid var(--border); border-radius: 10px; padding: 21px; display: grid; gap: 15px; }
 .collections-modal-head { display: flex; justify-content: space-between; }
