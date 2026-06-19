@@ -32,7 +32,8 @@ type CollectionCase = {
   status: string; assigned_to: string | null; current_attempt: number; next_attempt_at: string | null;
   total_amount_due: number; currency_code: string; close_reason: string | null; collected_by: string | null;
   collected_at: string | null; reopened_count: number; created_at: string; updated_at: string;
-  chargebeeUrl: string | null; due_now: boolean; age_seconds: number | string; sla_breached: boolean;
+  chargebeeUrl: string | null; freeScoutUrl: string | null; latest_freescout_conversation_id?: number | null;
+  due_now: boolean; age_seconds: number | string; sla_breached: boolean;
   invoices: any[]; attempts: any[]; events: any[];
   admin_disposition?: string | null; admin_actor?: string | null; admin_note?: string | null; admin_action_at?: string | null;
 };
@@ -111,6 +112,7 @@ export default function CollectionsPage() {
   const selectedIdRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
   const requestControllerRef = useRef<AbortController | null>(null);
+  const seenSentCaseIdsRef = useRef<Set<number>>(new Set());
 
   const selectCase = useCallback((record: CollectionCase | null) => {
     selectedIdRef.current = record?.id ?? null;
@@ -166,9 +168,15 @@ export default function CollectionsPage() {
     try {
       const res = await fetch('/api/ops/collections/email-jobs', { cache: 'no-store' });
       const data = await res.json();
-      if (res.ok) setEmailJobs(data.jobs || []);
+      if (res.ok) {
+        setEmailJobs(data.jobs || []);
+        const sentCaseIds = (data.recentlySentCaseIds || []).map(Number);
+        const newlySent = sentCaseIds.filter((id: number) => !seenSentCaseIdsRef.current.has(id));
+        sentCaseIds.forEach((id: number) => seenSentCaseIdsRef.current.add(id));
+        if (newlySent.length > 0) void load();
+      }
     } catch {}
-  }, []);
+  }, [load]);
 
   useEffect(() => {
     void load();
@@ -384,12 +392,13 @@ export default function CollectionsPage() {
               </div>
               <div className="collections-actions">
                 {selected.chargebeeUrl&&<a href={selected.chargebeeUrl} target="_blank" rel="noreferrer" className="ops-secondary-button">Chargebee Profile <ExternalLink size={14}/></a>}
+                {selected.freeScoutUrl&&<a href={selected.freeScoutUrl} target="_blank" rel="noreferrer" className="ops-secondary-button">FreeScout Ticket #{selected.latest_freescout_conversation_id} <ExternalLink size={14}/></a>}
                 <button onClick={()=>void loadInvoices()} disabled={working} className="ops-secondary-button">Load Invoices <RefreshCw size={14}/></button>
               </div>
               <section><button className="collections-section-toggle" onClick={()=>setExpandedInvoice(!expandedInvoice)}><span>Invoices ({(liveInvoices||selected.invoices||[]).length})</span>{expandedInvoice?<ChevronUp size={16}/>:<ChevronDown size={16}/>}</button>
                 {expandedInvoice&&<div className="collections-invoices">{(liveInvoices||selected.invoices||[]).map((invoice:any)=><div key={invoice.id||invoice.invoice_id}><strong>{invoice.id||invoice.invoice_id}</strong><span>{invoice.status||invoice.invoice_status||'Unknown'}</span><span>{money(invoice.amount_due??0,invoice.currency_code||selected.currency_code)}</span></div>)}</div>}
               </section>
-              <section><h3>Attempt history</h3>{selected.attempts?.length?<div className="collections-timeline">{selected.attempts.map((a:any)=><div key={a.id}><strong>Attempt {a.attempt_number}: {humanize(a.outcome)}</strong><span>{a.agent_email} · {when(a.created_at)}{a.email_delivery_status?` · Email ${humanize(a.email_delivery_status)}`:''}</span><p>{a.notes}</p>{a.email_delivery_error&&<small className="collection-email-error">{a.email_delivery_error}</small>}</div>)}</div>:<p className="collections-muted">No attempts recorded.</p>}</section>
+              <section><h3>Attempt history</h3>{selected.attempts?.length?<div className="collections-timeline">{selected.attempts.map((a:any)=><div key={a.id}><strong>Attempt {a.attempt_number}: {humanize(a.outcome)}</strong><span>{a.agent_email} · {when(a.created_at)}{a.email_delivery_status?` · Email ${humanize(a.email_delivery_status)}`:''}</span><p>{a.notes}</p>{a.freeScoutUrl&&<a className="collection-attempt-ticket" href={a.freeScoutUrl} target="_blank" rel="noreferrer">FreeScout Ticket #{a.freescout_conversation_id} <ExternalLink size={12}/></a>}{a.email_delivery_error&&<small className="collection-email-error">{a.email_delivery_error}</small>}</div>)}</div>:<p className="collections-muted">No attempts recorded.</p>}</section>
               {selected.status==='unassigned'&&<button onClick={()=>void mutate('claim')} disabled={working} className="ops-primary-button collections-full">Claim Collection Case</button>}
               {selected.assigned_to===agentEmail&&['assigned','follow_up_pending','awaiting_payment_confirmation'].includes(selected.status)&&<div className="collections-outcomes">
                 <button onClick={()=>openOutcome('completed')}><CheckCircle2 size={15}/>Completed</button>

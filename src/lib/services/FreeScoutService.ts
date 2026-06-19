@@ -66,6 +66,14 @@ export class FreeScoutService {
     return Boolean(this.apiUrl && this.apiKey);
   }
 
+  public conversationUrl(conversationId: number | string | null | undefined): string | null {
+    const id = Number(conversationId);
+    if (!this.apiUrl || !Number.isInteger(id) || id <= 0) return null;
+    const trimmedBaseUrl = this.apiUrl.replace(/\/+$/, '');
+    const safeBaseUrl = trimmedBaseUrl.endsWith('/api') ? trimmedBaseUrl.slice(0, -4) : trimmedBaseUrl;
+    return `${safeBaseUrl}/conversation/${id}`;
+  }
+
   // Exposed so the generic API route can use it if needed
   public async fetchApi(path: string, options: RequestInit = {}) {
     if (!this.isConfigured()) {

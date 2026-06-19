@@ -11,7 +11,8 @@ export async function GET() {
 
   try {
     await ensureCollectionsTables();
-    const result = await queryOpsDb(
+    const [result, recentlySent] = await Promise.all([
+      queryOpsDb(
       `SELECT j.id,j.case_id,j.attempt_id,j.status,j.retry_count,j.max_retries,j.next_retry_at,
               j.last_error,j.created_at,j.updated_at,c.customer_name,c.customer_email,a.outcome,a.attempt_number
        FROM ops_collection_email_jobs j
@@ -25,8 +26,18 @@ export async function GET() {
          j.created_at DESC
        LIMIT 50`,
       [session.email]
-    );
-    return NextResponse.json({ jobs: result.rows });
+      ),
+      queryOpsDb(
+        `SELECT DISTINCT case_id
+         FROM ops_collection_email_jobs
+         WHERE agent_email=$1 AND status='sent' AND sent_at >= NOW() - INTERVAL '2 minutes'`,
+        [session.email]
+      ),
+    ]);
+    return NextResponse.json({
+      jobs: result.rows,
+      recentlySentCaseIds: recentlySent.rows.map(row => Number(row.case_id)),
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Could not load background email tasks.' }, { status: 500 });
   }

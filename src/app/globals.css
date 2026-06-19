@@ -879,6 +879,8 @@ button {
 .collections-timeline div { padding: 10px 0; border-bottom: 1px solid var(--border); }
 .collections-timeline span { display: block; color: var(--ops-text-muted); font-size: 11px; margin-top: 3px; }
 .collections-timeline p { margin: 5px 0 0; font-size: 12px; }
+.collection-attempt-ticket { width: fit-content; margin-top: 7px; display: inline-flex; align-items: center; gap: 5px; color: var(--primary); font-size: 12px; font-weight: 800; text-decoration: none; }
+.collection-attempt-ticket:hover { text-decoration: underline; }
 .collection-email-error { display: block; margin-top: 6px; color: #dc2626; line-height: 1.4; }
 .collections-muted { color: var(--ops-text-muted); }
 .collections-full { width: 100%; padding: 12px; font-weight: 900; }

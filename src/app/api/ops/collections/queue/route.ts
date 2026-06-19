@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { chargebeeProfileUrl, ensureCollectionsTables } from '@/lib/collections';
 import { queryOpsDb } from '@/lib/opsDb';
+import { FreeScoutService } from '@/lib/services/FreeScoutService';
 
 export const dynamic = 'force-dynamic';
 
@@ -111,9 +112,15 @@ export async function GET(request: NextRequest) {
        LIMIT $${recordParams.length - 1} OFFSET $${recordParams.length}`,
       recordParams
     );
+    const freeScout = new FreeScoutService();
     const decoratedRecords = records.rows.map(row => ({
       ...row,
       chargebeeUrl: chargebeeProfileUrl(row.subscription_id, row.customer_id),
+      freeScoutUrl: freeScout.conversationUrl(row.latest_freescout_conversation_id),
+      attempts: (row.attempts || []).map((attempt: any) => ({
+        ...attempt,
+        freeScoutUrl: freeScout.conversationUrl(attempt.freescout_conversation_id),
+      })),
     }));
     return NextResponse.json({
       success: true, agentEmail: session.email, viewerRole: session.role, users: users.rows,
