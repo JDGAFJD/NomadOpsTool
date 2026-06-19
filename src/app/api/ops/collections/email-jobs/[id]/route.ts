@@ -4,6 +4,8 @@ import { processCollectionEmailJob } from '@/lib/collectionEmailJobs';
 import { addCollectionEvent, ensureCollectionsTables } from '@/lib/collections';
 import { queryOpsDb } from '@/lib/opsDb';
 
+export const maxDuration = 120;
+
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await verifyAuth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

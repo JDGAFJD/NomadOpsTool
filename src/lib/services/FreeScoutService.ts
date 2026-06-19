@@ -48,6 +48,7 @@ export interface Thread {
 export class FreeScoutService {
   private apiUrl: string;
   private apiKey: string;
+  private timeoutMs: number;
   
   // Hardcoded for MVP, user ID from the FreeScout docs
   private defaultUserId = 5; 
@@ -55,6 +56,10 @@ export class FreeScoutService {
   constructor() {
     this.apiUrl = getSetting('freescout_api_url') || '';
     this.apiKey = getSetting('freescout_api_key') || '';
+    const configuredTimeout = Number(process.env.FREESCOUT_API_TIMEOUT_MS);
+    this.timeoutMs = Number.isFinite(configuredTimeout)
+      ? Math.min(120000, Math.max(15000, configuredTimeout))
+      : 60000;
   }
 
   private isConfigured(): boolean {
@@ -71,18 +76,26 @@ export class FreeScoutService {
     const trimmedBaseUrl = this.apiUrl.replace(/\/+$/, '');
     const safeBaseUrl = trimmedBaseUrl.endsWith('/api') ? trimmedBaseUrl.slice(0, -4) : trimmedBaseUrl;
 
-    const res = await fetch(`${safeBaseUrl}/api/${path}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-FreeScout-API-Key': this.apiKey,
-        'Accept': 'application/json',
-        ...(options.headers || {}),
-      },
-      // Avoid caching real ticket requests for support workflows
-      cache: 'no-store',
-      signal: options.signal || AbortSignal.timeout(15000),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${safeBaseUrl}/api/${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-FreeScout-API-Key': this.apiKey,
+          'Accept': 'application/json',
+          ...(options.headers || {}),
+        },
+        // Avoid caching real ticket requests for support workflows.
+        cache: 'no-store',
+        signal: options.signal || AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch (error: any) {
+      if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+        throw new Error(`FreeScout did not respond within ${Math.round(this.timeoutMs / 1000)} seconds.`);
+      }
+      throw error;
+    }
 
     if (!res.ok) {
       const err = await res.text();

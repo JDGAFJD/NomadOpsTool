@@ -7,6 +7,8 @@ import { logActivity, queryOpsDb, withOpsDbTransaction } from '@/lib/opsDb';
 const REASONS = ['insufficient_funds','expired_replaced_card','bank_decline','payday_timing','forgot','billing_dispute','financial_hardship','technical_issue','refused_payment','promised_later','other'];
 const MISSED_ACTIONS = ['left_voicemail', 'no_answer'];
 
+export const maxDuration = 120;
+
 class RequestError extends Error {
   constructor(message: string, public status: number) {
     super(message);

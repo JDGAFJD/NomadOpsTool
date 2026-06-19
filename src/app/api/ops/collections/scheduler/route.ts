@@ -3,6 +3,7 @@ import { processDueCollectionEmailJobs } from '@/lib/collectionEmailJobs';
 import { sendDueCollectionReminders } from '@/lib/collections';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
 export async function POST(request: Request) {
   const expected = process.env.COLLECTIONS_SCHEDULER_SECRET;
