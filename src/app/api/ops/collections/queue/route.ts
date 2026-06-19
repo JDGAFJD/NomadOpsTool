@@ -5,6 +5,10 @@ import { queryOpsDb } from '@/lib/opsDb';
 
 export const dynamic = 'force-dynamic';
 
+const PAGE_SIZE = 50;
+const VIEWS = ['unassigned', 'mine', 'all', 'due', 'closed', 'collected'] as const;
+type CollectionView = typeof VIEWS[number];
+
 function filters(request: NextRequest, params: unknown[]) {
   const clauses: string[] = [];
   const search = request.nextUrl.searchParams.get('search')?.trim();
@@ -38,23 +42,62 @@ const SELECT = `SELECT c.*, NOW() >= c.next_attempt_at AS due_now,
   COALESCE((SELECT json_agg(a ORDER BY a.created_at DESC) FROM ops_collection_attempts a WHERE a.case_id=c.id), '[]'::json) AS attempts,
   COALESCE((SELECT json_agg(e ORDER BY e.created_at DESC) FROM ops_collection_events e WHERE e.case_id=c.id), '[]'::json) AS events`;
 
+function viewQuery(view: CollectionView, session: any, params: unknown[]) {
+  if (view === 'unassigned') {
+    return { where: `c.status='unassigned'`, order: 'c.created_at ASC, c.id ASC' };
+  }
+  if (view === 'mine') {
+    params.push(session.email);
+    return {
+      where: `c.assigned_to=$${params.length} AND c.status IN ('assigned','follow_up_pending','awaiting_payment_confirmation','paused')`,
+      order: 'c.next_attempt_at ASC NULLS LAST, c.created_at ASC, c.id ASC',
+    };
+  }
+  if (view === 'all') {
+    return {
+      where: `c.status IN ('unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused')`,
+      order: 'c.next_attempt_at ASC NULLS LAST, c.created_at ASC, c.id ASC',
+    };
+  }
+  if (view === 'due') {
+    params.push(session.email);
+    return {
+      where: `c.assigned_to=$${params.length} AND c.status IN ('assigned','follow_up_pending','awaiting_payment_confirmation') AND c.next_attempt_at<=NOW()`,
+      order: 'c.next_attempt_at ASC, c.id ASC',
+    };
+  }
+  if (view === 'closed') {
+    return {
+      where: `c.status IN ('exhausted','canceled','completed_by_admin','closed_by_admin')`,
+      order: 'c.updated_at DESC, c.id DESC',
+    };
+  }
+  return {
+    where: `c.status='collected'`,
+    order: 'c.collected_at DESC NULLS LAST, c.id DESC',
+  };
+}
+
 export async function GET(request: NextRequest) {
   const session = await verifyAuth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     await ensureCollectionsTables();
+    const requestedView = request.nextUrl.searchParams.get('view');
+    const view: CollectionView = VIEWS.includes(requestedView as CollectionView)
+      ? requestedView as CollectionView
+      : 'unassigned';
+    if (view === 'all' && session.role !== 'admin') {
+      return NextResponse.json({ error: 'Administrator access is required for All Active cases.' }, { status: 403 });
+    }
+    const requestedPage = Number(request.nextUrl.searchParams.get('page'));
+    const pageCandidate = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
     const baseParams: unknown[] = [];
     const clause = filters(request, baseParams);
-    const clone = () => [...baseParams];
-    const [unassigned, mine, allActive, due, closed, collected, counts, owners, users] = await Promise.all([
-      queryOpsDb(`${SELECT} FROM ops_collection_cases c WHERE c.status='unassigned' ${clause} ORDER BY c.created_at ASC LIMIT 200`, clone()),
-      queryOpsDb(`${SELECT} FROM ops_collection_cases c WHERE c.assigned_to=$${baseParams.length + 1} AND c.status IN ('assigned','follow_up_pending','awaiting_payment_confirmation','paused') ${clause} ORDER BY c.next_attempt_at ASC NULLS LAST`, [...clone(), session.email]),
-      session.role === 'admin'
-        ? queryOpsDb(`${SELECT} FROM ops_collection_cases c WHERE c.status IN ('unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused') ${clause} ORDER BY c.next_attempt_at ASC NULLS LAST, c.created_at ASC LIMIT 200`, clone())
-        : Promise.resolve({ rows: [] }),
-      queryOpsDb(`${SELECT} FROM ops_collection_cases c WHERE c.assigned_to=$${baseParams.length + 1} AND c.status IN ('assigned','follow_up_pending','awaiting_payment_confirmation') AND c.next_attempt_at<=NOW() ${clause} ORDER BY c.next_attempt_at ASC`, [...clone(), session.email]),
-      queryOpsDb(`${SELECT} FROM ops_collection_cases c WHERE c.status IN ('exhausted','canceled','completed_by_admin','closed_by_admin') ${clause} ORDER BY c.updated_at DESC LIMIT 200`, clone()),
-      queryOpsDb(`${SELECT} FROM ops_collection_cases c WHERE c.status='collected' ${clause} ORDER BY c.collected_at DESC LIMIT 200`, clone()),
+    const viewParams = [...baseParams];
+    const selectedView = viewQuery(view, session, viewParams);
+    const [total, counts, owners, users] = await Promise.all([
+      queryOpsDb(`SELECT COUNT(*)::int AS total FROM ops_collection_cases c WHERE ${selectedView.where} ${clause}`, viewParams),
       queryOpsDb(`SELECT COUNT(*) FILTER(WHERE status='unassigned') unassigned,
         COUNT(*) FILTER(WHERE assigned_to=$1 AND status IN ('assigned','follow_up_pending','awaiting_payment_confirmation','paused')) mine,
         COUNT(*) FILTER(WHERE assigned_to=$1 AND status IN ('assigned','follow_up_pending','awaiting_payment_confirmation') AND next_attempt_at<=NOW()) due,
@@ -65,11 +108,27 @@ export async function GET(request: NextRequest) {
         ? queryOpsDb('SELECT id, email, role FROM ops_users ORDER BY email ASC')
         : Promise.resolve({ rows: [] }),
     ]);
-    const decorate = (rows: any[]) => rows.map(row => ({ ...row, chargebeeUrl: chargebeeProfileUrl(row.subscription_id, row.customer_id) }));
+    const totalRecords = Number(total.rows[0]?.total || 0);
+    const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
+    const page = Math.min(pageCandidate, totalPages);
+    const offset = (page - 1) * PAGE_SIZE;
+    const recordParams = [...viewParams, PAGE_SIZE, offset];
+    const records = await queryOpsDb(
+      `${SELECT}
+       FROM ops_collection_cases c
+       WHERE ${selectedView.where} ${clause}
+       ORDER BY ${selectedView.order}
+       LIMIT $${recordParams.length - 1} OFFSET $${recordParams.length}`,
+      recordParams
+    );
+    const decoratedRecords = records.rows.map(row => ({
+      ...row,
+      chargebeeUrl: chargebeeProfileUrl(row.subscription_id, row.customer_id),
+    }));
     return NextResponse.json({
       success: true, agentEmail: session.email, viewerRole: session.role, users: users.rows,
-      unassigned: decorate(unassigned.rows), mine: decorate(mine.rows), allActive: decorate(allActive.rows), due: decorate(due.rows),
-      closed: decorate(closed.rows), collected: decorate(collected.rows),
+      records: decoratedRecords,
+      pagination: { page, pageSize: PAGE_SIZE, totalRecords, totalPages },
       counts: counts.rows[0], owners: owners.rows.map(row => row.assigned_to),
     });
   } catch (error: any) {

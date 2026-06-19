@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, BadgeDollarSign, CalendarClock, CheckCircle2, ChevronDown, ChevronUp,
+  ArrowLeft, BadgeDollarSign, CalendarClock, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
   CircleDollarSign, Clock3, ExternalLink, FileText, Inbox, Loader2, LogOut, Moon,
   PhoneCall, RefreshCw, Search, Sun, UserCheck, Voicemail, X,
 } from 'lucide-react';
@@ -17,6 +17,7 @@ import {
 import type { AdminQueueAction } from '@/lib/adminQueueActions';
 
 type View = 'unassigned' | 'mine' | 'all' | 'due' | 'closed' | 'collected';
+type Pagination = { page: number; pageSize: number; totalRecords: number; totalPages: number };
 type CollectionCase = {
   id: number; customer_id: string | null; customer_name: string | null; customer_email: string | null;
   customer_phone: string | null; subscription_id: string | null; subscription_status: string | null;
@@ -55,7 +56,9 @@ export default function CollectionsPage() {
   const [agentEmail, setAgentEmail] = useState('');
   const [viewerRole, setViewerRole] = useState('');
   const [users, setUsers] = useState<OpsUserOption[]>([]);
-  const [queues, setQueues] = useState<Record<View, CollectionCase[]>>({ unassigned: [], mine: [], all: [], due: [], closed: [], collected: [] });
+  const [records, setRecords] = useState<CollectionCase[]>([]);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState<Pagination>({ page: 1, pageSize: 50, totalRecords: 0, totalPages: 1 });
   const [counts, setCounts] = useState<any>({});
   const [owners, setOwners] = useState<string[]>([]);
   const [selected, setSelected] = useState<CollectionCase | null>(null);
@@ -86,7 +89,7 @@ export default function CollectionsPage() {
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ view, page: String(page) });
       if (search.trim()) params.set('search', search.trim());
       if (status !== 'all') params.set('status', status);
       if (owner !== 'all') params.set('owner', owner);
@@ -100,12 +103,15 @@ export default function CollectionsPage() {
       if (!res.ok) throw new Error(data.error || 'Could not load collections.');
       setAgentEmail(data.agentEmail); setViewerRole(data.viewerRole || ''); setUsers(data.users || []);
       setCounts(data.counts || {}); setOwners(data.owners || []);
-      const nextQueues = { unassigned: data.unassigned || [], mine: data.mine || [], all: data.allActive || [], due: data.due || [], closed: data.closed || [], collected: data.collected || [] };
-      setQueues(nextQueues);
-      if (selected) setSelected(Object.values(nextQueues).flat().find(item => item.id === selected.id) || null);
+      const nextRecords = data.records || [];
+      const nextPagination = data.pagination || { page: 1, pageSize: 50, totalRecords: 0, totalPages: 1 };
+      setRecords(nextRecords);
+      setPagination(nextPagination);
+      if (nextPagination.page !== page) setPage(nextPagination.page);
+      if (selected) setSelected(nextRecords.find((item: CollectionCase) => item.id === selected.id) || null);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
-  }, [search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate, selected?.id]);
+  }, [view, page, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate, selected?.id]);
 
   useEffect(() => {
     void load();
@@ -113,7 +119,6 @@ export default function CollectionsPage() {
     return () => window.clearInterval(timer);
   }, [load]);
 
-  const records = queues[view];
   const isAdmin = viewerRole === 'admin';
   const tabs = [
     ['unassigned','Unassigned',Inbox,counts.unassigned || 0],
@@ -128,7 +133,7 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     setSelectedIds([]);
-  }, [view, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate]);
+  }, [view, page, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate]);
 
   async function mutate(action: string, body: any = {}, target: CollectionCase | null = selected) {
     if (!target) return;
@@ -141,8 +146,13 @@ export default function CollectionsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Update failed.');
       setOutcome(null); setNotes(''); setCollected(false); setClaimedAmount(''); setReasonCategory('');
-      await load();
-      if (action === 'claim') setView('mine');
+      if (action === 'claim') {
+        setSelected(null);
+        setPage(1);
+        setView('mine');
+      } else {
+        await load();
+      }
     } catch (e: any) { setError(e.message); }
     finally { setWorking(false); }
   }
@@ -206,19 +216,19 @@ export default function CollectionsPage() {
 
       <main className="collections-main">
         <div className="collections-tabs">
-          {tabs.map(([id,label,Icon,count]) => <button key={id} onClick={() => { setView(id); setSelected(null); }} className="ops-tab" data-active={view===id}><Icon size={15}/>{label}{count !== '' && <span>{count}</span>}</button>)}
+          {tabs.map(([id,label,Icon,count]) => <button key={id} onClick={() => { setView(id); setPage(1); setSelected(null); }} className="ops-tab" data-active={view===id}><Icon size={15}/>{label}{count !== '' && <span>{count}</span>}</button>)}
         </div>
 
         <section className="collections-filters">
-          <label className="collections-search"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search customer, case, invoice, or subscription"/></label>
-          <select value={status} onChange={e=>setStatus(e.target.value)}>{STATUS_OPTIONS.map(v=><option key={v} value={v}>{v==='all'?'All statuses':humanize(v)}</option>)}</select>
-          <select value={owner} onChange={e=>setOwner(e.target.value)}><option value="all">All owners</option>{owners.map(v=><option key={v} value={v}>{v}</option>)}</select>
-          <select value={attempt} onChange={e=>setAttempt(e.target.value)}><option value="all">Any attempt</option><option value="0">Not attempted</option><option value="1">Attempt 1</option><option value="2">Attempt 2</option><option value="3">Attempt 3</option></select>
-          <input type="number" min="0" value={minAmount} onChange={e=>setMinAmount(e.target.value)} placeholder="Min $"/>
-          <input type="number" min="0" value={maxAmount} onChange={e=>setMaxAmount(e.target.value)} placeholder="Max $"/>
-          <input aria-label="Created from" type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)}/>
-          <input aria-label="Created through" type="date" value={toDate} onChange={e=>setToDate(e.target.value)}/>
-          <button onClick={()=>{setSearch('');setStatus('all');setOwner('all');setAttempt('all');setMinAmount('');setMaxAmount('');setFromDate('');setToDate('');}} className="ops-secondary-button">Reset</button>
+          <label className="collections-search"><Search size={16}/><input value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} placeholder="Search customer, case, invoice, or subscription"/></label>
+          <select value={status} onChange={e=>{setStatus(e.target.value);setPage(1);}}>{STATUS_OPTIONS.map(v=><option key={v} value={v}>{v==='all'?'All statuses':humanize(v)}</option>)}</select>
+          <select value={owner} onChange={e=>{setOwner(e.target.value);setPage(1);}}><option value="all">All owners</option>{owners.map(v=><option key={v} value={v}>{v}</option>)}</select>
+          <select value={attempt} onChange={e=>{setAttempt(e.target.value);setPage(1);}}><option value="all">Any attempt</option><option value="0">Not attempted</option><option value="1">Attempt 1</option><option value="2">Attempt 2</option><option value="3">Attempt 3</option></select>
+          <input type="number" min="0" value={minAmount} onChange={e=>{setMinAmount(e.target.value);setPage(1);}} placeholder="Min $"/>
+          <input type="number" min="0" value={maxAmount} onChange={e=>{setMaxAmount(e.target.value);setPage(1);}} placeholder="Max $"/>
+          <input aria-label="Created from" type="date" value={fromDate} onChange={e=>{setFromDate(e.target.value);setPage(1);}}/>
+          <input aria-label="Created through" type="date" value={toDate} onChange={e=>{setToDate(e.target.value);setPage(1);}}/>
+          <button onClick={()=>{setSearch('');setStatus('all');setOwner('all');setAttempt('all');setMinAmount('');setMaxAmount('');setFromDate('');setToDate('');setPage(1);}} className="ops-secondary-button">Reset</button>
         </section>
 
         {error && <div className="collections-error">{error}</div>}
@@ -237,6 +247,16 @@ export default function CollectionsPage() {
                </div>
                <div className="collection-row-amount"><strong>{money(item.total_amount_due,item.currency_code)}</strong><small>#{item.id}</small>{view==='unassigned'&&<button onClick={e=>{e.stopPropagation();setSelected(item);void mutate('claim',{},item);}} className="ops-primary-button">Claim</button>}</div>
              </article>)}
+            <nav className="collections-pagination" aria-label="Collections pagination">
+              <div>
+                <strong>Page {pagination.page} of {pagination.totalPages}</strong>
+                <span>{pagination.totalRecords === 0 ? 'Showing 0 records' : `Showing ${(pagination.page - 1) * pagination.pageSize + 1}-${Math.min(pagination.page * pagination.pageSize, pagination.totalRecords)} of ${pagination.totalRecords}`}</span>
+              </div>
+              <div>
+                <button type="button" className="ops-secondary-button" disabled={pagination.page <= 1 || loading} onClick={()=>{setSelected(null);setPage(current=>Math.max(1,current-1));}}><ChevronLeft size={15}/>Previous</button>
+                <button type="button" className="ops-secondary-button" disabled={pagination.page >= pagination.totalPages || loading} onClick={()=>{setSelected(null);setPage(current=>Math.min(pagination.totalPages,current+1));}}>Next<ChevronRight size={15}/></button>
+              </div>
+            </nav>
           </section>
 
           {selected && <aside className="collections-detail">
