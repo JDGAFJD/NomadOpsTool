@@ -4,7 +4,7 @@ import { queryOpsDb } from '@/lib/opsDb';
 import type { ChargebeeWebhookPayload } from '@/lib/chargebeeWebhooks';
 import { ChargebeeService } from '@/lib/services/ChargebeeService';
 
-export const COLLECTIONS_SLACK_CHANNEL = 'C09EZLGDMND';
+export const COLLECTIONS_SLACK_CHANNEL = 'C09BSKCL2S3';
 export const COLLECTIONS_ACTIVE_STATUSES = [
   'unassigned',
   'assigned',
