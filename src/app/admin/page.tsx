@@ -8,7 +8,11 @@ export default function AdminPage() {
     freescout_api_url: '',
     freescout_api_key: '',
     callback_freescout_mailbox_id: '',
+    twilio_account_sid: '',
+    twilio_api_key_sid: '',
+    twilio_api_key_secret: '',
   });
+  const [configured, setConfigured] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -21,9 +25,13 @@ export default function AdminPage() {
         if (data.settings) {
           setFormData({
             freescout_api_url: data.settings.freescout_api_url || '',
-            freescout_api_key: data.settings.freescout_api_key || '',
+            freescout_api_key: '',
             callback_freescout_mailbox_id: data.settings.callback_freescout_mailbox_id || '',
+            twilio_account_sid: '',
+            twilio_api_key_sid: '',
+            twilio_api_key_secret: '',
           });
+          setConfigured(data.configured || {});
         }
       } catch (err) {
         console.error(err);
@@ -98,7 +106,7 @@ export default function AdminPage() {
             <input 
               type="password" 
               className="input-field" 
-              placeholder="Enter your API key"
+              placeholder={configured.freescout_api_key ? 'Configured - enter only to replace' : 'Enter your API key'}
               value={formData.freescout_api_key}
               onChange={(e) => setFormData({...formData, freescout_api_key: e.target.value})}
             />
@@ -124,11 +132,24 @@ export default function AdminPage() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
             <ShieldAlert size={24} color="var(--text-muted)" />
-            <h2 style={{ margin: 0, color: 'var(--text-secondary)' }}>Future Integrations</h2>
+            <h2 style={{ margin: 0, color: 'var(--text-secondary)' }}>Twilio Call Verification</h2>
           </div>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '32px' }}>
-            Placeholders for Chargebee, ThingSpace, Shopify, and ShipStation will appear here in Phase 2.
-          </p>
+          {[
+            ['twilio_account_sid', 'Account SID'],
+            ['twilio_api_key_sid', 'API Key SID'],
+            ['twilio_api_key_secret', 'API Key Secret'],
+          ].map(([key, label]) => (
+            <div key={key} style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '14px' }}>{label}</label>
+              <input
+                type="password"
+                className="input-field"
+                placeholder={configured[key] ? 'Configured - enter only to replace' : `Enter Twilio ${label}`}
+                value={formData[key as keyof typeof formData]}
+                onChange={(e) => setFormData({...formData, [key]: e.target.value})}
+              />
+            </div>
+          ))}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <button type="submit" className="btn btn-primary" disabled={saving}>

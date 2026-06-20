@@ -822,7 +822,7 @@ button {
 .collections-tabs { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 16px; }
 .collections-tabs button { padding: 10px 14px; display: flex; align-items: center; gap: 7px; font-weight: 800; white-space: nowrap; }
 .collections-tabs button span { background: var(--surface-200); padding: 2px 7px; border-radius: 999px; font-size: 11px; }
-.collections-filters { display: grid; grid-template-columns: minmax(260px,1fr) repeat(4,minmax(130px,auto)) 90px 90px 135px 135px auto; gap: 9px; padding: 13px; border: 1px solid var(--ops-card-border); background: var(--ops-card-bg); border-radius: 8px; margin-bottom: 16px; }
+.collections-filters { display: grid; grid-template-columns: minmax(260px,1fr) repeat(5,minmax(130px,auto)) 90px 90px 135px 135px auto; gap: 9px; padding: 13px; border: 1px solid var(--ops-card-border); background: var(--ops-card-bg); border-radius: 8px; margin-bottom: 16px; }
 .collections-filters input,.collections-filters select { min-width: 0; padding: 10px 11px; }
 .collections-search { position: relative; display: flex; align-items: center; }
 .collections-search svg { position: absolute; left: 11px; color: var(--ops-text-muted); }
@@ -916,6 +916,21 @@ button {
 .collection-email-job-actions { display: flex; align-items: start; gap: 4px; }
 .collection-email-job-actions button { width: 28px; height: 28px; display: grid; place-items: center; color: var(--ops-text); background: transparent; border: 1px solid var(--border); border-radius: 6px; }
 .collection-email-job-actions button:disabled { opacity: .5; }
+.call-verification-badge { width: fit-content; display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border: 1px solid var(--border); border-radius: 999px; color: var(--ops-text-muted); background: var(--surface-200); font-size: 10px; font-weight: 900; text-transform: uppercase; }
+.call-verification-badge.is-verified { color: #059669; border-color: rgba(5,150,105,.3); background: rgba(5,150,105,.1); }
+.call-verification-badge.is-pending { color: #d97706; border-color: rgba(217,119,6,.3); background: rgba(217,119,6,.1); }
+.call-verification-badge.is-unverified,.call-verification-badge.is-outcome_mismatch { color: #dc2626; border-color: rgba(220,38,38,.3); background: rgba(220,38,38,.1); }
+.call-verification-panel { padding: 12px; display: grid; gap: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-200); }
+.call-verification-panel.is-unverified,.call-verification-panel.is-outcome_mismatch { border-color: rgba(220,38,38,.35); background: rgba(220,38,38,.07); }
+.call-verification-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.call-verification-head button { padding: 6px 8px; display: inline-flex; align-items: center; gap: 5px; color: var(--ops-text); background: transparent; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; font-weight: 800; }
+.call-verification-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.call-verification-grid div { min-width: 0; }
+.call-verification-grid small,.call-verification-grid strong { display: block; overflow-wrap: anywhere; }
+.call-verification-grid small { color: var(--ops-text-muted); font-size: 9px; font-weight: 900; text-transform: uppercase; }
+.call-verification-grid strong { margin-top: 3px; font-size: 11px; }
+.call-verification-panel p { margin: 0; display: flex; align-items: start; gap: 5px; color: var(--ops-text-muted); font-size: 11px; line-height: 1.4; }
+.call-verification-panel p.is-error { color: #dc2626; }
 
 /* Shared admin queue controls */
 .admin-select-all {
@@ -1185,6 +1200,7 @@ button {
   .collections-pagination { align-items: stretch; flex-direction: column; }
   .collections-pagination > div { justify-content: space-between; }
   .collections-pagination button { flex: 1; min-width: 0; }
+  .call-verification-grid { grid-template-columns: 1fr; }
   .collection-email-tray { right: 10px; bottom: 10px; width: calc(100vw - 20px); }
   .admin-queue-toolbar { align-items: stretch; flex-direction: column; }
   .admin-queue-toolbar > div:first-child { min-width: 0; }

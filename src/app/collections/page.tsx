@@ -16,6 +16,7 @@ import {
   type OpsUserOption,
 } from '@/components/AdminQueueControls';
 import type { AdminQueueAction } from '@/lib/adminQueueActions';
+import { CallVerificationDetails, VerificationBadge, type CallVerificationRecord } from '@/components/CallVerificationStatus';
 
 type View = 'unassigned' | 'mine' | 'all' | 'due' | 'closed' | 'collected';
 type Pagination = { page: number; pageSize: number; totalRecords: number; totalPages: number };
@@ -36,6 +37,7 @@ type CollectionCase = {
   due_now: boolean; age_seconds: number | string; sla_breached: boolean;
   invoices: any[]; attempts: any[]; events: any[];
   admin_disposition?: string | null; admin_actor?: string | null; admin_note?: string | null; admin_action_at?: string | null;
+  verification?: CallVerificationRecord | null;
 };
 
 const STATUS_OPTIONS = ['all','unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused','collected','exhausted','canceled','completed_by_admin','closed_by_admin'];
@@ -104,6 +106,10 @@ export default function CollectionsPage() {
   const [jobsCollapsed, setJobsCollapsed] = useState(false);
   const [jobWorking, setJobWorking] = useState<number | null>(null);
   const [requestKey, setRequestKey] = useState('');
+  const [verificationFilter, setVerificationFilter] = useState('all');
+  const [phoneSource, setPhoneSource] = useState('on_file');
+  const [calledPhone, setCalledPhone] = useState('');
+  const [verificationWorking, setVerificationWorking] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [adminAction, setAdminAction] = useState<AdminQueueAction | null>(null);
   const [adminTargetIds, setAdminTargetIds] = useState<number[]>([]);
@@ -138,6 +144,7 @@ export default function CollectionsPage() {
       if (maxAmount) params.set('maxAmount', maxAmount);
       if (fromDate) params.set('from', fromDate);
       if (toDate) params.set('to', toDate);
+      if (verificationFilter !== 'all') params.set('verification', verificationFilter);
       const res = await fetch(`/api/ops/collections/queue?${params}`, { cache: 'no-store', signal: controller.signal });
       const data = await res.json();
       if (requestId !== requestIdRef.current) return [];
@@ -162,7 +169,7 @@ export default function CollectionsPage() {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate]);
+  }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate, verificationFilter]);
 
   const loadEmailJobs = useCallback(async () => {
     try {
@@ -210,7 +217,7 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     setSelectedIds([]);
-  }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate]);
+  }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate, verificationFilter]);
 
   async function mutate(action: string, body: any = {}, target: CollectionCase | null = selected) {
     if (!target) return;
@@ -230,6 +237,8 @@ export default function CollectionsPage() {
       if (!res.ok) throw new Error(data.error || 'Update failed.');
       setOutcome(null); setNotes(''); setCollected(false); setClaimedAmount(''); setReasonCategory('');
       setRequestKey('');
+      setCalledPhone('');
+      if (data.verification) setAdminNotice('Attempt saved. Twilio call verification is pending.');
       if (action === 'claim') {
         selectCase(null);
         setPage(1);
@@ -253,8 +262,25 @@ export default function CollectionsPage() {
   const openOutcome = (nextOutcome: 'completed'|'left_voicemail'|'no_answer') => {
     setOutcomeError('');
     setRequestKey(nextOutcome === 'completed' ? '' : crypto.randomUUID());
+    setPhoneSource('on_file');
+    setCalledPhone('');
     setOutcome(nextOutcome);
   };
+
+  async function recheckVerification(id: number) {
+    setVerificationWorking(id);
+    try {
+      const res = await fetch(`/api/ops/call-verifications/${id}`, { method: 'PATCH' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not recheck Twilio.');
+      setAdminNotice('Twilio verification was queued for another check.');
+      await load();
+    } catch (e: any) {
+      setError(e.message || 'Could not recheck Twilio.');
+    } finally {
+      setVerificationWorking(null);
+    }
+  }
 
   async function updateEmailJob(id: number, action: 'retry'|'dismiss') {
     setJobWorking(id);
@@ -367,11 +393,20 @@ export default function CollectionsPage() {
             <option value="newest">Newest first</option>
           </select>
           <select value={attempt} onChange={e=>{setAttempt(e.target.value);setPage(1);}}><option value="all">Any attempt</option><option value="0">Not attempted</option><option value="1">Attempt 1</option><option value="2">Attempt 2</option><option value="3">Attempt 3</option></select>
+          <select value={verificationFilter} onChange={e=>{setVerificationFilter(e.target.value);setPage(1);}}>
+            <option value="all">All verification</option>
+            <option value="pending">Pending verification</option>
+            <option value="verified">Verified</option>
+            <option value="unverified">Unable to verify</option>
+            <option value="outcome_mismatch">Outcome mismatch</option>
+            {isAdmin&&<option value="needs_review">Needs review</option>}
+            <option value="not_tracked">Not tracked</option>
+          </select>
           <input type="number" min="0" value={minAmount} onChange={e=>{setMinAmount(e.target.value);setPage(1);}} placeholder="Min $"/>
           <input type="number" min="0" value={maxAmount} onChange={e=>{setMaxAmount(e.target.value);setPage(1);}} placeholder="Max $"/>
           <input aria-label="Created from" type="date" value={fromDate} onChange={e=>{setFromDate(e.target.value);setPage(1);}}/>
           <input aria-label="Created through" type="date" value={toDate} onChange={e=>{setToDate(e.target.value);setPage(1);}}/>
-          <button onClick={()=>{setSearch('');setStatus('all');setOwner('all');setAttempt('all');setMinAmount('');setMaxAmount('');setFromDate('');setToDate('');setPage(1);}} className="ops-secondary-button">Reset</button>
+          <button onClick={()=>{setSearch('');setStatus('all');setOwner('all');setAttempt('all');setVerificationFilter('all');setMinAmount('');setMaxAmount('');setFromDate('');setToDate('');setPage(1);}} className="ops-secondary-button">Reset</button>
         </section>
 
         {error && <div className="collections-error">{error}</div>}
@@ -391,7 +426,7 @@ export default function CollectionsPage() {
                {selectableRecords.some(record=>record.id===item.id)&&<input className="admin-row-checkbox" type="checkbox" checked={selectedIds.includes(item.id)} onClick={e=>e.stopPropagation()} onChange={()=>toggleSelected(item.id)} aria-label={`Select collection case ${item.id}`}/>}
                <div className="collection-row-main">
                  <div className="collection-row-heading"><strong>{item.customer_name || item.customer_email || item.customer_id || 'Unknown customer'}</strong><span>{humanize(item.status)}</span>{item.sla_breached&&<b className="collection-sla-badge">48h SLA breached</b>}{item.reopened_count>0&&<em>Reopened {item.reopened_count}x</em>}</div>
-                 <div className="collection-row-meta"><span>{item.subscription_id || 'Invoice-only case'}</span><span>Attempt {Number(item.current_attempt)+1} of 3</span><span><Clock3 size={12}/>{when(item.next_attempt_at)}</span><span className={item.sla_breached?'collection-age is-breached':'collection-age'}>Age: {ageLabel(item.age_seconds)}</span></div>
+                 <div className="collection-row-meta"><span>{item.subscription_id || 'Invoice-only case'}</span><span>Attempt {Number(item.current_attempt)+1} of 3</span><span><Clock3 size={12}/>{when(item.next_attempt_at)}</span><span className={item.sla_breached?'collection-age is-breached':'collection-age'}>Age: {ageLabel(item.age_seconds)}</span>{(item.attempts?.length>0||item.verification)&&<VerificationBadge verification={item.verification}/>}</div>
                </div>
                <div className="collection-row-amount"><strong>{money(item.total_amount_due,item.currency_code)}</strong><small>#{item.id}</small>{view==='unassigned'&&<button onClick={e=>{e.stopPropagation();selectCase(item);void mutate('claim',{},item);}} className="ops-primary-button">Claim</button>}</div>
              </article>)}
@@ -428,7 +463,7 @@ export default function CollectionsPage() {
               <section><button className="collections-section-toggle" onClick={()=>setExpandedInvoice(!expandedInvoice)}><span>Invoices ({(liveInvoices||selected.invoices||[]).length})</span>{expandedInvoice?<ChevronUp size={16}/>:<ChevronDown size={16}/>}</button>
                 {expandedInvoice&&<div className="collections-invoices">{(liveInvoices||selected.invoices||[]).map((invoice:any)=><div key={invoice.id||invoice.invoice_id}><strong>{invoice.id||invoice.invoice_id}</strong><span>{invoice.status||invoice.invoice_status||'Unknown'}</span><span>{money(invoice.amount_due??0,invoice.currency_code||selected.currency_code)}</span></div>)}</div>}
               </section>
-              <section><h3>Attempt history</h3>{selected.attempts?.length?<div className="collections-timeline">{selected.attempts.map((a:any)=><div key={a.id}><strong>Attempt {a.attempt_number}: {humanize(a.outcome)}</strong><span>{a.agent_email} · {when(a.created_at)}{a.email_delivery_status?` · Email ${humanize(a.email_delivery_status)}`:''}</span><p>{a.notes}</p>{a.freeScoutUrl&&<a className="collection-attempt-ticket" href={a.freeScoutUrl} target="_blank" rel="noreferrer">FreeScout Ticket #{a.freescout_conversation_id} <ExternalLink size={12}/></a>}{a.email_delivery_error&&<small className="collection-email-error">{a.email_delivery_error}</small>}</div>)}</div>:<p className="collections-muted">No attempts recorded.</p>}</section>
+              <section><h3>Attempt history</h3>{selected.attempts?.length?<div className="collections-timeline">{selected.attempts.map((a:any)=><div key={a.id}><strong>Attempt {a.attempt_number}: {humanize(a.outcome)}</strong><span>{a.agent_email} · {when(a.created_at)}{a.email_delivery_status?` · Email ${humanize(a.email_delivery_status)}`:''}</span><p>{a.notes}</p>{a.freeScoutUrl&&<a className="collection-attempt-ticket" href={a.freeScoutUrl} target="_blank" rel="noreferrer">FreeScout Ticket #{a.freescout_conversation_id} <ExternalLink size={12}/></a>}{a.email_delivery_error&&<small className="collection-email-error">{a.email_delivery_error}</small>}<CallVerificationDetails verification={a.verification} isAdmin={isAdmin} working={verificationWorking===a.verification?.id} onRecheck={recheckVerification}/></div>)}</div>:<p className="collections-muted">No attempts recorded.</p>}</section>
               {selected.status==='unassigned'&&<button onClick={()=>void mutate('claim')} disabled={working} className="ops-primary-button collections-full">Claim Collection Case</button>}
               {selected.assigned_to===agentEmail&&['assigned','follow_up_pending','awaiting_payment_confirmation'].includes(selected.status)&&<div className="collections-outcomes">
                 <button onClick={()=>openOutcome('completed')}><CheckCircle2 size={15}/>Completed</button>
@@ -450,8 +485,10 @@ export default function CollectionsPage() {
         {outcome==='completed'&&<label className="collections-check"><input type="checkbox" checked={collected} onChange={e=>setCollected(e.target.checked)}/> Were you able to collect payment?</label>}
         {outcome==='completed'&&collected&&<label><span>Amount collected</span><input type="number" min="0.01" step="0.01" value={claimedAmount} onChange={e=>setClaimedAmount(e.target.value)} placeholder="0.00"/></label>}
         {outcome==='completed'&&<label><span>{collected?'Why was payment late?':'Why were you unable to collect?'}</span><select value={reasonCategory} onChange={e=>setReasonCategory(e.target.value)}><option value="">Select a reason</option>{REASONS.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>}
+        <label><span>Which number did you call?</span><select value={phoneSource} onChange={e=>setPhoneSource(e.target.value)}><option value="on_file">Number on file: {selected.customer_phone||'Unavailable'}</option><option value="different">Different number</option></select></label>
+        {phoneSource==='different'&&<label><span>Called number</span><input value={calledPhone} onChange={e=>setCalledPhone(e.target.value)} placeholder="Enter the number dialed"/></label>}
         <label><span>Required notes</span><textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Document what happened, customer commitments, and next steps."/></label>
-        <div className="collections-modal-actions"><button disabled={working} onClick={()=>{setOutcome(null);setOutcomeError('');setRequestKey('');}} className="ops-secondary-button">Cancel</button><button disabled={working||!notes.trim()||(outcome==='completed'&&!reasonCategory)||(collected&&!claimedAmount)} onClick={()=>void mutate(outcome,{notes,collected,claimedAmount,reasonCategory,requestKey})} className="ops-primary-button">{working?(outcome==='completed'?'Saving...':'Queuing...'):(outcome==='completed'?'Save Attempt':'Save and continue')}</button></div>
+        <div className="collections-modal-actions"><button disabled={working} onClick={()=>{setOutcome(null);setOutcomeError('');setRequestKey('');}} className="ops-secondary-button">Cancel</button><button disabled={working||!notes.trim()||(outcome==='completed'&&!reasonCategory)||(collected&&!claimedAmount)||(phoneSource==='on_file'&&!selected.customer_phone)||(phoneSource==='different'&&calledPhone.replace(/\D/g,'').length<7)} onClick={()=>void mutate(outcome,{notes,collected,claimedAmount,reasonCategory,requestKey,phoneSource,calledPhone})} className="ops-primary-button">{working?(outcome==='completed'?'Saving...':'Queuing...'):(outcome==='completed'?'Save Attempt':'Save and continue')}</button></div>
       </div></div>}
       {emailJobs.length>0&&<aside className={`collection-email-tray ${jobsCollapsed?'is-collapsed':''}`}>
         <button className="collection-email-tray-head" onClick={()=>setJobsCollapsed(value=>!value)} aria-expanded={!jobsCollapsed}>

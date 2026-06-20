@@ -3,6 +3,7 @@ import { verifyAuth } from '@/lib/auth';
 import { chargebeeProfileUrl, ensureCollectionsTables } from '@/lib/collections';
 import { queryOpsDb } from '@/lib/opsDb';
 import { FreeScoutService } from '@/lib/services/FreeScoutService';
+import { ensureCallVerificationTable } from '@/lib/callVerification';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,7 @@ function filters(request: NextRequest, params: unknown[]) {
   const maxAmount = Number(request.nextUrl.searchParams.get('maxAmount'));
   const from = request.nextUrl.searchParams.get('from');
   const to = request.nextUrl.searchParams.get('to');
+  const verification = request.nextUrl.searchParams.get('verification');
   if (search) {
     params.push(`%${search.toLowerCase()}%`);
     const p = params.length;
@@ -35,6 +37,28 @@ function filters(request: NextRequest, params: unknown[]) {
   if (Number.isFinite(maxAmount) && maxAmount > 0) { params.push(Math.round(maxAmount * 100)); clauses.push(`c.total_amount_due <= $${params.length}`); }
   if (from) { params.push(from); clauses.push(`c.created_at >= $${params.length}::date`); }
   if (to) { params.push(to); clauses.push(`c.created_at < $${params.length}::date + INTERVAL '1 day'`); }
+  if (verification && verification !== 'all') {
+    if (verification === 'needs_review') {
+      clauses.push(`EXISTS (
+        SELECT 1 FROM ops_collection_attempts a
+        JOIN ops_call_verifications v ON v.collection_attempt_id=a.id
+        WHERE a.case_id=c.id AND v.state IN ('unverified','outcome_mismatch')
+      )`);
+    } else if (verification === 'not_tracked') {
+      clauses.push(`NOT EXISTS (
+        SELECT 1 FROM ops_collection_attempts a
+        JOIN ops_call_verifications v ON v.collection_attempt_id=a.id
+        WHERE a.case_id=c.id
+      )`);
+    } else {
+      params.push(verification);
+      clauses.push(`EXISTS (
+        SELECT 1 FROM ops_collection_attempts a
+        JOIN ops_call_verifications v ON v.collection_attempt_id=a.id
+        WHERE a.case_id=c.id AND v.state=$${params.length}
+      )`);
+    }
+  }
   return clauses.length ? ` AND ${clauses.join(' AND ')}` : '';
 }
 
@@ -42,7 +66,18 @@ const SELECT = `SELECT c.*, NOW() >= c.next_attempt_at AS due_now,
   GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() - c.created_at))))::bigint AS age_seconds,
   NOW() > c.created_at + INTERVAL '48 hours' AS sla_breached,
   COALESCE((SELECT json_agg(i ORDER BY i.failure_date DESC) FROM ops_collection_invoices i WHERE i.case_id=c.id), '[]'::json) AS invoices,
-  COALESCE((SELECT json_agg(a ORDER BY a.created_at DESC) FROM ops_collection_attempts a WHERE a.case_id=c.id), '[]'::json) AS attempts,
+  COALESCE((
+    SELECT json_agg(attempt_row ORDER BY attempt_row.created_at DESC)
+    FROM (
+      SELECT a.*, (SELECT row_to_json(v) FROM ops_call_verifications v WHERE v.collection_attempt_id=a.id LIMIT 1) AS verification
+      FROM ops_collection_attempts a WHERE a.case_id=c.id
+    ) attempt_row
+  ), '[]'::json) AS attempts,
+  (
+    SELECT row_to_json(v) FROM ops_collection_attempts a
+    JOIN ops_call_verifications v ON v.collection_attempt_id=a.id
+    WHERE a.case_id=c.id ORDER BY a.created_at DESC LIMIT 1
+  ) AS verification,
   COALESCE((SELECT json_agg(e ORDER BY e.created_at DESC) FROM ops_collection_events e WHERE e.case_id=c.id), '[]'::json) AS events`;
 
 function viewQuery(view: CollectionView, session: any, params: unknown[]) {
@@ -71,6 +106,10 @@ export async function GET(request: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     await ensureCollectionsTables();
+    await ensureCallVerificationTable();
+    if (request.nextUrl.searchParams.get('verification') === 'needs_review' && session.role !== 'admin') {
+      return NextResponse.json({ error: 'Administrator access is required for Needs Review.' }, { status: 403 });
+    }
     const requestedView = request.nextUrl.searchParams.get('view');
     const view: CollectionView = VIEWS.includes(requestedView as CollectionView)
       ? requestedView as CollectionView

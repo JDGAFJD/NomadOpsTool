@@ -1,6 +1,7 @@
 import { after, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { processCollectionEmailJob } from '@/lib/collectionEmailJobs';
+import { createCallVerification, ensureCallVerificationTable, processCallVerification } from '@/lib/callVerification';
 import { ensureCollectionsTables, followUpWindow, nextCollectionWindow } from '@/lib/collections';
 import { logActivity, queryOpsDb, withOpsDbTransaction } from '@/lib/opsDb';
 
@@ -65,6 +66,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
     const notes = String(body.notes || '').trim();
     if (!notes) return NextResponse.json({ error: 'Attempt notes are required.' }, { status: 400 });
+    const phoneSource = String(body.phoneSource || '');
+    const manualPhone = String(body.calledPhone || '').trim();
+    if (!['on_file', 'different'].includes(phoneSource)) {
+      return NextResponse.json({ error: 'Select the number that was called.' }, { status: 400 });
+    }
+    if (phoneSource === 'different' && manualPhone.replace(/\D/g, '').length < 7) {
+      return NextResponse.json({ error: 'Enter a valid called number.' }, { status: 400 });
+    }
+    await ensureCallVerificationTable();
 
     if (MISSED_ACTIONS.includes(action)) {
       const requestKey = String(body.requestKey || '').trim();
@@ -109,6 +119,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         if (row.assigned_to !== session.email) throw new RequestError('Only the case owner can update it.', 403);
         if (Number(row.current_attempt) >= 3) throw new RequestError('This case has exhausted all attempts.', 409);
         if (!row.customer_email) throw new RequestError('Customer email is unavailable.', 400);
+        const selectedPhone = phoneSource === 'on_file' ? row.customer_phone : manualPhone;
+        if (!selectedPhone) throw new RequestError('A called phone number is required.', 400);
 
         const attemptNumber = Number(row.current_attempt) + 1;
         const state = nextCaseState(attemptNumber, false);
@@ -144,6 +156,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
             row.latest_freescout_conversation_id,
           ]
         );
+        const verification = await createCallVerification(client, {
+          workType: 'collection',
+          collectionAttemptId: Number(attempt.rows[0].id),
+          agentEmail: session.email,
+          reportedOutcome: action,
+          selectedPhone,
+          phoneSource,
+        });
         const updated = await client.query(
           `UPDATE ops_collection_cases SET
              status=$1,current_attempt=$2,next_attempt_at=$3,awaiting_amount=NULL,
@@ -160,12 +180,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
             nextAttemptAt: state.nextAttempt?.toISOString() || null,
             emailJobId: Number(job.rows[0].id),
             emailDeliveryStatus: 'queued',
+            calledPhone: selectedPhone,
+            phoneSource,
+            verificationId: verification?.id || null,
+            verificationState: verification ? 'pending' : null,
           })]
         );
         return {
           duplicate: false,
           jobId: Number(job.rows[0].id),
           jobStatus: 'queued',
+          verificationId: verification ? Number(verification.id) : null,
           case: updated.rows[0],
         };
       });
@@ -173,6 +198,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       after(async () => {
         await Promise.allSettled([
           processCollectionEmailJob(queued.jobId),
+          queued.verificationId ? processCallVerification(queued.verificationId) : Promise.resolve(),
           logActivity(session.email, `collection_${action}`, String(id), request),
         ]);
       });
@@ -182,6 +208,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           queued: true,
           duplicate: queued.duplicate,
           job: { id: queued.jobId, status: queued.jobStatus },
+          verification: queued.verificationId ? { id: queued.verificationId, state: 'pending' } : null,
           case: queued.case,
         },
         { status: 202 }
@@ -204,15 +231,26 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (!row) throw new RequestError('Case not found.', 404);
       if (row.assigned_to !== session.email) throw new RequestError('Only the case owner can update it.', 403);
       if (Number(row.current_attempt) >= 3) throw new RequestError('This case has exhausted all attempts.', 409);
+      const selectedPhone = phoneSource === 'on_file' ? row.customer_phone : manualPhone;
+      if (!selectedPhone) throw new RequestError('A called phone number is required.', 400);
 
       const attemptNumber = Number(row.current_attempt) + 1;
       const state = nextCaseState(attemptNumber, collected);
-      await client.query(
+      const attempt = await client.query(
         `INSERT INTO ops_collection_attempts (
            case_id,attempt_number,agent_email,outcome,notes,collected,claimed_amount,reason_category,scheduled_for
-         ) VALUES ($1,$2,$3,'completed',$4,$5,$6,$7,$8)`,
+         ) VALUES ($1,$2,$3,'completed',$4,$5,$6,$7,$8)
+         RETURNING *`,
         [id, attemptNumber, session.email, notes, collected, claimedAmount, reasonCategory, row.next_attempt_at]
       );
+      const verification = await createCallVerification(client, {
+        workType: 'collection',
+        collectionAttemptId: Number(attempt.rows[0].id),
+        agentEmail: session.email,
+        reportedOutcome: 'completed',
+        selectedPhone,
+        phoneSource,
+      });
       const updated = await client.query(
         `UPDATE ops_collection_cases SET status=$1,current_attempt=$2,next_attempt_at=$3,awaiting_amount=$4,
          close_reason=$5,updated_at=NOW() WHERE id=$6 RETURNING *`,
@@ -227,13 +265,23 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           collected,
           claimedAmount,
           reasonCategory,
+          calledPhone: selectedPhone,
+          phoneSource,
+          verificationId: verification?.id || null,
+          verificationState: verification ? 'pending' : null,
           nextAttemptAt: state.nextAttempt?.toISOString() || null,
         })]
       );
-      return updated.rows[0];
+      return { case: updated.rows[0], verificationId: verification ? Number(verification.id) : null };
     });
     await logActivity(session.email, 'collection_completed', String(id), request);
-    return NextResponse.json({ success: true, case: completed });
+    const completedVerificationId = completed.verificationId;
+    if (completedVerificationId) after(() => processCallVerification(completedVerificationId));
+    return NextResponse.json({
+      success: true,
+      case: completed.case,
+      verification: completed.verificationId ? { id: completed.verificationId, state: 'pending' } : null,
+    });
   } catch (error: any) {
     console.error('Collection attempt update failed:', error);
     const status = error instanceof RequestError ? error.status : 500;

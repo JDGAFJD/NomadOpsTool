@@ -15,6 +15,7 @@ import {
   type OpsUserOption,
 } from '@/components/AdminQueueControls';
 import type { AdminQueueAction } from '@/lib/adminQueueActions';
+import { CallVerificationDetails, VerificationBadge, type CallVerificationRecord } from '@/components/CallVerificationStatus';
 
 type QueueTab = 'unassigned' | 'assigned' | 'history';
 const DEPARTMENT_OPTIONS = [
@@ -59,6 +60,7 @@ type CallbackRecord = {
   created_at: string;
   overdue?: boolean;
   events?: any[];
+  verification?: CallVerificationRecord | null;
 };
 
 function humanize(value: string) {
@@ -95,6 +97,10 @@ export default function CallbacksPage() {
   const [timeFilter, setTimeFilter] = useState('all');
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [verificationFilter, setVerificationFilter] = useState('all');
+  const [phoneSource, setPhoneSource] = useState('primary');
+  const [calledPhone, setCalledPhone] = useState('');
+  const [verificationWorking, setVerificationWorking] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [adminAction, setAdminAction] = useState<AdminQueueAction | null>(null);
   const [adminTargetIds, setAdminTargetIds] = useState<number[]>([]);
@@ -123,6 +129,7 @@ export default function CallbacksPage() {
       if (timeFilter !== 'all') params.set('preferredTime', timeFilter);
       if (overdueOnly) params.set('overdue', 'true');
       if (searchTerm.trim()) params.set('search', searchTerm.trim());
+      if (verificationFilter !== 'all') params.set('verification', verificationFilter);
       const res = await fetch(`/api/ops/callbacks/queue?${params.toString()}`, { cache: 'no-store', signal: controller.signal });
       const data = await res.json();
       if (requestId !== requestIdRef.current) return;
@@ -147,7 +154,7 @@ export default function CallbacksPage() {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [scope, departmentFilter, timeFilter, overdueOnly, searchTerm]);
+  }, [scope, departmentFilter, timeFilter, overdueOnly, searchTerm, verificationFilter]);
 
   useEffect(() => {
     void loadQueue();
@@ -158,19 +165,21 @@ export default function CallbacksPage() {
     };
   }, [loadQueue]);
 
-  const mutate = async (record: CallbackRecord, action: string, outcomeNotes?: string) => {
+  const mutate = async (record: CallbackRecord, action: string, outcomeNotes?: string, extra: Record<string, unknown> = {}) => {
     setWorkingId(record.id);
     setError('');
     try {
       const res = await fetch(`/api/ops/callbacks/${record.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, notes: outcomeNotes }),
+        body: JSON.stringify({ action, notes: outcomeNotes, ...extra }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Callback update failed.');
       setOutcome(null);
       setNotes('');
+      setCalledPhone('');
+      if (data.verification) setAdminNotice('Outcome saved. Twilio call verification is pending.');
       await loadQueue();
     } catch (err: any) {
       setError(err.message || 'Callback update failed.');
@@ -183,12 +192,13 @@ export default function CallbacksPage() {
   const isAdmin = viewerRole === 'admin';
   const selectableRecords = tab === 'history' ? [] : records;
   const allVisibleSelected = selectableRecords.length > 0 && selectableRecords.every(record => selectedIds.includes(record.id));
-  const hasActiveFilters = departmentFilter !== 'all' || timeFilter !== 'all' || overdueOnly || Boolean(searchTerm.trim());
+  const hasActiveFilters = departmentFilter !== 'all' || timeFilter !== 'all' || verificationFilter !== 'all' || overdueOnly || Boolean(searchTerm.trim());
   const clearFilters = () => {
     setDepartmentFilter('all');
     setTimeFilter('all');
     setOverdueOnly(false);
     setSearchTerm('');
+    setVerificationFilter('all');
   };
   const snapshot = selected?.account_snapshot || {};
   const latestSubscription = snapshot.subscriptions?.[0];
@@ -197,7 +207,28 @@ export default function CallbacksPage() {
 
   useEffect(() => {
     setSelectedIds([]);
-  }, [tab, scope, departmentFilter, timeFilter, overdueOnly, searchTerm]);
+  }, [tab, scope, departmentFilter, timeFilter, overdueOnly, searchTerm, verificationFilter]);
+
+  const openOutcome = (value: 'completed'|'left_voicemail'|'no_answer') => {
+    setPhoneSource('primary');
+    setCalledPhone('');
+    setOutcome(value);
+  };
+
+  const recheckVerification = async (id: number) => {
+    setVerificationWorking(id);
+    try {
+      const res = await fetch(`/api/ops/call-verifications/${id}`, { method: 'PATCH' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not recheck Twilio.');
+      setAdminNotice('Twilio verification was queued for another check.');
+      await loadQueue();
+    } catch (err: any) {
+      setError(err.message || 'Could not recheck Twilio.');
+    } finally {
+      setVerificationWorking(null);
+    }
+  };
 
   const toggleSelected = (id: number) => {
     setSelectedIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
@@ -288,7 +319,7 @@ export default function CallbacksPage() {
         </div>
 
         <div style={{ marginBottom: 16, padding: 14, border: '1px solid var(--ops-card-border)', background: 'var(--ops-card-bg)', borderRadius: 8, display: 'grid', gap: 12 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) repeat(3, minmax(150px, auto)) auto', gap: 10, alignItems: 'center' }} className="callback-filter-grid">
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) repeat(4, minmax(150px, auto)) auto', gap: 10, alignItems: 'center' }} className="callback-filter-grid">
             <label style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <Search size={16} style={{ position: 'absolute', left: 12, color: 'var(--ops-text-muted)' }} />
               <input
@@ -304,6 +335,15 @@ export default function CallbacksPage() {
             <select value={timeFilter} onChange={event => setTimeFilter(event.target.value)} style={{ padding: 11, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-200)', color: 'var(--ops-text)' }}>
               {TIME_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
+            <select value={verificationFilter} onChange={event=>setVerificationFilter(event.target.value)} style={{ padding: 11, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-200)', color: 'var(--ops-text)' }}>
+              <option value="all">All verification</option>
+              <option value="pending">Pending verification</option>
+              <option value="verified">Verified</option>
+              <option value="unverified">Unable to verify</option>
+              <option value="outcome_mismatch">Outcome mismatch</option>
+              {isAdmin&&<option value="needs_review">Needs review</option>}
+              <option value="not_tracked">Not tracked</option>
+            </select>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 12px', borderRadius: 8, border: '1px solid var(--border)', background: overdueOnly ? 'rgba(239,68,68,0.1)' : 'var(--surface-200)', color: overdueOnly ? '#ef4444' : 'var(--ops-text)', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>
               <input type="checkbox" checked={overdueOnly} onChange={event => setOverdueOnly(event.target.checked)} style={{ accentColor: '#ef4444' }} />
               Overdue only
@@ -317,6 +357,7 @@ export default function CallbacksPage() {
               {searchTerm.trim() && <span style={{ padding: '4px 9px', borderRadius: 999, background: 'var(--primary-light)', color: 'var(--primary)', fontSize: 12, fontWeight: 800 }}>Search: {searchTerm.trim()}</span>}
               {departmentFilter !== 'all' && <span style={{ padding: '4px 9px', borderRadius: 999, background: 'var(--primary-light)', color: 'var(--primary)', fontSize: 12, fontWeight: 800 }}>{humanize(departmentFilter)}</span>}
               {timeFilter !== 'all' && <span style={{ padding: '4px 9px', borderRadius: 999, background: 'var(--primary-light)', color: 'var(--primary)', fontSize: 12, fontWeight: 800 }}>{humanize(timeFilter)}</span>}
+              {verificationFilter !== 'all' && <span style={{ padding: '4px 9px', borderRadius: 999, background: 'var(--primary-light)', color: 'var(--primary)', fontSize: 12, fontWeight: 800 }}>{humanize(verificationFilter)}</span>}
               {overdueOnly && <span style={{ padding: '4px 9px', borderRadius: 999, background: 'rgba(239,68,68,0.12)', color: '#ef4444', fontSize: 12, fontWeight: 800 }}>Overdue</span>}
             </div>
           )}
@@ -365,6 +406,7 @@ export default function CallbacksPage() {
                     <span><Phone size={12} style={{ verticalAlign: -2 }} /> {record.primary_phone}</span>
                     <span><Clock3 size={12} style={{ verticalAlign: -2 }} /> {humanize(record.preferred_time)}</span>
                     <span>Requested {durationFrom(record.created_at)} ago</span>
+                    {(tab==='history'||record.verification)&&<VerificationBadge verification={record.verification}/>}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--ops-text-muted)' }}>
@@ -405,14 +447,15 @@ export default function CallbacksPage() {
                 </div>
 
                 {(selected.events || []).length > 0 && <div><div style={{ color: 'var(--ops-text-muted)', fontSize: 11, fontWeight: 900, textTransform: 'uppercase', marginBottom: 8 }}>Activity</div>{selected.events!.map(event => <div key={event.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}><strong>{humanize(event.event_type)}</strong> by {event.actor_email}<div style={{ color: 'var(--ops-text-muted)', marginTop: 3 }}>{new Date(event.created_at).toLocaleString()}</div></div>)}</div>}
+                {['completed','left_voicemail','no_answer'].includes(selected.status)&&<CallVerificationDetails verification={selected.verification} isAdmin={isAdmin} working={verificationWorking===selected.verification?.id} onRecheck={recheckVerification}/>}
 
                 {selected.status === 'unassigned' && <button onClick={() => void mutate(selected, 'claim')} disabled={workingId === selected.id} className="ops-primary-button" style={{ padding: 12, cursor: 'pointer', fontWeight: 900 }}>Claim Callback</button>}
                 {selected.status === 'assigned' && selected.assigned_to === agentEmail && (
                   <div style={{ display: 'grid', gap: 8 }}>
                     <div className="callback-outcome-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
-                      <button onClick={() => setOutcome('completed')} style={{ padding: 10, borderRadius: 7, border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.1)', color: '#10b981', cursor: 'pointer', fontWeight: 800 }}><CheckCircle2 size={15} /> Completed</button>
-                      <button onClick={() => setOutcome('left_voicemail')} style={{ padding: 10, borderRadius: 7, border: '1px solid rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.1)', color: '#60a5fa', cursor: 'pointer', fontWeight: 800 }}><Voicemail size={15} /> Voicemail</button>
-                      <button onClick={() => setOutcome('no_answer')} style={{ padding: 10, borderRadius: 7, border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', cursor: 'pointer', fontWeight: 800 }}><PhoneCall size={15} /> No Answer</button>
+                      <button onClick={() => openOutcome('completed')} style={{ padding: 10, borderRadius: 7, border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.1)', color: '#10b981', cursor: 'pointer', fontWeight: 800 }}><CheckCircle2 size={15} /> Completed</button>
+                      <button onClick={() => openOutcome('left_voicemail')} style={{ padding: 10, borderRadius: 7, border: '1px solid rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.1)', color: '#60a5fa', cursor: 'pointer', fontWeight: 800 }}><Voicemail size={15} /> Voicemail</button>
+                      <button onClick={() => openOutcome('no_answer')} style={{ padding: 10, borderRadius: 7, border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', cursor: 'pointer', fontWeight: 800 }}><PhoneCall size={15} /> No Answer</button>
                     </div>
                     <button onClick={() => void mutate(selected, 'release')} style={{ padding: 10, borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--ops-text-muted)', cursor: 'pointer', fontWeight: 800 }}><RotateCcw size={15} /> Return to Unassigned</button>
                   </div>
@@ -436,8 +479,16 @@ export default function CallbacksPage() {
           <div style={{ width: '100%', maxWidth: 560, background: 'var(--surface-100)', border: '1px solid var(--border)', borderRadius: 10, padding: 22 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><div><div style={{ color: 'var(--primary)', fontSize: 11, fontWeight: 900, textTransform: 'uppercase' }}>Record Outcome</div><h2 style={{ margin: '5px 0 0' }}>{humanize(outcome)}</h2></div><button onClick={() => setOutcome(null)} className="ops-icon-button" style={{ width: 36, height: 36 }}><X size={17} /></button></div>
             {outcome !== 'completed' && <div style={{ margin: '16px 0', padding: 12, background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.22)', borderRadius: 7, display: 'flex', gap: 9, fontSize: 13, lineHeight: 1.45 }}><Mail size={17} style={{ flexShrink: 0 }} /> Saving this outcome automatically sends a FreeScout email to {selected.customer_email}. If delivery fails, the callback remains assigned.</div>}
+            <label style={{ display:'grid',gap:8,marginTop:16 }}><span style={{fontSize:12,color:'var(--ops-text-muted)',fontWeight:900,textTransform:'uppercase'}}>Which number did you call?</span>
+              <select value={phoneSource} onChange={event=>setPhoneSource(event.target.value)} style={{padding:11,borderRadius:8}}>
+                <option value="primary">Primary: {selected.primary_phone}</option>
+                {selected.secondary_phone&&<option value="secondary">Secondary: {selected.secondary_phone}</option>}
+                <option value="different">Different number</option>
+              </select>
+            </label>
+            {phoneSource==='different'&&<label style={{display:'grid',gap:8,marginTop:12}}><span style={{fontSize:12,color:'var(--ops-text-muted)',fontWeight:900,textTransform:'uppercase'}}>Called number</span><input value={calledPhone} onChange={event=>setCalledPhone(event.target.value)} placeholder="Enter the number dialed" style={{padding:11,borderRadius:8}}/></label>}
             <label style={{ display: 'grid', gap: 8, marginTop: 16 }}><span style={{ fontSize: 12, color: 'var(--ops-text-muted)', fontWeight: 900, textTransform: 'uppercase' }}>Required notes</span><textarea value={notes} onChange={event => setNotes(event.target.value)} placeholder={outcome === 'completed' ? 'Describe the conversation, resolution, commitments, and follow-up.' : 'Record when the call was attempted and what occurred.'} style={{ minHeight: 140, resize: 'vertical', padding: 13, borderRadius: 8 }} /></label>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 9, marginTop: 18 }}><button onClick={() => setOutcome(null)} className="ops-secondary-button" style={{ padding: '10px 14px' }}>Cancel</button><button onClick={() => void mutate(selected, outcome, notes)} disabled={!notes.trim() || workingId === selected.id} className="ops-primary-button" style={{ padding: '10px 15px', cursor: 'pointer', fontWeight: 900 }}>{workingId === selected.id ? 'Saving...' : outcome === 'completed' ? 'Complete Callback' : 'Save and Send Email'}</button></div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 9, marginTop: 18 }}><button onClick={() => setOutcome(null)} className="ops-secondary-button" style={{ padding: '10px 14px' }}>Cancel</button><button onClick={() => void mutate(selected, outcome, notes,{phoneSource,calledPhone})} disabled={!notes.trim() || (phoneSource==='different'&&calledPhone.replace(/\D/g,'').length<7) || workingId === selected.id} className="ops-primary-button" style={{ padding: '10px 15px', cursor: 'pointer', fontWeight: 900 }}>{workingId === selected.id ? 'Saving...' : outcome === 'completed' ? 'Complete Callback' : 'Save and Send Email'}</button></div>
           </div>
         </div>
       )}

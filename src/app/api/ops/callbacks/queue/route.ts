@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { ensureCallbackTables } from '@/lib/callbacks';
+import { ensureCallVerificationTable } from '@/lib/callVerification';
 import { queryOpsDb } from '@/lib/opsDb';
 
 function buildCallbackFilters(searchParams: URLSearchParams, params: any[] = []) {
@@ -9,6 +10,7 @@ function buildCallbackFilters(searchParams: URLSearchParams, params: any[] = [])
   const preferredTime = searchParams.get('preferredTime');
   const overdue = searchParams.get('overdue');
   const search = searchParams.get('search')?.trim();
+  const verification = searchParams.get('verification');
 
   if (department && department !== 'all') {
     params.push(department);
@@ -20,6 +22,16 @@ function buildCallbackFilters(searchParams: URLSearchParams, params: any[] = [])
   }
   if (overdue === 'true') {
     clauses.push('NOW() > c.due_at');
+  }
+  if (verification && verification !== 'all') {
+    if (verification === 'needs_review') {
+      clauses.push(`EXISTS (SELECT 1 FROM ops_call_verifications v WHERE v.callback_id=c.id AND v.state IN ('unverified','outcome_mismatch'))`);
+    } else if (verification === 'not_tracked') {
+      clauses.push(`NOT EXISTS (SELECT 1 FROM ops_call_verifications v WHERE v.callback_id=c.id)`);
+    } else {
+      params.push(verification);
+      clauses.push(`EXISTS (SELECT 1 FROM ops_call_verifications v WHERE v.callback_id=c.id AND v.state=$${params.length})`);
+    }
   }
   if (search) {
     params.push(`%${search.toLowerCase()}%`);
@@ -44,8 +56,12 @@ export async function GET(request: Request) {
     const session = await verifyAuth();
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     await ensureCallbackTables();
+    await ensureCallVerificationTable();
 
     const searchParams = new URL(request.url).searchParams;
+    if (searchParams.get('verification') === 'needs_review' && session.role !== 'admin') {
+      return NextResponse.json({ error: 'Administrator access is required for Needs Review.' }, { status: 403 });
+    }
     const scope = searchParams.get('scope') || 'mine';
     const unassignedFilters = buildCallbackFilters(searchParams);
     const assignedParams = scope === 'all' ? [] : [session.email];
@@ -57,6 +73,7 @@ export async function GET(request: Request) {
     const [unassigned, assigned, history, counts, users] = await Promise.all([
     queryOpsDb(`
       SELECT c.*, NOW() > c.due_at AS overdue,
+        (SELECT row_to_json(v) FROM ops_call_verifications v WHERE v.callback_id=c.id LIMIT 1) AS verification,
         COALESCE((SELECT json_agg(e ORDER BY e.created_at) FROM ops_callback_events e WHERE e.callback_id = c.id), '[]'::json) AS events
       FROM ops_callbacks c
       WHERE c.status = 'unassigned' ${unassignedFilters.clause}
@@ -65,6 +82,7 @@ export async function GET(request: Request) {
     `, unassignedFilters.params),
     queryOpsDb(`
       SELECT c.*, NOW() > c.due_at AS overdue,
+        (SELECT row_to_json(v) FROM ops_call_verifications v WHERE v.callback_id=c.id LIMIT 1) AS verification,
         COALESCE((SELECT json_agg(e ORDER BY e.created_at) FROM ops_callback_events e WHERE e.callback_id = c.id), '[]'::json) AS events
       FROM ops_callbacks c
       WHERE c.status = 'assigned' ${assignedScopeClause} ${assignedFilters.clause}
@@ -73,6 +91,7 @@ export async function GET(request: Request) {
     `, assignedFilters.params),
     queryOpsDb(`
       SELECT c.*,
+        (SELECT row_to_json(v) FROM ops_call_verifications v WHERE v.callback_id=c.id LIMIT 1) AS verification,
         COALESCE((SELECT json_agg(e ORDER BY e.created_at) FROM ops_callback_events e WHERE e.callback_id = c.id), '[]'::json) AS events
       FROM ops_callbacks c
       WHERE c.status IN ('completed', 'left_voicemail', 'no_answer', 'closed_by_admin') ${historyFilters.clause}
