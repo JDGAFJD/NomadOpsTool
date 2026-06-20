@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  AlertCircle,
+  AlertCircle, BarChart3,
   ArrowLeft, BadgeDollarSign, CalendarClock, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
   CircleDollarSign, Clock3, ExternalLink, FileText, Inbox, Loader2, LogOut, Moon,
   Mail, PhoneCall, RefreshCw, RotateCcw, Search, Sun, UserCheck, Voicemail, X,
@@ -375,6 +375,7 @@ export default function CollectionsPage() {
         </div>
         <div className="collections-header-actions">
           <span className="callback-agent-label">{agentEmail}</span>
+          {isAdmin&&<button title="Collections reports" onClick={()=>router.push('/collections/reports')} className="ops-secondary-button collections-report-link"><BarChart3 size={15}/><span>Reports</span></button>}
           <button title="Refresh" onClick={() => void load()} className="ops-icon-button"><RefreshCw size={17}/></button>
           <button title="Toggle theme" onClick={toggle} className="ops-icon-button">{theme === 'dark' ? <Sun size={17}/> : <Moon size={17}/>}</button>
           <button title="Sign out" onClick={async () => { await fetch('/api/ops/logout',{method:'POST'}); router.push('/ops/login'); }} className="ops-icon-button"><LogOut size={17}/></button>
