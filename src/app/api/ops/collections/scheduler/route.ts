@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { processDueCollectionEmailJobs } from '@/lib/collectionEmailJobs';
 import { processPendingCallVerifications } from '@/lib/callVerification';
 import { sendDueCollectionReminders } from '@/lib/collections';
+import { isCallVerificationEnabled } from '@/lib/features';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -16,7 +17,9 @@ export async function POST(request: Request) {
     const [reminders, emailJobs, callVerifications] = await Promise.all([
       sendDueCollectionReminders(),
       processDueCollectionEmailJobs(),
-      processPendingCallVerifications(),
+      isCallVerificationEnabled()
+        ? processPendingCallVerifications()
+        : Promise.resolve({ callVerificationsChecked: 0, callVerificationsResolved: 0 }),
     ]);
     return NextResponse.json({ success: true, ...reminders, ...emailJobs, ...callVerifications });
   } catch (error: any) {

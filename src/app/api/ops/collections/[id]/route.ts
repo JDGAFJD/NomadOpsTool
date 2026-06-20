@@ -3,6 +3,7 @@ import { verifyAuth } from '@/lib/auth';
 import { processCollectionEmailJob } from '@/lib/collectionEmailJobs';
 import { createCallVerification, ensureCallVerificationTable, processCallVerification } from '@/lib/callVerification';
 import { ensureCollectionsTables, followUpWindow, nextCollectionWindow } from '@/lib/collections';
+import { isCallVerificationEnabled } from '@/lib/features';
 import { logActivity, queryOpsDb, withOpsDbTransaction } from '@/lib/opsDb';
 
 const REASONS = ['insufficient_funds','expired_replaced_card','bank_decline','payday_timing','forgot','billing_dispute','financial_hardship','technical_issue','refused_payment','promised_later','other'];
@@ -66,15 +67,18 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
     const notes = String(body.notes || '').trim();
     if (!notes) return NextResponse.json({ error: 'Attempt notes are required.' }, { status: 400 });
-    const phoneSource = String(body.phoneSource || '');
-    const manualPhone = String(body.calledPhone || '').trim();
-    if (!['on_file', 'different'].includes(phoneSource)) {
-      return NextResponse.json({ error: 'Select the number that was called.' }, { status: 400 });
+    const verificationEnabled = isCallVerificationEnabled();
+    const phoneSource = verificationEnabled ? String(body.phoneSource || '') : '';
+    const manualPhone = verificationEnabled ? String(body.calledPhone || '').trim() : '';
+    if (verificationEnabled) {
+      if (!['on_file', 'different'].includes(phoneSource)) {
+        return NextResponse.json({ error: 'Select the number that was called.' }, { status: 400 });
+      }
+      if (phoneSource === 'different' && manualPhone.replace(/\D/g, '').length < 7) {
+        return NextResponse.json({ error: 'Enter a valid called number.' }, { status: 400 });
+      }
     }
-    if (phoneSource === 'different' && manualPhone.replace(/\D/g, '').length < 7) {
-      return NextResponse.json({ error: 'Enter a valid called number.' }, { status: 400 });
-    }
-    await ensureCallVerificationTable();
+    if (verificationEnabled) await ensureCallVerificationTable();
 
     if (MISSED_ACTIONS.includes(action)) {
       const requestKey = String(body.requestKey || '').trim();
@@ -119,8 +123,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         if (row.assigned_to !== session.email) throw new RequestError('Only the case owner can update it.', 403);
         if (Number(row.current_attempt) >= 3) throw new RequestError('This case has exhausted all attempts.', 409);
         if (!row.customer_email) throw new RequestError('Customer email is unavailable.', 400);
-        const selectedPhone = phoneSource === 'on_file' ? row.customer_phone : manualPhone;
-        if (!selectedPhone) throw new RequestError('A called phone number is required.', 400);
+        const selectedPhone = verificationEnabled
+          ? (phoneSource === 'on_file' ? row.customer_phone : manualPhone)
+          : '';
+        if (verificationEnabled && !selectedPhone) throw new RequestError('A called phone number is required.', 400);
 
         const attemptNumber = Number(row.current_attempt) + 1;
         const state = nextCaseState(attemptNumber, false);
@@ -156,14 +162,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
             row.latest_freescout_conversation_id,
           ]
         );
-        const verification = await createCallVerification(client, {
-          workType: 'collection',
-          collectionAttemptId: Number(attempt.rows[0].id),
-          agentEmail: session.email,
-          reportedOutcome: action,
-          selectedPhone,
-          phoneSource,
-        });
+        const verification = verificationEnabled
+          ? await createCallVerification(client, {
+              workType: 'collection',
+              collectionAttemptId: Number(attempt.rows[0].id),
+              agentEmail: session.email,
+              reportedOutcome: action,
+              selectedPhone,
+              phoneSource,
+            })
+          : null;
         const updated = await client.query(
           `UPDATE ops_collection_cases SET
              status=$1,current_attempt=$2,next_attempt_at=$3,awaiting_amount=NULL,
@@ -180,8 +188,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
             nextAttemptAt: state.nextAttempt?.toISOString() || null,
             emailJobId: Number(job.rows[0].id),
             emailDeliveryStatus: 'queued',
-            calledPhone: selectedPhone,
-            phoneSource,
+            calledPhone: selectedPhone || null,
+            phoneSource: phoneSource || null,
             verificationId: verification?.id || null,
             verificationState: verification ? 'pending' : null,
           })]
@@ -231,8 +239,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (!row) throw new RequestError('Case not found.', 404);
       if (row.assigned_to !== session.email) throw new RequestError('Only the case owner can update it.', 403);
       if (Number(row.current_attempt) >= 3) throw new RequestError('This case has exhausted all attempts.', 409);
-      const selectedPhone = phoneSource === 'on_file' ? row.customer_phone : manualPhone;
-      if (!selectedPhone) throw new RequestError('A called phone number is required.', 400);
+      const selectedPhone = verificationEnabled
+        ? (phoneSource === 'on_file' ? row.customer_phone : manualPhone)
+        : '';
+      if (verificationEnabled && !selectedPhone) throw new RequestError('A called phone number is required.', 400);
 
       const attemptNumber = Number(row.current_attempt) + 1;
       const state = nextCaseState(attemptNumber, collected);
@@ -243,14 +253,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
          RETURNING *`,
         [id, attemptNumber, session.email, notes, collected, claimedAmount, reasonCategory, row.next_attempt_at]
       );
-      const verification = await createCallVerification(client, {
-        workType: 'collection',
-        collectionAttemptId: Number(attempt.rows[0].id),
-        agentEmail: session.email,
-        reportedOutcome: 'completed',
-        selectedPhone,
-        phoneSource,
-      });
+      const verification = verificationEnabled
+        ? await createCallVerification(client, {
+            workType: 'collection',
+            collectionAttemptId: Number(attempt.rows[0].id),
+            agentEmail: session.email,
+            reportedOutcome: 'completed',
+            selectedPhone,
+            phoneSource,
+          })
+        : null;
       const updated = await client.query(
         `UPDATE ops_collection_cases SET status=$1,current_attempt=$2,next_attempt_at=$3,awaiting_amount=$4,
          close_reason=$5,updated_at=NOW() WHERE id=$6 RETURNING *`,
@@ -265,8 +277,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           collected,
           claimedAmount,
           reasonCategory,
-          calledPhone: selectedPhone,
-          phoneSource,
+          calledPhone: selectedPhone || null,
+          phoneSource: phoneSource || null,
           verificationId: verification?.id || null,
           verificationState: verification ? 'pending' : null,
           nextAttemptAt: state.nextAttempt?.toISOString() || null,

@@ -4,6 +4,7 @@ import { chargebeeProfileUrl, ensureCollectionsTables } from '@/lib/collections'
 import { queryOpsDb } from '@/lib/opsDb';
 import { FreeScoutService } from '@/lib/services/FreeScoutService';
 import { ensureCallVerificationTable } from '@/lib/callVerification';
+import { isCallVerificationEnabled } from '@/lib/features';
 
 export const dynamic = 'force-dynamic';
 
@@ -107,6 +108,8 @@ export async function GET(request: NextRequest) {
   try {
     await ensureCollectionsTables();
     await ensureCallVerificationTable();
+    const callVerificationEnabled = isCallVerificationEnabled();
+    if (!callVerificationEnabled) request.nextUrl.searchParams.delete('verification');
     if (request.nextUrl.searchParams.get('verification') === 'needs_review' && session.role !== 'admin') {
       return NextResponse.json({ error: 'Administrator access is required for Needs Review.' }, { status: 403 });
     }
@@ -163,6 +166,7 @@ export async function GET(request: NextRequest) {
     }));
     return NextResponse.json({
       success: true, agentEmail: session.email, viewerRole: session.role, users: users.rows,
+      callVerificationEnabled,
       records: decoratedRecords,
       pagination: { page, pageSize: PAGE_SIZE, totalRecords, totalPages },
       sort,

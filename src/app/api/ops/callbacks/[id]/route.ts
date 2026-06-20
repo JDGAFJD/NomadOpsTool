@@ -2,6 +2,7 @@ import { after, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { createCallVerification, ensureCallVerificationTable, processCallVerification } from '@/lib/callVerification';
 import { getSetting } from '@/lib/db';
+import { isCallVerificationEnabled } from '@/lib/features';
 import { FreeScoutService } from '@/lib/services/FreeScoutService';
 import { addCallbackEvent, ensureCallbackTables } from '@/lib/callbacks';
 import { logActivity, queryOpsDb, withOpsDbTransaction } from '@/lib/opsDb';
@@ -65,18 +66,23 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
     const notes = String(body.notes || '').trim();
     if (!notes) return NextResponse.json({ error: 'Outcome notes are required.' }, { status: 400 });
-    const phoneSource = String(body.phoneSource || '');
-    const manualPhone = String(body.calledPhone || '').trim();
-    const selectedPhone = phoneSource === 'primary'
-      ? callback.primary_phone
-      : phoneSource === 'secondary'
-        ? callback.secondary_phone
-        : phoneSource === 'different'
-          ? manualPhone
-          : '';
-    if (!selectedPhone) return NextResponse.json({ error: 'Select the number that was called.' }, { status: 400 });
-    if (phoneSource === 'different' && selectedPhone.replace(/\D/g, '').length < 7) {
-      return NextResponse.json({ error: 'Enter a valid called number.' }, { status: 400 });
+    const verificationEnabled = isCallVerificationEnabled();
+    let phoneSource = '';
+    let selectedPhone = '';
+    if (verificationEnabled) {
+      phoneSource = String(body.phoneSource || '');
+      const manualPhone = String(body.calledPhone || '').trim();
+      selectedPhone = phoneSource === 'primary'
+        ? callback.primary_phone
+        : phoneSource === 'secondary'
+          ? callback.secondary_phone
+          : phoneSource === 'different'
+            ? manualPhone
+            : '';
+      if (!selectedPhone) return NextResponse.json({ error: 'Select the number that was called.' }, { status: 400 });
+      if (phoneSource === 'different' && selectedPhone.replace(/\D/g, '').length < 7) {
+        return NextResponse.json({ error: 'Enter a valid called number.' }, { status: 400 });
+      }
     }
 
     let conversationId = callback.freescout_conversation_id ? Number(callback.freescout_conversation_id) : null;
@@ -99,7 +105,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       }
     }
 
-    await ensureCallVerificationTable();
+    if (verificationEnabled) await ensureCallVerificationTable();
     const saved = await withOpsDbTransaction(async client => {
       const result = await client.query(
         `UPDATE ops_callbacks
@@ -110,14 +116,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         [action, notes, conversationId, callbackId, session.email]
       );
       if (!result.rows[0]) return null;
-      const verification = await createCallVerification(client, {
-        workType: 'callback',
-        callbackId,
-        agentEmail: session.email,
-        reportedOutcome: action,
-        selectedPhone,
-        phoneSource,
-      });
+      const verification = verificationEnabled
+        ? await createCallVerification(client, {
+            workType: 'callback',
+            callbackId,
+            agentEmail: session.email,
+            reportedOutcome: action,
+            selectedPhone,
+            phoneSource,
+          })
+        : null;
       await client.query(
         `INSERT INTO ops_callback_events (callback_id,actor_email,event_type,details)
          VALUES ($1,$2,$3,$4::jsonb)`,
@@ -125,8 +133,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           notes,
           freescoutConversationId: conversationId,
           emailSent: action !== 'completed',
-          calledPhone: selectedPhone,
-          phoneSource,
+          calledPhone: selectedPhone || null,
+          phoneSource: phoneSource || null,
           verificationId: verification?.id || null,
           verificationState: verification ? 'pending' : null,
         })]

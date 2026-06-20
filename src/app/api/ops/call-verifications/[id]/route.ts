@@ -1,6 +1,7 @@
 import { after, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { ensureCallVerificationTable, processCallVerification } from '@/lib/callVerification';
+import { isCallVerificationEnabled } from '@/lib/features';
 import { queryOpsDb } from '@/lib/opsDb';
 
 export const maxDuration = 60;
@@ -9,6 +10,9 @@ export async function PATCH(_request: Request, context: { params: Promise<{ id: 
   const session = await verifyAuth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (session.role !== 'admin') return NextResponse.json({ error: 'Administrator access is required.' }, { status: 403 });
+  if (!isCallVerificationEnabled()) {
+    return NextResponse.json({ error: 'Twilio call verification is currently disabled.' }, { status: 503 });
+  }
 
   await ensureCallVerificationTable();
   const id = Number((await context.params).id);

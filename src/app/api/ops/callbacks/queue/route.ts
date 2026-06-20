@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { ensureCallbackTables } from '@/lib/callbacks';
 import { ensureCallVerificationTable } from '@/lib/callVerification';
+import { isCallVerificationEnabled } from '@/lib/features';
 import { queryOpsDb } from '@/lib/opsDb';
 
 function buildCallbackFilters(searchParams: URLSearchParams, params: any[] = []) {
@@ -57,8 +58,10 @@ export async function GET(request: Request) {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     await ensureCallbackTables();
     await ensureCallVerificationTable();
+    const callVerificationEnabled = isCallVerificationEnabled();
 
     const searchParams = new URL(request.url).searchParams;
+    if (!callVerificationEnabled) searchParams.delete('verification');
     if (searchParams.get('verification') === 'needs_review' && session.role !== 'admin') {
       return NextResponse.json({ error: 'Administrator access is required for Needs Review.' }, { status: 403 });
     }
@@ -115,6 +118,7 @@ export async function GET(request: Request) {
       success: true,
       agentEmail: session.email,
       viewerRole: session.role,
+      callVerificationEnabled,
       users: users.rows,
       unassigned: unassigned.rows,
       assigned: assigned.rows,
