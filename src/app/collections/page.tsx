@@ -202,7 +202,10 @@ export default function CollectionsPage() {
     ['closed','Closed',FileText,''],
     ['collected','Successful Collections',CircleDollarSign,counts.collected || 0],
   ] as const;
-  const selectableRecords = ['unassigned','mine','all','due'].includes(view) ? records.filter(item => ACTIVE_STATUSES.includes(item.status)) : [];
+  const claimableRecords = view === 'unassigned' ? records.filter(item => item.status === 'unassigned') : [];
+  const selectableRecords = isAdmin && ['unassigned','mine','all','due'].includes(view)
+    ? records.filter(item => ACTIVE_STATUSES.includes(item.status))
+    : claimableRecords;
   const allVisibleSelected = selectableRecords.length > 0 && selectableRecords.every(item => selectedIds.includes(item.id));
 
   useEffect(() => {
@@ -312,6 +315,28 @@ export default function CollectionsPage() {
     }
   }
 
+  async function claimSelectedCases() {
+    if (!selectedIds.length) return;
+    setWorking(true); setError(''); setAdminNotice('');
+    try {
+      const res = await fetch('/api/ops/collections/bulk', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds, action: 'claim_self' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'The selected cases could not be claimed.');
+      setAdminNotice(`${data.updated} collection case${data.updated === 1 ? '' : 's'} assigned to you${data.skipped ? `; ${data.skipped} skipped because another agent claimed them first` : ''}.`);
+      setSelectedIds([]);
+      selectCase(null);
+      await load();
+    } catch (e: any) {
+      setError(e.message || 'The selected cases could not be claimed.');
+    } finally {
+      setWorking(false);
+    }
+  }
+
   return (
     <div className="ops-app-shell collections-shell">
       <header className="ops-topbar collections-topbar">
@@ -352,13 +377,18 @@ export default function CollectionsPage() {
         {error && <div className="collections-error">{error}</div>}
         {adminNotice && <div className="admin-queue-notice">{adminNotice}</div>}
         {isAdmin && <AdminQueueToolbar count={selectedIds.length} onClear={() => setSelectedIds([])} onAction={action => openAdminAction(action, selectedIds)} />}
+        {!isAdmin && selectedIds.length>0&&<section className="admin-queue-toolbar collections-claim-toolbar" aria-label="Bulk claim collection cases">
+          <div><strong>{selectedIds.length} selected</strong><span>Assign these unassigned cases to yourself.</span></div>
+          <button type="button" className="ops-primary-button" disabled={working} onClick={()=>void claimSelectedCases()}><UserCheck size={15}/>{working?'Claiming...':'Claim selected'}</button>
+          <button type="button" className="ops-secondary-button" disabled={working} onClick={()=>setSelectedIds([])}>Clear</button>
+        </section>}
         <div className={`collections-workspace ${selected ? 'is-open' : ''}`}>
           <section className="collections-list">
-            {isAdmin && selectableRecords.length > 0 && <label className="admin-select-all"><input type="checkbox" checked={allVisibleSelected} onChange={()=>setSelectedIds(allVisibleSelected ? [] : selectableRecords.map(item=>item.id))}/>Select all {selectableRecords.length} visible collection cases</label>}
+            {selectableRecords.length > 0 && <label className="admin-select-all"><input type="checkbox" checked={allVisibleSelected} onChange={()=>setSelectedIds(allVisibleSelected ? [] : selectableRecords.map(item=>item.id))}/>Select all {selectableRecords.length} visible collection cases</label>}
             {loading && records.length===0 ? <div className="collections-empty"><Loader2 className="animate-spin"/></div> :
              records.length===0 ? <div className="collections-empty">No collection cases in this view.</div> :
-             records.map(item => <article key={item.id} className={`collection-row ${item.due_now?'is-due':''} ${item.sla_breached?'is-sla-breached':''} ${selected?.id===item.id?'is-selected':''} ${isAdmin&&selectableRecords.some(record=>record.id===item.id)?'has-admin-select':''}`} onClick={()=>selectCase(item)}>
-               {isAdmin&&selectableRecords.some(record=>record.id===item.id)&&<input className="admin-row-checkbox" type="checkbox" checked={selectedIds.includes(item.id)} onClick={e=>e.stopPropagation()} onChange={()=>toggleSelected(item.id)} aria-label={`Select collection case ${item.id}`}/>}
+             records.map(item => <article key={item.id} className={`collection-row ${item.due_now?'is-due':''} ${item.sla_breached?'is-sla-breached':''} ${selected?.id===item.id?'is-selected':''} ${selectableRecords.some(record=>record.id===item.id)?'has-admin-select':''}`} onClick={()=>selectCase(item)}>
+               {selectableRecords.some(record=>record.id===item.id)&&<input className="admin-row-checkbox" type="checkbox" checked={selectedIds.includes(item.id)} onClick={e=>e.stopPropagation()} onChange={()=>toggleSelected(item.id)} aria-label={`Select collection case ${item.id}`}/>}
                <div className="collection-row-main">
                  <div className="collection-row-heading"><strong>{item.customer_name || item.customer_email || item.customer_id || 'Unknown customer'}</strong><span>{humanize(item.status)}</span>{item.sla_breached&&<b className="collection-sla-badge">48h SLA breached</b>}{item.reopened_count>0&&<em>Reopened {item.reopened_count}x</em>}</div>
                  <div className="collection-row-meta"><span>{item.subscription_id || 'Invoice-only case'}</span><span>Attempt {Number(item.current_attempt)+1} of 3</span><span><Clock3 size={12}/>{when(item.next_attempt_at)}</span><span className={item.sla_breached?'collection-age is-breached':'collection-age'}>Age: {ageLabel(item.age_seconds)}</span></div>
