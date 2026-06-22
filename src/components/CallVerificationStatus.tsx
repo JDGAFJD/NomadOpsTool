@@ -24,6 +24,14 @@ export type CallVerificationRecord = {
   ringing_seconds?: number | null;
   talking_seconds?: number | null;
   report_date?: string | null;
+  explanations?: Array<{
+    id: number;
+    author_email: string;
+    verification_state: string;
+    category: string;
+    notes: string;
+    created_at: string;
+  }>;
 };
 
 const COPY = {

@@ -6,7 +6,7 @@ import {
   AlertCircle, BarChart3, FileCheck2,
   ArrowLeft, BadgeDollarSign, CalendarClock, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
   CircleDollarSign, Clock3, ExternalLink, FileText, Inbox, Loader2, LogOut, Moon,
-  Mail, PhoneCall, RefreshCw, RotateCcw, Search, Sun, UserCheck, Voicemail, X,
+  Bookmark, Mail, Pencil, PhoneCall, RefreshCw, RotateCcw, Save, Search, Sun, Trash2, UserCheck, Voicemail, X,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import {
@@ -38,7 +38,11 @@ type CollectionCase = {
   invoices: any[]; attempts: any[]; events: any[];
   admin_disposition?: string | null; admin_actor?: string | null; admin_note?: string | null; admin_action_at?: string | null;
   verification?: CallVerificationRecord | null;
+  total_collected_amount?: number; viewer_credit_amount?: number; latest_paid_at?: string | null;
+  agent_credits?: Array<{ agent_email: string; credited_amount: number; paid_invoices: number }>;
 };
+type SavedView = { id: number; name: string; config: Record<string, string>; created_at: string; updated_at: string };
+type ExplanationTarget = { verificationId: number; attemptId: number; customer: string };
 
 const STATUS_OPTIONS = ['all','unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused','collected','exhausted','canceled','completed_by_admin','closed_by_admin'];
 const ACTIVE_STATUSES = ['unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused'];
@@ -48,6 +52,16 @@ const REASONS = [
   ['billing_dispute','Billing dispute'], ['financial_hardship','Financial hardship'],
   ['technical_issue','Technical issue'], ['refused_payment','Refused payment'],
   ['promised_later','Promised to pay later'], ['other','Other'],
+];
+const EXPLANATION_REASONS = [
+  ['report_not_uploaded','Report not uploaded'],
+  ['extension_mapping_issue','Extension mapping issue'],
+  ['called_number_differs','Called number differs'],
+  ['outside_matching_window','Call outside matching window'],
+  ['call_missing_from_report','Call missing from report'],
+  ['status_mismatch','3CX status does not match outcome'],
+  ['import_system_issue','Import or system issue'],
+  ['other','Other'],
 ];
 
 function humanize(value: string) {
@@ -107,6 +121,8 @@ export default function CollectionsPage() {
   const [jobWorking, setJobWorking] = useState<number | null>(null);
   const [requestKey, setRequestKey] = useState('');
   const [verificationFilter, setVerificationFilter] = useState('all');
+  const [successScope, setSuccessScope] = useState<'mine'|'all'>('mine');
+  const [successVerification, setSuccessVerification] = useState('all');
   const [callVerificationEnabled, setCallVerificationEnabled] = useState(false);
   const [phoneSource, setPhoneSource] = useState('on_file');
   const [calledPhone, setCalledPhone] = useState('');
@@ -116,6 +132,14 @@ export default function CollectionsPage() {
   const [adminTargetIds, setAdminTargetIds] = useState<number[]>([]);
   const [adminWorking, setAdminWorking] = useState(false);
   const [adminNotice, setAdminNotice] = useState('');
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+  const [savedViewId, setSavedViewId] = useState('');
+  const [savedViewDialog, setSavedViewDialog] = useState<{ mode: 'create'|'rename'; name: string; id?: number } | null>(null);
+  const [savedViewWorking, setSavedViewWorking] = useState(false);
+  const [explanationTarget, setExplanationTarget] = useState<ExplanationTarget | null>(null);
+  const [explanationCategory, setExplanationCategory] = useState('');
+  const [explanationNotes, setExplanationNotes] = useState('');
+  const [explanationWorking, setExplanationWorking] = useState(false);
   const selectedIdRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
   const requestControllerRef = useRef<AbortController | null>(null);
@@ -145,13 +169,19 @@ export default function CollectionsPage() {
       if (maxAmount) params.set('maxAmount', maxAmount);
       if (fromDate) params.set('from', fromDate);
       if (toDate) params.set('to', toDate);
-      if (callVerificationEnabled && verificationFilter !== 'all') params.set('verification', verificationFilter);
+      if (view === 'collected') {
+        params.set('successScope', successScope);
+        if (successVerification !== 'all') params.set('successVerification', successVerification);
+      } else if (callVerificationEnabled && verificationFilter !== 'all') {
+        params.set('verification', verificationFilter);
+      }
       const res = await fetch(`/api/ops/collections/queue?${params}`, { cache: 'no-store', signal: controller.signal });
       const data = await res.json();
       if (requestId !== requestIdRef.current) return [];
       if (!res.ok) throw new Error(data.error || 'Could not load collections.');
       setAgentEmail(data.agentEmail); setViewerRole(data.viewerRole || ''); setUsers(data.users || []);
       setCallVerificationEnabled(Boolean(data.callVerificationEnabled));
+      if (data.successScope) setSuccessScope(data.successScope);
       setCounts(data.counts || {}); setOwners(data.owners || []);
       const nextRecords = data.records || [];
       const nextPagination = data.pagination || { page: 1, pageSize: 50, totalRecords: 0, totalPages: 1 };
@@ -171,7 +201,15 @@ export default function CollectionsPage() {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate, verificationFilter, callVerificationEnabled]);
+  }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate, verificationFilter, successScope, successVerification, callVerificationEnabled]);
+
+  const loadSavedViews = useCallback(async () => {
+    try {
+      const response = await fetch('/api/ops/collections/saved-views', { cache: 'no-store' });
+      const data = await response.json();
+      if (response.ok) setSavedViews(data.views || []);
+    } catch {}
+  }, []);
 
   const loadEmailJobs = useCallback(async () => {
     try {
@@ -202,6 +240,8 @@ export default function CollectionsPage() {
     return () => window.clearInterval(timer);
   }, [loadEmailJobs]);
 
+  useEffect(() => { void loadSavedViews(); }, [loadSavedViews]);
+
   const isAdmin = viewerRole === 'admin';
   const tabs = [
     ['unassigned','Unassigned',Inbox,counts.unassigned || 0],
@@ -209,7 +249,7 @@ export default function CollectionsPage() {
     ...(isAdmin ? [['all','All Active',UserCheck,counts.active || 0] as const] : []),
     ['due','Due Follow-ups',CalendarClock,counts.due || 0],
     ['closed','Closed',FileText,''],
-    ['collected','Successful Collections',CircleDollarSign,counts.collected || 0],
+    ['collected','Successful Collections',CircleDollarSign,view==='collected'&&successScope==='all'&&isAdmin ? counts.collected_all || 0 : counts.collected || 0],
   ] as const;
   const claimableRecords = view === 'unassigned' ? records.filter(item => item.status === 'unassigned') : [];
   const selectableRecords = isAdmin && ['unassigned','mine','all','due'].includes(view)
@@ -219,7 +259,7 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     setSelectedIds([]);
-  }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate, verificationFilter]);
+  }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate, verificationFilter, successScope, successVerification]);
 
   async function mutate(action: string, body: any = {}, target: CollectionCase | null = selected) {
     if (!target) return;
@@ -365,6 +405,118 @@ export default function CollectionsPage() {
     }
   }
 
+  function currentSavedViewConfig() {
+    return {
+      view,
+      successScope,
+      successVerification,
+      search,
+      status,
+      owner,
+      sort,
+      attempt,
+      verification: verificationFilter,
+      minAmount,
+      maxAmount,
+      from: fromDate,
+      to: toDate,
+    };
+  }
+
+  function applySavedView(saved: SavedView) {
+    const config = saved.config || {};
+    setView((config.view || 'unassigned') as View);
+    setSuccessScope(config.successScope === 'all' && isAdmin ? 'all' : 'mine');
+    setSuccessVerification(config.successVerification || 'all');
+    setSearch(config.search || '');
+    setStatus(config.status || 'all');
+    setOwner(config.owner || 'all');
+    setSort(config.sort === 'newest' ? 'newest' : 'oldest');
+    setAttempt(config.attempt || 'all');
+    setVerificationFilter(config.verification || 'all');
+    setMinAmount(config.minAmount || '');
+    setMaxAmount(config.maxAmount || '');
+    setFromDate(config.from || '');
+    setToDate(config.to || '');
+    setSavedViewId(String(saved.id));
+    setPage(1);
+    setSelectedIds([]);
+    selectCase(null);
+  }
+
+  async function submitSavedViewDialog() {
+    if (!savedViewDialog) return;
+    setSavedViewWorking(true);
+    setError('');
+    try {
+      const isRename = savedViewDialog.mode === 'rename';
+      const response = await fetch(
+        isRename ? `/api/ops/collections/saved-views/${savedViewDialog.id}` : '/api/ops/collections/saved-views',
+        {
+          method: isRename ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(isRename
+            ? { name: savedViewDialog.name }
+            : { name: savedViewDialog.name, config: currentSavedViewConfig() }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'The saved view could not be updated.');
+      setSavedViewDialog(null);
+      setSavedViewId(String(data.view.id));
+      await loadSavedViews();
+    } catch (e: any) {
+      setError(e.message || 'The saved view could not be updated.');
+    } finally {
+      setSavedViewWorking(false);
+    }
+  }
+
+  async function deleteSavedView() {
+    if (!savedViewId) return;
+    setSavedViewWorking(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/ops/collections/saved-views/${savedViewId}`, { method: 'DELETE' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'The saved view could not be deleted.');
+      setSavedViewId('');
+      await loadSavedViews();
+    } catch (e: any) {
+      setError(e.message || 'The saved view could not be deleted.');
+    } finally {
+      setSavedViewWorking(false);
+    }
+  }
+
+  async function submitVerificationExplanation() {
+    if (!explanationTarget) return;
+    setExplanationWorking(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/ops/call-verifications/${explanationTarget.verificationId}/explanations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: explanationCategory, notes: explanationNotes }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'The explanation could not be saved.');
+      setExplanationTarget(null);
+      setExplanationCategory('');
+      setExplanationNotes('');
+      setAdminNotice('Call verification explanation saved.');
+      await load();
+    } catch (e: any) {
+      setError(e.message || 'The explanation could not be saved.');
+    } finally {
+      setExplanationWorking(false);
+    }
+  }
+
+  const selectedSavedView = savedViews.find(saved => String(saved.id) === savedViewId);
+  const explanationWordCount = explanationNotes.trim().split(/\s+/).filter(Boolean).length;
+  const successfulView = view === 'collected';
+
   return (
     <div className="ops-app-shell collections-shell">
       <header className="ops-topbar collections-topbar">
@@ -388,16 +540,41 @@ export default function CollectionsPage() {
           {tabs.map(([id,label,Icon,count]) => <button key={id} onClick={() => { setView(id); setPage(1); selectCase(null); }} className="ops-tab" data-active={view===id}><Icon size={15}/>{label}{count !== '' && <span>{count}</span>}</button>)}
         </div>
 
+        <section className="collections-saved-views">
+          <div><Bookmark size={16}/><strong>Saved views</strong></div>
+          <select value={savedViewId} onChange={event=>{
+            const saved = savedViews.find(item=>String(item.id)===event.target.value);
+            if (saved) applySavedView(saved); else setSavedViewId('');
+          }}>
+            <option value="">Select a personal view</option>
+            {savedViews.map(saved=><option key={saved.id} value={saved.id}>{saved.name}</option>)}
+          </select>
+          <button className="ops-secondary-button" onClick={()=>setSavedViewDialog({mode:'create',name:''})}><Save size={14}/>Save current</button>
+          <button className="ops-icon-button" title="Rename selected view" disabled={!selectedSavedView||savedViewWorking} onClick={()=>selectedSavedView&&setSavedViewDialog({mode:'rename',id:selectedSavedView.id,name:selectedSavedView.name})}><Pencil size={15}/></button>
+          <button className="ops-icon-button" title="Delete selected view" disabled={!selectedSavedView||savedViewWorking} onClick={()=>void deleteSavedView()}><Trash2 size={15}/></button>
+          <span>{savedViews.length}/25</span>
+        </section>
+
         <section className="collections-filters">
           <label className="collections-search"><Search size={16}/><input value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} placeholder="Search customer, case, invoice, or subscription"/></label>
           <select value={status} onChange={e=>{setStatus(e.target.value);setPage(1);}}>{STATUS_OPTIONS.map(v=><option key={v} value={v}>{v==='all'?'All statuses':humanize(v)}</option>)}</select>
-          <select value={owner} onChange={e=>{setOwner(e.target.value);setPage(1);}}><option value="all">All owners</option>{owners.map(v=><option key={v} value={v}>{v}</option>)}</select>
+          {(!successfulView||isAdmin)&&<select value={owner} onChange={e=>{setOwner(e.target.value);setPage(1);}}><option value="all">{successfulView?'All credited agents':'All owners'}</option>{owners.map(v=><option key={v} value={v}>{v}</option>)}</select>}
+          {successfulView&&isAdmin&&<select value={successScope} onChange={e=>{setSuccessScope(e.target.value as 'mine'|'all');setOwner('all');setPage(1);}}>
+            <option value="mine">My credited collections</option>
+            <option value="all">All successful collections</option>
+          </select>}
           <select aria-label="Sort collection cases" value={sort} onChange={e=>{setSort(e.target.value as 'oldest'|'newest');setPage(1);}}>
             <option value="oldest">Oldest first</option>
             <option value="newest">Newest first</option>
           </select>
           <select value={attempt} onChange={e=>{setAttempt(e.target.value);setPage(1);}}><option value="all">Any attempt</option><option value="0">Not attempted</option><option value="1">Attempt 1</option><option value="2">Attempt 2</option><option value="3">Attempt 3</option></select>
-          {callVerificationEnabled&&<select value={verificationFilter} onChange={e=>{setVerificationFilter(e.target.value);setPage(1);}}>
+          {successfulView&&callVerificationEnabled&&<select value={successVerification} onChange={e=>{setSuccessVerification(e.target.value);setPage(1);}}>
+            <option value="all">All calls</option>
+            <option value="verified">Verified calls</option>
+            <option value="not_verified">Not verified</option>
+            <option value="needs_explanation">Needs explanation</option>
+          </select>}
+          {!successfulView&&callVerificationEnabled&&<select value={verificationFilter} onChange={e=>{setVerificationFilter(e.target.value);setPage(1);}}>
             <option value="all">All verification</option>
             <option value="pending">Pending daily verification</option>
             <option value="verified">Verified</option>
@@ -411,7 +588,7 @@ export default function CollectionsPage() {
           <input type="number" min="0" value={maxAmount} onChange={e=>{setMaxAmount(e.target.value);setPage(1);}} placeholder="Max $"/>
           <input aria-label="Created from" type="date" value={fromDate} onChange={e=>{setFromDate(e.target.value);setPage(1);}}/>
           <input aria-label="Created through" type="date" value={toDate} onChange={e=>{setToDate(e.target.value);setPage(1);}}/>
-          <button onClick={()=>{setSearch('');setStatus('all');setOwner('all');setAttempt('all');setVerificationFilter('all');setMinAmount('');setMaxAmount('');setFromDate('');setToDate('');setPage(1);}} className="ops-secondary-button">Reset</button>
+          <button onClick={()=>{setSearch('');setStatus('all');setOwner('all');setAttempt('all');setVerificationFilter('all');setSuccessVerification('all');setMinAmount('');setMaxAmount('');setFromDate('');setToDate('');setPage(1);}} className="ops-secondary-button">Reset</button>
         </section>
 
         {error && <div className="collections-error">{error}</div>}
@@ -427,13 +604,13 @@ export default function CollectionsPage() {
             {selectableRecords.length > 0 && <label className="admin-select-all"><input type="checkbox" checked={allVisibleSelected} onChange={()=>setSelectedIds(allVisibleSelected ? [] : selectableRecords.map(item=>item.id))}/>Select all {selectableRecords.length} visible collection cases</label>}
             {loading && records.length===0 ? <div className="collections-empty"><Loader2 className="animate-spin"/></div> :
              records.length===0 ? <div className="collections-empty">No collection cases in this view.</div> :
-             records.map(item => <article key={item.id} className={`collection-row ${item.due_now?'is-due':''} ${item.sla_breached?'is-sla-breached':''} ${selected?.id===item.id?'is-selected':''} ${selectableRecords.some(record=>record.id===item.id)?'has-admin-select':''}`} onClick={()=>selectCase(item)}>
+             records.map(item => <article key={item.id} className={`collection-row ${!successfulView&&item.due_now?'is-due':''} ${!successfulView&&item.sla_breached?'is-sla-breached':''} ${successfulView?'is-successful':''} ${selected?.id===item.id?'is-selected':''} ${selectableRecords.some(record=>record.id===item.id)?'has-admin-select':''}`} onClick={()=>selectCase(item)}>
                {selectableRecords.some(record=>record.id===item.id)&&<input className="admin-row-checkbox" type="checkbox" checked={selectedIds.includes(item.id)} onClick={e=>e.stopPropagation()} onChange={()=>toggleSelected(item.id)} aria-label={`Select collection case ${item.id}`}/>}
                <div className="collection-row-main">
-                 <div className="collection-row-heading"><strong>{item.customer_name || item.customer_email || item.customer_id || 'Unknown customer'}</strong><span>{humanize(item.status)}</span>{item.sla_breached&&<b className="collection-sla-badge">48h SLA breached</b>}{item.reopened_count>0&&<em>Reopened {item.reopened_count}x</em>}</div>
-                 <div className="collection-row-meta"><span>{item.subscription_id || 'Invoice-only case'}</span><span>Attempt {Number(item.current_attempt)+1} of 3</span><span><Clock3 size={12}/>{when(item.next_attempt_at)}</span><span className={item.sla_breached?'collection-age is-breached':'collection-age'}>SLA age: {ageLabel(item.age_seconds)}</span>{callVerificationEnabled&&(item.attempts?.length>0||item.verification)&&<VerificationBadge verification={item.verification}/>}</div>
+                 <div className="collection-row-heading"><strong>{item.customer_name || item.customer_email || item.customer_id || 'Unknown customer'}</strong><span>{successfulView?'Paid history':humanize(item.status)}</span>{!successfulView&&item.sla_breached&&<b className="collection-sla-badge">48h SLA breached</b>}{item.reopened_count>0&&<em>Reopened {item.reopened_count}x</em>}</div>
+                 <div className="collection-row-meta"><span>{item.subscription_id || 'Invoice-only case'}</span>{successfulView?<><span>{item.attempts?.length||0} credited call{item.attempts?.length===1?'':'s'}</span><span><CheckCircle2 size={12}/>Paid {when(item.latest_paid_at||null)}</span></>:<><span>Attempt {Number(item.current_attempt)+1} of 3</span><span><Clock3 size={12}/>{when(item.next_attempt_at)}</span><span className={item.sla_breached?'collection-age is-breached':'collection-age'}>SLA age: {ageLabel(item.age_seconds)}</span>{callVerificationEnabled&&(item.attempts?.length>0||item.verification)&&<VerificationBadge verification={item.verification}/>}</>}</div>
                </div>
-               <div className="collection-row-amount"><strong>{money(item.total_amount_due,item.currency_code)}</strong><small>#{item.id}</small>{view==='unassigned'&&<button onClick={e=>{e.stopPropagation();selectCase(item);void mutate('claim',{},item);}} className="ops-primary-button">Claim</button>}</div>
+               <div className="collection-row-amount"><strong>{money(successfulView ? (successScope==='mine' ? item.viewer_credit_amount||0 : item.total_collected_amount||0) : item.total_amount_due,item.currency_code)}</strong><small>{successfulView?(successScope==='mine'?'Your credit':'Confirmed paid'):`#${item.id}`}</small>{view==='unassigned'&&<button onClick={e=>{e.stopPropagation();selectCase(item);void mutate('claim',{},item);}} className="ops-primary-button">Claim</button>}</div>
              </article>)}
             <nav className="collections-pagination" aria-label="Collections pagination">
               <div>
@@ -450,15 +627,14 @@ export default function CollectionsPage() {
           {selected && <aside className="collections-detail">
             <div className="collections-detail-head"><div><small>Collections Case #{selected.id}</small><h2>{selected.customer_name || selected.customer_email || 'Customer'}</h2></div><button onClick={()=>selectCase(null)} className="ops-icon-button"><X size={17}/></button></div>
             <div className="collections-detail-body">
-              <div className="collections-balance"><span>Total outstanding</span><strong>{money(selected.total_amount_due,selected.currency_code)}</strong><em>{humanize(selected.status)}</em></div>
+              <div className="collections-balance"><span>{successfulView?'Chargebee-confirmed collected':'Total outstanding'}</span><strong>{money(successfulView?(selected.total_collected_amount||0):selected.total_amount_due,selected.currency_code)}</strong><em>{successfulView?'Successful collection history':humanize(selected.status)}</em></div>
               <div className="collections-grid">
                 <div><small>Phone</small><strong>{selected.customer_phone || 'Not available'}</strong></div>
                 <div><small>Owner</small><strong>{selected.assigned_to || 'Unassigned'}</strong></div>
                 <div><small>Subscription</small><strong>{selected.subscription_id || 'Invoice only'}</strong></div>
                 <div><small>Status</small><strong>{selected.subscription_status || 'Unknown'}</strong></div>
                 <div><small>Plan</small><strong>{selected.plan_id || 'Unknown'}</strong></div>
-                <div><small>Next attempt</small><strong>{when(selected.next_attempt_at)}</strong></div>
-                <div className={selected.sla_breached?'collection-detail-age is-breached':'collection-detail-age'}><small>SLA age</small><strong>{ageLabel(selected.age_seconds)}</strong><em>{selected.attempts?.length ? 'Since last attempt' : 'Since case creation'}</em>{selected.sla_breached&&<span>48h SLA breached</span>}</div>
+                {successfulView?<><div><small>Latest payment</small><strong>{when(selected.latest_paid_at||null)}</strong></div><div><small>{successScope==='mine'?'Your credited amount':'Credited agents'}</small><strong>{successScope==='mine'?money(selected.viewer_credit_amount||0,selected.currency_code):String(selected.agent_credits?.length||0)}</strong></div></>:<><div><small>Next attempt</small><strong>{when(selected.next_attempt_at)}</strong></div><div className={selected.sla_breached?'collection-detail-age is-breached':'collection-detail-age'}><small>SLA age</small><strong>{ageLabel(selected.age_seconds)}</strong><em>{selected.attempts?.length ? 'Since last attempt' : 'Since case creation'}</em>{selected.sla_breached&&<span>48h SLA breached</span>}</div></>}
               </div>
               <div className="collections-actions">
                 {selected.chargebeeUrl&&<a href={selected.chargebeeUrl} target="_blank" rel="noreferrer" className="ops-secondary-button">Chargebee Profile <ExternalLink size={14}/></a>}
@@ -466,9 +642,13 @@ export default function CollectionsPage() {
                 <button onClick={()=>void loadInvoices()} disabled={working} className="ops-secondary-button">Load Invoices <RefreshCw size={14}/></button>
               </div>
               <section><button className="collections-section-toggle" onClick={()=>setExpandedInvoice(!expandedInvoice)}><span>Invoices ({(liveInvoices||selected.invoices||[]).length})</span>{expandedInvoice?<ChevronUp size={16}/>:<ChevronDown size={16}/>}</button>
-                {expandedInvoice&&<div className="collections-invoices">{(liveInvoices||selected.invoices||[]).map((invoice:any)=><div key={invoice.id||invoice.invoice_id}><strong>{invoice.id||invoice.invoice_id}</strong><span>{invoice.status||invoice.invoice_status||'Unknown'}</span><span>{money(invoice.amount_due??0,invoice.currency_code||selected.currency_code)}</span></div>)}</div>}
+                {expandedInvoice&&<div className="collections-invoices">{(liveInvoices||selected.invoices||[]).map((invoice:any)=><div key={invoice.id||invoice.invoice_id}><strong>{invoice.invoice_id||invoice.id}</strong><span>{successfulView?`Paid ${when(invoice.paid_at||null)}`:(invoice.status||invoice.invoice_status||'Unknown')}</span><span>{money(successfulView?(invoice.amount_paid??0):(invoice.amount_due??0),invoice.currency_code||selected.currency_code)}</span></div>)}</div>}
               </section>
-              <section><h3>Attempt history</h3>{selected.attempts?.length?<div className="collections-timeline">{selected.attempts.map((a:any)=><div key={a.id}><strong>Attempt {a.attempt_number}: {humanize(a.outcome)}</strong><span>{a.agent_email} · {when(a.created_at)}{a.email_delivery_status?` · Email ${humanize(a.email_delivery_status)}`:''}</span><p>{a.notes}</p>{a.freeScoutUrl&&<a className="collection-attempt-ticket" href={a.freeScoutUrl} target="_blank" rel="noreferrer">FreeScout Ticket #{a.freescout_conversation_id} <ExternalLink size={12}/></a>}{a.email_delivery_error&&<small className="collection-email-error">{a.email_delivery_error}</small>}{callVerificationEnabled&&<CallVerificationDetails verification={a.verification} isAdmin={isAdmin} working={verificationWorking===a.verification?.id} onRecheck={recheckVerification}/>}</div>)}</div>:<p className="collections-muted">No attempts recorded.</p>}</section>
+              {successfulView&&isAdmin&&selected.agent_credits?.length?<section><h3>Credited agents</h3><div className="collection-credit-list">{selected.agent_credits.map(credit=><div key={credit.agent_email}><strong>{credit.agent_email}</strong><span>{credit.paid_invoices} paid invoice{credit.paid_invoices===1?'':'s'}</span><b>{money(credit.credited_amount,selected.currency_code)}</b></div>)}</div></section>:null}
+              <section><h3>{successfulView?'Credited call attempts':'Attempt history'}</h3>{selected.attempts?.length?<div className="collections-timeline">{selected.attempts.map((a:any)=><div key={a.id}><strong>Attempt {a.attempt_number}: {humanize(a.outcome)}</strong><span>{a.agent_email} · {when(a.created_at)}{a.email_delivery_status?` · Email ${humanize(a.email_delivery_status)}`:''}</span><p>{a.notes}</p>{a.freeScoutUrl&&<a className="collection-attempt-ticket" href={a.freeScoutUrl} target="_blank" rel="noreferrer">FreeScout Ticket #{a.freescout_conversation_id} <ExternalLink size={12}/></a>}{a.email_delivery_error&&<small className="collection-email-error">{a.email_delivery_error}</small>}{callVerificationEnabled&&<CallVerificationDetails verification={a.verification} isAdmin={isAdmin} working={verificationWorking===a.verification?.id} onRecheck={recheckVerification}/>}
+                {a.verification?.explanations?.length>0&&<div className="verification-explanations">{a.verification.explanations.map((explanation:any)=><article key={explanation.id}><strong>{humanize(explanation.category)}</strong><span>{explanation.author_email} · {when(explanation.created_at)} · State: {humanize(explanation.verification_state)}</span><p>{explanation.notes}</p></article>)}</div>}
+                {successfulView&&a.verification&&a.verification.state!=='verified'&&a.agent_email.toLowerCase()===agentEmail.toLowerCase()&&<button className="ops-secondary-button verification-explain-button" onClick={()=>{setExplanationTarget({verificationId:a.verification.id,attemptId:a.id,customer:selected.customer_name||selected.customer_email||`Case #${selected.id}`});setExplanationCategory('');setExplanationNotes('');}}>Explain why this call was not verified</button>}
+              </div>)}</div>:<p className="collections-muted">No eligible call attempts were recorded before payment confirmation.</p>}</section>
               {selected.status==='unassigned'&&<button onClick={()=>void mutate('claim')} disabled={working} className="ops-primary-button collections-full">Claim Collection Case</button>}
               {selected.assigned_to===agentEmail&&['assigned','follow_up_pending','awaiting_payment_confirmation'].includes(selected.status)&&<div className="collections-outcomes">
                 <button onClick={()=>openOutcome('completed')}><CheckCircle2 size={15}/>Completed</button>
@@ -494,6 +674,20 @@ export default function CollectionsPage() {
         {callVerificationEnabled&&phoneSource==='different'&&<label><span>Called number</span><input value={calledPhone} onChange={e=>setCalledPhone(e.target.value)} placeholder="Enter the number dialed"/></label>}
         <label><span>Required notes</span><textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Document what happened, customer commitments, and next steps."/></label>
         <div className="collections-modal-actions"><button disabled={working} onClick={()=>{setOutcome(null);setOutcomeError('');setRequestKey('');}} className="ops-secondary-button">Cancel</button><button disabled={working||!notes.trim()||(outcome==='completed'&&!reasonCategory)||(collected&&!claimedAmount)||(callVerificationEnabled&&phoneSource==='on_file'&&!selected.customer_phone)||(callVerificationEnabled&&phoneSource==='different'&&calledPhone.replace(/\D/g,'').length<7)} onClick={()=>void mutate(outcome,{notes,collected,claimedAmount,reasonCategory,requestKey,...(callVerificationEnabled?{phoneSource,calledPhone}:{})})} className="ops-primary-button">{working?(outcome==='completed'?'Saving...':'Queuing...'):(outcome==='completed'?'Save Attempt':'Save and continue')}</button></div>
+      </div></div>}
+      {savedViewDialog&&<div className="collections-modal-backdrop"><div className="collections-modal">
+        <div className="collections-modal-head"><div><small>Personal Collections view</small><h2>{savedViewDialog.mode==='create'?'Save current view':'Rename saved view'}</h2></div><button disabled={savedViewWorking} onClick={()=>setSavedViewDialog(null)} className="ops-icon-button"><X size={17}/></button></div>
+        <label><span>View name</span><input autoFocus maxLength={60} value={savedViewDialog.name} onChange={event=>setSavedViewDialog(current=>current?{...current,name:event.target.value}:current)} placeholder="Example: My unverified collections"/></label>
+        <div className="collections-info">{savedViewDialog.mode==='create'?'The current tab, filters, sorting, and successful-collection scope will be saved for your account.':'Only the name will change; the saved filters stay the same.'}</div>
+        <div className="collections-modal-actions"><button disabled={savedViewWorking} onClick={()=>setSavedViewDialog(null)} className="ops-secondary-button">Cancel</button><button disabled={savedViewWorking||savedViewDialog.name.trim().length<2} onClick={()=>void submitSavedViewDialog()} className="ops-primary-button">{savedViewWorking?'Saving...':savedViewDialog.mode==='create'?'Save view':'Rename view'}</button></div>
+      </div></div>}
+      {explanationTarget&&<div className="collections-modal-backdrop"><div className="collections-modal">
+        <div className="collections-modal-head"><div><small>Call verification explanation</small><h2>{explanationTarget.customer}</h2></div><button disabled={explanationWorking} onClick={()=>setExplanationTarget(null)} className="ops-icon-button"><X size={17}/></button></div>
+        <div className="collections-info">This explanation is append-only and does not change the call verification result.</div>
+        <label><span>Reason</span><select value={explanationCategory} onChange={event=>setExplanationCategory(event.target.value)}><option value="">Select a reason</option>{EXPLANATION_REASONS.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+        <label><span>Explanation</span><textarea value={explanationNotes} onChange={event=>setExplanationNotes(event.target.value)} placeholder="Explain why you believe the call was made even though the available 3CX evidence did not verify it."/></label>
+        <small className={explanationWordCount<15?'verification-word-count is-short':'verification-word-count'}>{explanationWordCount}/15 words minimum</small>
+        <div className="collections-modal-actions"><button disabled={explanationWorking} onClick={()=>setExplanationTarget(null)} className="ops-secondary-button">Cancel</button><button disabled={explanationWorking||!explanationCategory||explanationWordCount<15} onClick={()=>void submitVerificationExplanation()} className="ops-primary-button">{explanationWorking?'Saving...':'Save explanation'}</button></div>
       </div></div>}
       {emailJobs.length>0&&<aside className={`collection-email-tray ${jobsCollapsed?'is-collapsed':''}`}>
         <button className="collection-email-tray-head" onClick={()=>setJobsCollapsed(value=>!value)} aria-expanded={!jobsCollapsed}>

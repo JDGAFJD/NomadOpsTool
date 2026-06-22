@@ -151,6 +151,32 @@ export async function ensureCollectionsTables() {
   await queryOpsDb(`ALTER TABLE ops_collection_cases ADD COLUMN IF NOT EXISTS admin_actor TEXT`);
   await queryOpsDb(`ALTER TABLE ops_collection_cases ADD COLUMN IF NOT EXISTS admin_note TEXT`);
   await queryOpsDb(`ALTER TABLE ops_collection_cases ADD COLUMN IF NOT EXISTS admin_action_at TIMESTAMPTZ`);
+  await queryOpsDb(`
+    CREATE TABLE IF NOT EXISTS ops_call_verification_explanations (
+      id BIGSERIAL PRIMARY KEY,
+      verification_id BIGINT NOT NULL,
+      collection_attempt_id BIGINT NOT NULL REFERENCES ops_collection_attempts(id) ON DELETE CASCADE,
+      author_email TEXT NOT NULL,
+      verification_state TEXT NOT NULL,
+      category TEXT NOT NULL,
+      notes TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await queryOpsDb(`
+    CREATE TABLE IF NOT EXISTS ops_collection_saved_views (
+      id BIGSERIAL PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      name TEXT NOT NULL,
+      config JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_verification_explanations_verification ON ops_call_verification_explanations(verification_id,created_at)`);
+  await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_verification_explanations_author ON ops_call_verification_explanations(author_email,created_at)`);
+  await queryOpsDb(`CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_saved_views_owner_name ON ops_collection_saved_views(owner_email,LOWER(name))`);
+  await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_collection_saved_views_owner_updated ON ops_collection_saved_views(owner_email,updated_at DESC)`);
   await queryOpsDb(`CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_webhook_event ON ops_collection_events(source_webhook_id, event_type) WHERE source_webhook_id IS NOT NULL`);
   await queryOpsDb(`ALTER TABLE ops_chargebee_webhook_events ADD COLUMN IF NOT EXISTS processing_attempts INTEGER NOT NULL DEFAULT 0`);
   await queryOpsDb(`ALTER TABLE ops_chargebee_webhook_events ADD COLUMN IF NOT EXISTS processing_error TEXT`);
