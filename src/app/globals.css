@@ -870,6 +870,7 @@ button {
 .collections-grid strong { display: block; margin-top: 4px; font-size: 12px; overflow-wrap: anywhere; }
 .collections-grid .collection-detail-age.is-breached { border-color: rgba(220,38,38,.36); background: rgba(220,38,38,.08); }
 .collection-detail-age.is-breached strong,.collection-detail-age.is-breached span { color: #dc2626; }
+.collection-detail-age em { display: block; margin-top: 3px; color: var(--ops-text-muted); font-size: 11px; font-style: normal; }
 .collection-detail-age span { display: block; margin-top: 4px; font-size: 10px; font-weight: 900; text-transform: uppercase; }
 .collections-actions { flex-wrap: wrap; }
 .collections-actions a,.collections-actions button { display: inline-flex; align-items: center; gap: 6px; padding: 9px 11px; text-decoration: none; }

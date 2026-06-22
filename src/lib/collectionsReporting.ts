@@ -210,7 +210,10 @@ export async function getCollectionReport(filters: CollectionReportFilters) {
         COUNT(*) FILTER (WHERE status IN ('assigned','follow_up_pending','awaiting_payment_confirmation')
           AND next_attempt_at IS NOT NULL AND next_attempt_at <= NOW())::int AS due,
         COUNT(*) FILTER (WHERE status IN ('unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused')
-          AND created_at < NOW() - INTERVAL '48 hours')::int AS sla_breached,
+          AND COALESCE(
+            (SELECT MAX(a.created_at) FROM ops_collection_attempts a WHERE a.case_id=ops_collection_cases.id),
+            created_at
+          ) < NOW() - INTERVAL '48 hours')::int AS sla_breached,
         COUNT(*) FILTER (WHERE status IN ('unassigned','assigned','follow_up_pending','awaiting_payment_confirmation') AND current_attempt=0)::int AS attempt_1,
         COUNT(*) FILTER (WHERE status IN ('unassigned','assigned','follow_up_pending','awaiting_payment_confirmation') AND current_attempt=1)::int AS attempt_2,
         COUNT(*) FILTER (WHERE status IN ('unassigned','assigned','follow_up_pending','awaiting_payment_confirmation') AND current_attempt=2)::int AS attempt_3,
@@ -221,7 +224,10 @@ export async function getCollectionReport(filters: CollectionReportFilters) {
       SELECT assigned_to AS agent_email, COUNT(*)::int AS assigned,
         COUNT(*) FILTER (WHERE status IN ('assigned','follow_up_pending','awaiting_payment_confirmation')
           AND next_attempt_at IS NOT NULL AND next_attempt_at <= NOW())::int AS due,
-        COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '48 hours')::int AS sla_breached
+        COUNT(*) FILTER (WHERE COALESCE(
+          (SELECT MAX(a.created_at) FROM ops_collection_attempts a WHERE a.case_id=ops_collection_cases.id),
+          created_at
+        ) < NOW() - INTERVAL '48 hours')::int AS sla_breached
       FROM ops_collection_cases
       WHERE assigned_to IS NOT NULL
         AND status IN ('assigned','follow_up_pending','awaiting_payment_confirmation','paused')
@@ -300,7 +306,10 @@ export async function getCollectionReport(filters: CollectionReportFilters) {
       SELECT assigned_to AS agent_email, COUNT(*)::int AS assigned,
         COUNT(*) FILTER (WHERE status IN ('assigned','follow_up_pending','awaiting_payment_confirmation')
           AND next_attempt_at IS NOT NULL AND next_attempt_at <= NOW())::int AS due,
-        COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '48 hours')::int AS sla_breached
+        COUNT(*) FILTER (WHERE COALESCE(
+          (SELECT MAX(a.created_at) FROM ops_collection_attempts a WHERE a.case_id=ops_collection_cases.id),
+          created_at
+        ) < NOW() - INTERVAL '48 hours')::int AS sla_breached
       FROM ops_collection_cases
       WHERE assigned_to IS NOT NULL
         AND status IN ('assigned','follow_up_pending','awaiting_payment_confirmation','paused')

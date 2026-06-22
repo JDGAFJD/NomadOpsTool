@@ -34,7 +34,7 @@ type CollectionCase = {
   total_amount_due: number; currency_code: string; close_reason: string | null; collected_by: string | null;
   collected_at: string | null; reopened_count: number; created_at: string; updated_at: string;
   chargebeeUrl: string | null; freeScoutUrl: string | null; latest_freescout_conversation_id?: number | null;
-  due_now: boolean; age_seconds: number | string; sla_breached: boolean;
+  due_now: boolean; age_seconds: number | string; sla_breached: boolean; sla_anchor_at: string;
   invoices: any[]; attempts: any[]; events: any[];
   admin_disposition?: string | null; admin_actor?: string | null; admin_note?: string | null; admin_action_at?: string | null;
   verification?: CallVerificationRecord | null;
@@ -431,7 +431,7 @@ export default function CollectionsPage() {
                {selectableRecords.some(record=>record.id===item.id)&&<input className="admin-row-checkbox" type="checkbox" checked={selectedIds.includes(item.id)} onClick={e=>e.stopPropagation()} onChange={()=>toggleSelected(item.id)} aria-label={`Select collection case ${item.id}`}/>}
                <div className="collection-row-main">
                  <div className="collection-row-heading"><strong>{item.customer_name || item.customer_email || item.customer_id || 'Unknown customer'}</strong><span>{humanize(item.status)}</span>{item.sla_breached&&<b className="collection-sla-badge">48h SLA breached</b>}{item.reopened_count>0&&<em>Reopened {item.reopened_count}x</em>}</div>
-                 <div className="collection-row-meta"><span>{item.subscription_id || 'Invoice-only case'}</span><span>Attempt {Number(item.current_attempt)+1} of 3</span><span><Clock3 size={12}/>{when(item.next_attempt_at)}</span><span className={item.sla_breached?'collection-age is-breached':'collection-age'}>Age: {ageLabel(item.age_seconds)}</span>{callVerificationEnabled&&(item.attempts?.length>0||item.verification)&&<VerificationBadge verification={item.verification}/>}</div>
+                 <div className="collection-row-meta"><span>{item.subscription_id || 'Invoice-only case'}</span><span>Attempt {Number(item.current_attempt)+1} of 3</span><span><Clock3 size={12}/>{when(item.next_attempt_at)}</span><span className={item.sla_breached?'collection-age is-breached':'collection-age'}>SLA age: {ageLabel(item.age_seconds)}</span>{callVerificationEnabled&&(item.attempts?.length>0||item.verification)&&<VerificationBadge verification={item.verification}/>}</div>
                </div>
                <div className="collection-row-amount"><strong>{money(item.total_amount_due,item.currency_code)}</strong><small>#{item.id}</small>{view==='unassigned'&&<button onClick={e=>{e.stopPropagation();selectCase(item);void mutate('claim',{},item);}} className="ops-primary-button">Claim</button>}</div>
              </article>)}
@@ -458,7 +458,7 @@ export default function CollectionsPage() {
                 <div><small>Status</small><strong>{selected.subscription_status || 'Unknown'}</strong></div>
                 <div><small>Plan</small><strong>{selected.plan_id || 'Unknown'}</strong></div>
                 <div><small>Next attempt</small><strong>{when(selected.next_attempt_at)}</strong></div>
-                <div className={selected.sla_breached?'collection-detail-age is-breached':'collection-detail-age'}><small>Case age</small><strong>{ageLabel(selected.age_seconds)}</strong>{selected.sla_breached&&<span>48h SLA breached</span>}</div>
+                <div className={selected.sla_breached?'collection-detail-age is-breached':'collection-detail-age'}><small>SLA age</small><strong>{ageLabel(selected.age_seconds)}</strong><em>{selected.attempts?.length ? 'Since last attempt' : 'Since case creation'}</em>{selected.sla_breached&&<span>48h SLA breached</span>}</div>
               </div>
               <div className="collections-actions">
                 {selected.chargebeeUrl&&<a href={selected.chargebeeUrl} target="_blank" rel="noreferrer" className="ops-secondary-button">Chargebee Profile <ExternalLink size={14}/></a>}

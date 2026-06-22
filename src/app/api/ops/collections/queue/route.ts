@@ -63,9 +63,15 @@ function filters(request: NextRequest, params: unknown[]) {
   return clauses.length ? ` AND ${clauses.join(' AND ')}` : '';
 }
 
+const SLA_ANCHOR = `COALESCE(
+  (SELECT MAX(sla_attempt.created_at) FROM ops_collection_attempts sla_attempt WHERE sla_attempt.case_id=c.id),
+  c.created_at
+)`;
+
 const SELECT = `SELECT c.*, NOW() >= c.next_attempt_at AS due_now,
-  GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() - c.created_at))))::bigint AS age_seconds,
-  NOW() > c.created_at + INTERVAL '48 hours' AS sla_breached,
+  ${SLA_ANCHOR} AS sla_anchor_at,
+  GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() - ${SLA_ANCHOR}))))::bigint AS age_seconds,
+  NOW() > ${SLA_ANCHOR} + INTERVAL '48 hours' AS sla_breached,
   COALESCE((SELECT json_agg(i ORDER BY i.failure_date DESC) FROM ops_collection_invoices i WHERE i.case_id=c.id), '[]'::json) AS invoices,
   COALESCE((
     SELECT json_agg(attempt_row ORDER BY attempt_row.created_at DESC)
@@ -148,8 +154,8 @@ export async function GET(request: NextRequest) {
       `${SELECT}
        FROM ops_collection_cases c
        WHERE ${viewWhere} ${clause}
-       ORDER BY (NOW() > c.created_at + INTERVAL '48 hours') DESC,
-         c.created_at ${sort === 'newest' ? 'DESC' : 'ASC'},
+       ORDER BY (NOW() > ${SLA_ANCHOR} + INTERVAL '48 hours') DESC,
+         ${SLA_ANCHOR} ${sort === 'newest' ? 'DESC' : 'ASC'},
          c.id ${sort === 'newest' ? 'DESC' : 'ASC'}
        LIMIT $${recordParams.length - 1} OFFSET $${recordParams.length}`,
       recordParams
