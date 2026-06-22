@@ -64,7 +64,7 @@ export function CallVerificationDetails({
       <div className="call-verification-grid">
         <div><small>Called number</small><strong>{verification.selected_phone}</strong></div>
         <div><small>Source</small><strong>{verification.phone_source.replace(/_/g,' ')}</strong></div>
-        {verification.evidence_source==='csv'&&verification.external_call_id&&<div><small>3CX Call ID</small><strong>{verification.external_call_id}</strong></div>}
+        {verification.evidence_source==='csv'&&verification.external_call_id&&<div><small>3CX Evidence Reference</small><strong>{verification.external_call_id.slice(0,12)}</strong></div>}
         {verification.evidence_source==='csv'&&verification.agent_display_name&&<div><small>3CX agent</small><strong>{verification.agent_display_name} ({verification.agent_extension})</strong></div>}
         {verification.evidence_source==='csv'&&verification.evidence_status&&<div><small>CSV status</small><strong>{verification.evidence_status}</strong></div>}
         {verification.evidence_source==='csv'&&verification.evidence_call_time&&<div><small>Call time</small><strong>{new Date(verification.evidence_call_time).toLocaleString()}</strong></div>}

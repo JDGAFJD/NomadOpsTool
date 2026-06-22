@@ -7,22 +7,22 @@ import { queryOpsDb, withOpsDbTransaction } from '@/lib/opsDb';
 const CENTRAL_ZONE = 'America/Chicago';
 const REQUIRED_HEADERS = [
   'call time',
-  'call id',
-  'from',
-  'to',
-  'direction',
+  'caller id',
+  'caller display name',
+  'trunk',
+  'trunk number',
   'status',
   'ringing',
   'talking',
-  'cost',
-  'call activity details',
+  'total duration',
+  'destination callee id',
 ] as const;
 
 export type ParsedCallReportRow = {
   rowNumber: number;
   reportDate: string;
   callTime: Date;
-  callId: string;
+  evidenceReference: string;
   agentDisplayName: string;
   agentExtension: string;
   destinationPhone: string;
@@ -36,7 +36,9 @@ export type ParsedCallReportRow = {
 };
 
 export type ParsedCallReport = {
-  reportDate: string;
+  reportStartDate: string;
+  reportEndDate: string;
+  reportDates: string[];
   totalRows: number;
   ignoredRows: number;
   rows: ParsedCallReportRow[];
@@ -127,16 +129,12 @@ function durationSeconds(value: string) {
   return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
 }
 
-function agentParts(value: string) {
-  const match = value.trim().match(/^(.*?)\s*\((\d+)\)\s*$/);
-  return {
-    displayName: match?.[1]?.trim() || value.trim(),
-    extension: match?.[2] || '',
-  };
-}
-
 function fingerprint(parts: string[]) {
   return createHash('sha256').update(parts.join('|')).digest('hex');
+}
+
+function normalizedPhone(value: string) {
+  return value.replace(/\D/g, '');
 }
 
 export function parseCallReportCsv(csv: string): ParsedCallReport {
@@ -165,44 +163,52 @@ export function parseCallReportCsv(csv: string): ParsedCallReport {
       rejected.push({ row: rowNumber, reason: 'Invalid Call Time.' });
       return;
     }
+    const agentExtension = value('caller id').replace(/\D/g, '');
+    const agentDisplayName = value('caller display name').replace(/\s*\(\d+\)\s*$/, '').trim();
+    const destinationPhone = value('destination callee id');
+    const destinationDigits = normalizedPhone(destinationPhone);
+    const status = value('status').toLowerCase();
+    if (!destinationPhone || !phoneMatchKey(destinationPhone) || !agentExtension) {
+      rejected.push({ row: rowNumber, reason: 'Outbound row is missing the destination phone or caller extension.' });
+      return;
+    }
+    if (!['answered', 'unanswered'].includes(status)) {
+      rejected.push({ row: rowNumber, reason: 'Status must be Answered or Unanswered.' });
+      return;
+    }
     reportDates.add(reportDate);
-    if (value('direction').toLowerCase() !== 'outbound') {
-      ignoredRows += 1;
-      return;
-    }
-    const callId = value('call id');
-    const destinationPhone = value('to');
-    const agent = agentParts(value('from'));
-    if (!callId || !destinationPhone || !phoneMatchKey(destinationPhone) || !agent.extension) {
-      rejected.push({ row: rowNumber, reason: 'Outbound row is missing Call ID, destination phone, or agent extension.' });
-      return;
-    }
+    const evidenceReference = fingerprint([
+      callTime.toISOString(),
+      agentExtension,
+      destinationDigits,
+      value('trunk'),
+      value('trunk number'),
+    ]);
     const raw = Object.fromEntries(headers.map((header, index) => [header, String(cells[index] || '')]));
     rows.push({
       rowNumber,
       reportDate,
       callTime,
-      callId,
-      agentDisplayName: agent.displayName,
-      agentExtension: agent.extension,
+      evidenceReference,
+      agentDisplayName: agentDisplayName || agentExtension,
+      agentExtension,
       destinationPhone,
-      status: value('status').toLowerCase(),
+      status,
       ringingSeconds: durationSeconds(value('ringing')),
       talkingSeconds: durationSeconds(value('talking')),
       cost: value('cost'),
-      activityDetails: value('call activity details'),
+      activityDetails: '',
       raw,
-      fingerprint: fingerprint([callId, 'outbound', agent.extension, phoneMatchKey(destinationPhone), callTime.toISOString()]),
+      fingerprint: evidenceReference,
     });
   });
 
-  if (reportDates.size !== 1) {
-    throw new Error(reportDates.size
-      ? 'The CSV must contain calls from exactly one Central Time calendar date.'
-      : 'The CSV does not contain any valid call rows.');
-  }
+  if (!reportDates.size) throw new Error('The CSV does not contain any valid outbound call rows.');
+  const sortedDates = [...reportDates].sort();
   return {
-    reportDate: [...reportDates][0],
+    reportStartDate: sortedDates[0],
+    reportEndDate: sortedDates[sortedDates.length - 1],
+    reportDates: sortedDates,
     totalRows: Math.max(0, records.length - 1),
     ignoredRows,
     rows,
@@ -230,6 +236,14 @@ export async function ensureCallReportTables() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       processed_at TIMESTAMPTZ
     )
+  `);
+  await queryOpsDb(`ALTER TABLE ops_call_report_batches ADD COLUMN IF NOT EXISTS report_start_date DATE`);
+  await queryOpsDb(`ALTER TABLE ops_call_report_batches ADD COLUMN IF NOT EXISTS report_end_date DATE`);
+  await queryOpsDb(`
+    UPDATE ops_call_report_batches
+    SET report_start_date=COALESCE(report_start_date,report_date),
+        report_end_date=COALESCE(report_end_date,report_date)
+    WHERE report_start_date IS NULL OR report_end_date IS NULL
   `);
   await queryOpsDb(`
     CREATE TABLE IF NOT EXISTS ops_call_report_rows (
@@ -278,7 +292,7 @@ export function callReportOutcomeState(outcome: string, status: string): Verific
 export async function processCallReportDate(reportDate: string, batchId?: number) {
   await ensureCallReportTables();
   const [reportResult, callsResult, verificationsResult, usedResult] = await Promise.all([
-    queryOpsDb('SELECT id FROM ops_call_report_batches WHERE report_date=$1::date LIMIT 1', [reportDate]),
+    queryOpsDb('SELECT id FROM ops_call_report_rows WHERE report_date=$1::date LIMIT 1', [reportDate]),
     queryOpsDb(`
       SELECT r.*,m.ops_email
       FROM ops_call_report_rows r
@@ -383,7 +397,7 @@ export async function processCallReportDate(reportDate: string, batchId?: number
         verificationId: Number(verification.id),
         reportDate,
         callReportRowId: best ? Number(best.id) : null,
-        callId: evidence?.call_id || null,
+        evidenceReference: evidence?.call_id || null,
         agentExtension: evidence?.agent_extension || null,
         agentDisplayName: evidence?.agent_display_name || null,
         status: evidence?.status || null,
@@ -414,10 +428,19 @@ export async function importCallReportCsv(input: {
   const batch = await withOpsDbTransaction(async client => {
     const inserted = await client.query(
       `INSERT INTO ops_call_report_batches
-       (file_hash,report_date,file_name,uploaded_by,total_rows,imported_rows,ignored_rows,rejected_rows)
-       VALUES ($1,$2::date,$3,$4,$5,0,$6,$7)
+       (file_hash,report_date,report_start_date,report_end_date,file_name,uploaded_by,total_rows,imported_rows,ignored_rows,rejected_rows)
+       VALUES ($1,$2::date,$2::date,$3::date,$4,$5,$6,0,$7,$8)
        RETURNING *`,
-      [fileHash, parsed.reportDate, input.fileName, input.uploadedBy, parsed.totalRows, parsed.ignoredRows, parsed.rejected.length]
+      [
+        fileHash,
+        parsed.reportStartDate,
+        parsed.reportEndDate,
+        input.fileName,
+        input.uploadedBy,
+        parsed.totalRows,
+        parsed.ignoredRows,
+        parsed.rejected.length,
+      ]
     );
     let imported = 0;
     for (const row of parsed.rows) {
@@ -432,7 +455,7 @@ export async function importCallReportCsv(input: {
            cost=EXCLUDED.cost,activity_details=EXCLUDED.activity_details,raw_row=EXCLUDED.raw_row
          RETURNING id`,
         [
-          inserted.rows[0].id, row.fingerprint, row.reportDate, row.callTime, row.callId,
+          inserted.rows[0].id, row.fingerprint, row.reportDate, row.callTime, row.evidenceReference,
           row.agentDisplayName, row.agentExtension, row.destinationPhone, phoneMatchKey(row.destinationPhone),
           row.status, row.ringingSeconds, row.talkingSeconds, row.cost || null,
           row.activityDetails || null, JSON.stringify(row.raw),
@@ -446,14 +469,24 @@ export async function importCallReportCsv(input: {
     );
     return updated.rows[0];
   });
-  const processing = await processCallReportDate(parsed.reportDate, Number(batch.id));
+  const processingByDate = [];
+  const processing = { verified: 0, outcomeMismatch: 0, unverified: 0, mappingRequired: 0, processed: 0 };
+  for (const reportDate of parsed.reportDates) {
+    const dateProcessing = await processCallReportDate(reportDate, Number(batch.id));
+    processingByDate.push({ reportDate, ...dateProcessing });
+    processing.verified += dateProcessing.verified;
+    processing.outcomeMismatch += dateProcessing.outcomeMismatch;
+    processing.unverified += dateProcessing.unverified;
+    processing.mappingRequired += dateProcessing.mappingRequired;
+    processing.processed += dateProcessing.processed;
+  }
   const updatedBatch = await queryOpsDb(
     `UPDATE ops_call_report_batches SET matched_rows=$2,mismatch_rows=$3,unverified_rows=$4,
        mapping_required_rows=$5,processed_at=NOW()
      WHERE id=$1 RETURNING *`,
     [batch.id, processing.verified, processing.outcomeMismatch, processing.unverified, processing.mappingRequired]
   );
-  return { duplicate: false, batch: updatedBatch.rows[0], parsed, processing };
+  return { duplicate: false, batch: updatedBatch.rows[0], parsed, processing, processingByDate };
 }
 
 export async function reprocessVerification(id: number) {

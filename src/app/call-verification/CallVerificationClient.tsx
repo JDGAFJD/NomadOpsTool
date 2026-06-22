@@ -9,7 +9,8 @@ import {
 import { useTheme } from '@/components/ThemeProvider';
 
 type Batch = {
-  id: number; report_date: string; file_name: string; uploaded_by: string;
+  id: number; report_date: string; report_start_date: string; report_end_date: string;
+  file_name: string; uploaded_by: string;
   total_rows: number; imported_rows: number; ignored_rows: number; rejected_rows: number;
   matched_rows: number; mismatch_rows: number; unverified_rows: number;
   mapping_required_rows: number; created_at: string; processed_at: string | null;
@@ -29,6 +30,7 @@ type UploadResult = {
   duplicate: boolean;
   batch: Batch;
   processing: { verified: number; outcomeMismatch: number; unverified: number; mappingRequired: number; processed: number } | null;
+  processingByDate?: Array<{ reportDate: string; verified: number; outcomeMismatch: number; unverified: number; mappingRequired: number; processed: number }> | null;
   rejected: { row: number; reason: string }[];
 };
 
@@ -48,6 +50,12 @@ function duration(seconds: number | null) {
   if (seconds === null || seconds === undefined) return 'N/A';
   const minutes = Math.floor(seconds / 60);
   return minutes ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
+}
+
+function batchDateRange(batch: Batch) {
+  const start = String(batch.report_start_date || batch.report_date).slice(0, 10);
+  const end = String(batch.report_end_date || batch.report_date).slice(0, 10);
+  return start === end ? start : `${start} to ${end}`;
 }
 
 export default function CallVerificationClient({ userEmail }: { userEmail: string }) {
@@ -207,7 +215,7 @@ export default function CallVerificationClient({ userEmail }: { userEmail: strin
         <section className="call-report-intake-grid">
           <form className="call-report-upload" onSubmit={upload}>
             <div><FileUp size={20}/><div><small>Daily 3CX report</small><h2>Upload completed CSV</h2></div></div>
-            <p>Upload the completed report for one Central Time calendar date. Outbound calls are imported and matched automatically.</p>
+            <p>Upload a completed outbound report. One or multiple Central Time dates are supported and matched automatically.</p>
             <input type="file" accept=".csv,text/csv" onChange={event => setFile(event.target.files?.[0] || null)}/>
             <button className="ops-primary-button" disabled={!file || uploading}>{uploading ? <Loader2 className="animate-spin" size={16}/> : <FileCheck2 size={16}/>} {uploading ? 'Processing...' : 'Upload and verify'}</button>
           </form>
@@ -215,8 +223,8 @@ export default function CallVerificationClient({ userEmail }: { userEmail: strin
             <h2>Latest upload result</h2>
             {!result && <p>No report uploaded in this session.</p>}
             {result && <div className="call-report-result-grid">
-              <strong>{result.duplicate ? 'File already imported' : `Report ${String(result.batch.report_date).slice(0,10)} processed`}</strong>
-              <span>{result.batch.imported_rows} new outbound rows</span>
+              <strong>{result.duplicate ? 'File already imported' : `Report ${batchDateRange(result.batch)} processed`}</strong>
+              <span>{result.batch.imported_rows} outbound rows imported</span>
               <span>{result.processing?.verified || 0} verified</span>
               <span>{result.processing?.outcomeMismatch || 0} mismatched</span>
               <span>{result.processing?.unverified || 0} unverified</span>
@@ -249,6 +257,7 @@ export default function CallVerificationClient({ userEmail }: { userEmail: strin
               <div><small>CSV status</small><strong>{item.evidence_status ? humanize(item.evidence_status) : 'N/A'}</strong></div>
               <div><small>Call time</small><strong>{item.evidence_call_time ? new Date(item.evidence_call_time).toLocaleString() : 'N/A'}</strong></div>
               <div><small>Ringing / talking</small><strong>{duration(item.ringing_seconds)} / {duration(item.talking_seconds)}</strong></div>
+              <div><small>Evidence reference</small><strong>{item.external_call_id ? item.external_call_id.slice(0,12) : 'N/A'}</strong></div>
             </div>
             {item.integration_error && <p>{item.integration_error}</p>}
             {isAdmin && <button className="ops-secondary-button" disabled={working === `v-${item.id}`} onClick={() => void reprocess(item.id)}><RotateCcw size={13}/> Reprocess</button>}
@@ -257,7 +266,7 @@ export default function CallVerificationClient({ userEmail }: { userEmail: strin
 
         <section className="call-report-section">
           <div className="call-report-section-head"><div><small>Imports</small><h2>Upload history</h2></div></div>
-          <div className="call-report-table-wrap"><table><thead><tr><th>Report date</th><th>File</th><th>Imported</th><th>Verified</th><th>Mismatch</th><th>Unverified</th><th>Mapping</th><th>Uploaded by</th></tr></thead><tbody>{batches.map(batch => <tr key={batch.id}><td>{String(batch.report_date).slice(0,10)}</td><td>{batch.file_name}</td><td>{batch.imported_rows}</td><td>{batch.matched_rows}</td><td>{batch.mismatch_rows}</td><td>{batch.unverified_rows}</td><td>{batch.mapping_required_rows}</td><td>{batch.uploaded_by}<small>{new Date(batch.created_at).toLocaleString()}</small></td></tr>)}{batches.length === 0 && <tr><td colSpan={8}>{loading ? 'Loading...' : 'No reports uploaded yet.'}</td></tr>}</tbody></table></div>
+          <div className="call-report-table-wrap"><table><thead><tr><th>Report dates</th><th>File</th><th>Imported</th><th>Verified</th><th>Mismatch</th><th>Unverified</th><th>Mapping</th><th>Uploaded by</th></tr></thead><tbody>{batches.map(batch => <tr key={batch.id}><td>{batchDateRange(batch)}</td><td>{batch.file_name}</td><td>{batch.imported_rows}</td><td>{batch.matched_rows}</td><td>{batch.mismatch_rows}</td><td>{batch.unverified_rows}</td><td>{batch.mapping_required_rows}</td><td>{batch.uploaded_by}<small>{new Date(batch.created_at).toLocaleString()}</small></td></tr>)}{batches.length === 0 && <tr><td colSpan={8}>{loading ? 'Loading...' : 'No reports uploaded yet.'}</td></tr>}</tbody></table></div>
         </section>
       </main>
     </div>

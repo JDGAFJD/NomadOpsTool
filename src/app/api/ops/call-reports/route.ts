@@ -82,12 +82,18 @@ export async function POST(request: Request) {
       fileName: file.name || 'call-report.csv',
       uploadedBy: session.email,
     });
-    await logActivity(session.email, 'upload_call_report', `${result.batch.report_date}:${result.batch.id}`, request);
+    await logActivity(
+      session.email,
+      'upload_call_report',
+      `${result.batch.report_start_date}:${result.batch.report_end_date}:${result.batch.id}`,
+      request
+    );
     return NextResponse.json({
       success: true,
       duplicate: result.duplicate,
       batch: result.batch,
       processing: result.processing,
+      processingByDate: 'processingByDate' in result ? result.processingByDate : null,
       rejected: result.parsed.rejected,
     });
   } catch (error: any) {
