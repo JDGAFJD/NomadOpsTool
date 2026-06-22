@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { processDueCollectionEmailJobs } from '@/lib/collectionEmailJobs';
 import { processPendingCallVerifications } from '@/lib/callVerification';
 import { sendDueCollectionReminders } from '@/lib/collections';
-import { isCallVerificationEnabled } from '@/lib/features';
+import { isTwilioCallVerificationMode } from '@/lib/features';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     const [reminders, emailJobs, callVerifications] = await Promise.all([
       sendDueCollectionReminders(),
       processDueCollectionEmailJobs(),
-      isCallVerificationEnabled()
+      isTwilioCallVerificationMode()
         ? processPendingCallVerifications()
         : Promise.resolve({ callVerificationsChecked: 0, callVerificationsResolved: 0 }),
     ]);

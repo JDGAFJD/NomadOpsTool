@@ -43,7 +43,7 @@ function filters(request: NextRequest, params: unknown[]) {
       clauses.push(`EXISTS (
         SELECT 1 FROM ops_collection_attempts a
         JOIN ops_call_verifications v ON v.collection_attempt_id=a.id
-        WHERE a.case_id=c.id AND v.state IN ('unverified','outcome_mismatch')
+        WHERE a.case_id=c.id AND v.state IN ('unverified','outcome_mismatch','mapping_required')
       )`);
     } else if (verification === 'not_tracked') {
       clauses.push(`NOT EXISTS (

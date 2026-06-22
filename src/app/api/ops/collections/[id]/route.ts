@@ -3,7 +3,7 @@ import { verifyAuth } from '@/lib/auth';
 import { processCollectionEmailJob } from '@/lib/collectionEmailJobs';
 import { createCallVerification, ensureCallVerificationTable, processCallVerification } from '@/lib/callVerification';
 import { ensureCollectionsTables, followUpWindow, nextCollectionWindow } from '@/lib/collections';
-import { isCallVerificationEnabled } from '@/lib/features';
+import { isCallVerificationEnabled, isTwilioCallVerificationMode } from '@/lib/features';
 import { logActivity, queryOpsDb, withOpsDbTransaction } from '@/lib/opsDb';
 
 const REASONS = ['insufficient_funds','expired_replaced_card','bank_decline','payday_timing','forgot','billing_dispute','financial_hardship','technical_issue','refused_payment','promised_later','other'];
@@ -206,7 +206,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       after(async () => {
         await Promise.allSettled([
           processCollectionEmailJob(queued.jobId),
-          queued.verificationId ? processCallVerification(queued.verificationId) : Promise.resolve(),
+          queued.verificationId && isTwilioCallVerificationMode()
+            ? processCallVerification(queued.verificationId)
+            : Promise.resolve(),
           logActivity(session.email, `collection_${action}`, String(id), request),
         ]);
       });
@@ -288,7 +290,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     });
     await logActivity(session.email, 'collection_completed', String(id), request);
     const completedVerificationId = completed.verificationId;
-    if (completedVerificationId) after(() => processCallVerification(completedVerificationId));
+    if (completedVerificationId && isTwilioCallVerificationMode()) {
+      after(() => processCallVerification(completedVerificationId));
+    }
     return NextResponse.json({
       success: true,
       case: completed.case,

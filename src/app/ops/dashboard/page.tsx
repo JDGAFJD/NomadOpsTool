@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { LogOut, ShieldCheck, Loader2, Search, Package, Zap, CreditCard, Activity, ArrowRight, DollarSign, Calendar, Play, Pause, AlertCircle, Copy, RefreshCw, X, AlertTriangle, ShieldAlert, Check, Info, BarChart2, Sun, Moon, ClipboardList, PhoneCall } from 'lucide-react';
+import { LogOut, ShieldCheck, Loader2, Search, Package, Zap, CreditCard, Activity, ArrowRight, DollarSign, Calendar, Play, Pause, AlertCircle, Copy, RefreshCw, X, AlertTriangle, ShieldAlert, Check, Info, BarChart2, Sun, Moon, ClipboardList, PhoneCall, FileCheck2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useTheme } from '@/components/ThemeProvider';
@@ -248,6 +248,10 @@ export default function OpsDashboard() {
             <button type="button" onClick={() => router.push('/collections')} title="Open collections">
               <DollarSign size={15} />
               <span>Collections</span>
+            </button>
+            <button type="button" onClick={() => router.push('/call-verification')} title="Open call verification">
+              <FileCheck2 size={15} />
+              <span>Call Verification</span>
             </button>
           </nav>
           {/* Theme Toggle */}

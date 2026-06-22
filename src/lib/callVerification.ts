@@ -1,8 +1,9 @@
 import type { PoolClient } from 'pg';
+import { getCallVerificationMode } from '@/lib/features';
 import { queryOpsDb } from '@/lib/opsDb';
 import { TwilioService, type TwilioCall } from '@/lib/services/TwilioService';
 
-export type VerificationState = 'pending' | 'verified' | 'outcome_mismatch' | 'unverified';
+export type VerificationState = 'pending' | 'verified' | 'outcome_mismatch' | 'unverified' | 'mapping_required';
 export type VerificationWorkType = 'callback' | 'collection';
 
 export function phoneMatchKey(value: string | null | undefined) {
@@ -57,6 +58,18 @@ export async function ensureCallVerificationTable() {
   await queryOpsDb(`CREATE UNIQUE INDEX IF NOT EXISTS idx_call_verification_collection_attempt ON ops_call_verifications(collection_attempt_id) WHERE collection_attempt_id IS NOT NULL`);
   await queryOpsDb(`CREATE UNIQUE INDEX IF NOT EXISTS idx_call_verification_twilio_sid ON ops_call_verifications(twilio_call_sid) WHERE twilio_call_sid IS NOT NULL`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_call_verification_pending ON ops_call_verifications(state, verification_deadline)`);
+  await queryOpsDb(`ALTER TABLE ops_call_verifications ADD COLUMN IF NOT EXISTS evidence_source TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_call_verifications ADD COLUMN IF NOT EXISTS call_report_batch_id BIGINT`);
+  await queryOpsDb(`ALTER TABLE ops_call_verifications ADD COLUMN IF NOT EXISTS call_report_row_id BIGINT`);
+  await queryOpsDb(`ALTER TABLE ops_call_verifications ADD COLUMN IF NOT EXISTS external_call_id TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_call_verifications ADD COLUMN IF NOT EXISTS agent_extension TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_call_verifications ADD COLUMN IF NOT EXISTS agent_display_name TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_call_verifications ADD COLUMN IF NOT EXISTS evidence_status TEXT`);
+  await queryOpsDb(`ALTER TABLE ops_call_verifications ADD COLUMN IF NOT EXISTS evidence_call_time TIMESTAMPTZ`);
+  await queryOpsDb(`ALTER TABLE ops_call_verifications ADD COLUMN IF NOT EXISTS ringing_seconds INTEGER`);
+  await queryOpsDb(`ALTER TABLE ops_call_verifications ADD COLUMN IF NOT EXISTS talking_seconds INTEGER`);
+  await queryOpsDb(`ALTER TABLE ops_call_verifications ADD COLUMN IF NOT EXISTS report_date DATE`);
+  await queryOpsDb(`CREATE UNIQUE INDEX IF NOT EXISTS idx_call_verification_report_row ON ops_call_verifications(call_report_row_id) WHERE call_report_row_id IS NOT NULL`);
 }
 
 type CreateVerificationInput = {
@@ -72,14 +85,14 @@ type CreateVerificationInput = {
 
 export async function createCallVerification(client: PoolClient, input: CreateVerificationInput) {
   const submittedAt = input.submittedAt || new Date();
-  const windowStart = new Date(submittedAt.getTime() - 60 * 60 * 1000);
+  const windowStart = new Date(submittedAt.getTime() - 90 * 60 * 1000);
   const windowEnd = new Date(submittedAt.getTime() + 5 * 60 * 1000);
-  const deadline = new Date(submittedAt.getTime() + 30 * 60 * 1000);
+  const deadline = new Date(submittedAt.getTime() + 36 * 60 * 60 * 1000);
   const result = await client.query(
     `INSERT INTO ops_call_verifications (
        work_type,callback_id,collection_attempt_id,agent_email,reported_outcome,
-       selected_phone,phone_source,submitted_at,window_start,window_end,verification_deadline
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       selected_phone,phone_source,submitted_at,window_start,window_end,verification_deadline,evidence_source
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      ON CONFLICT DO NOTHING
      RETURNING *`,
     [
@@ -94,6 +107,7 @@ export async function createCallVerification(client: PoolClient, input: CreateVe
       windowStart,
       windowEnd,
       deadline,
+      getCallVerificationMode(),
     ]
   );
   return result.rows[0] || null;
@@ -110,21 +124,21 @@ function closestCall(calls: TwilioCall[], phone: string, submittedAt: Date) {
     })[0] || null;
 }
 
-async function recordVerificationEvent(row: any, state: VerificationState, details: Record<string, unknown>) {
+export async function recordVerificationEvent(row: any, state: VerificationState, details: Record<string, unknown>, actor = 'verification') {
   if (row.work_type === 'callback' && row.callback_id) {
     await queryOpsDb(
       `INSERT INTO ops_callback_events (callback_id,actor_email,event_type,details)
-       VALUES ($1,'twilio',$2,$3::jsonb)`,
-      [row.callback_id, `call_verification_${state}`, JSON.stringify(details)]
+       VALUES ($1,$2,$3,$4::jsonb)`,
+      [row.callback_id, actor, `call_verification_${state}`, JSON.stringify(details)]
     );
     return;
   }
   if (row.work_type === 'collection' && row.collection_attempt_id) {
     await queryOpsDb(
       `INSERT INTO ops_collection_events (case_id,actor_email,event_type,details)
-       SELECT a.case_id,'twilio',$2,$3::jsonb
+       SELECT a.case_id,$2,$3,$4::jsonb
        FROM ops_collection_attempts a WHERE a.id=$1`,
-      [row.collection_attempt_id, `call_verification_${state}`, JSON.stringify({
+      [row.collection_attempt_id, actor, `call_verification_${state}`, JSON.stringify({
         ...details,
         collectionAttemptId: Number(row.collection_attempt_id),
       })]

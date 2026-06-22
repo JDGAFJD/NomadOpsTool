@@ -2,7 +2,7 @@ import { after, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { createCallVerification, ensureCallVerificationTable, processCallVerification } from '@/lib/callVerification';
 import { getSetting } from '@/lib/db';
-import { isCallVerificationEnabled } from '@/lib/features';
+import { isCallVerificationEnabled, isTwilioCallVerificationMode } from '@/lib/features';
 import { FreeScoutService } from '@/lib/services/FreeScoutService';
 import { addCallbackEvent, ensureCallbackTables } from '@/lib/callbacks';
 import { logActivity, queryOpsDb, withOpsDbTransaction } from '@/lib/opsDb';
@@ -144,7 +144,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (!saved) return NextResponse.json({ error: 'Callback changed before it could be completed.' }, { status: 409 });
 
     await logActivity(session.email, `callback_${action}`, String(callbackId), request);
-    if (saved.verification) after(() => processCallVerification(Number(saved.verification.id)));
+    if (saved.verification && isTwilioCallVerificationMode()) {
+      after(() => processCallVerification(Number(saved.verification.id)));
+    }
     return NextResponse.json({
       success: true,
       callback: saved.callback,

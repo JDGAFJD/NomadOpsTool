@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, CalendarClock, CheckCircle2, Clock3, Headphones, History,
-  Inbox, Loader2, LogOut, Mail, Phone, PhoneCall, RefreshCw, RotateCcw, Search,
+  FileCheck2, Inbox, Loader2, LogOut, Mail, Phone, PhoneCall, RefreshCw, RotateCcw, Search,
   Sun, Moon, UserCheck, Voicemail, X,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
@@ -181,7 +181,7 @@ export default function CallbacksPage() {
       setOutcome(null);
       setNotes('');
       setCalledPhone('');
-      if (data.verification) setAdminNotice('Outcome saved. Twilio call verification is pending.');
+      if (data.verification) setAdminNotice('Outcome saved. Daily call verification is pending.');
       await loadQueue();
     } catch (err: any) {
       setError(err.message || 'Callback update failed.');
@@ -222,11 +222,11 @@ export default function CallbacksPage() {
     try {
       const res = await fetch(`/api/ops/call-verifications/${id}`, { method: 'PATCH' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not recheck Twilio.');
-      setAdminNotice('Twilio verification was queued for another check.');
+      if (!res.ok) throw new Error(data.error || 'Could not reprocess verification.');
+      setAdminNotice('Call verification was queued for another check.');
       await loadQueue();
     } catch (err: any) {
-      setError(err.message || 'Could not recheck Twilio.');
+      setError(err.message || 'Could not reprocess verification.');
     } finally {
       setVerificationWorking(null);
     }
@@ -278,6 +278,7 @@ export default function CallbacksPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="callback-agent-label" style={{ color: 'var(--ops-text-muted)', fontSize: 13 }}>{agentEmail}</span>
+          <button title="Call verification" onClick={() => router.push('/call-verification')} className="ops-secondary-button collections-report-link"><FileCheck2 size={15}/><span>Verify Calls</span></button>
           <button title="Toggle theme" onClick={toggle} className="ops-icon-button" style={{ width: 40, height: 40, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button>
           <button title="Sign out" onClick={async () => { await fetch('/api/ops/logout', { method: 'POST' }); router.push('/ops/login'); }} className="ops-icon-button" style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><LogOut size={17} /></button>
         </div>
@@ -339,10 +340,11 @@ export default function CallbacksPage() {
             </select>
             {callVerificationEnabled&&<select value={verificationFilter} onChange={event=>setVerificationFilter(event.target.value)} style={{ padding: 11, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-200)', color: 'var(--ops-text)' }}>
               <option value="all">All verification</option>
-              <option value="pending">Pending verification</option>
+              <option value="pending">Pending daily verification</option>
               <option value="verified">Verified</option>
               <option value="unverified">Unable to verify</option>
               <option value="outcome_mismatch">Outcome mismatch</option>
+              <option value="mapping_required">Agent mapping required</option>
               {isAdmin&&<option value="needs_review">Needs review</option>}
               <option value="not_tracked">Not tracked</option>
             </select>}

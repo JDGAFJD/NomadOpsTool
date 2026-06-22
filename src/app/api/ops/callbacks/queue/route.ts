@@ -26,7 +26,7 @@ function buildCallbackFilters(searchParams: URLSearchParams, params: any[] = [])
   }
   if (verification && verification !== 'all') {
     if (verification === 'needs_review') {
-      clauses.push(`EXISTS (SELECT 1 FROM ops_call_verifications v WHERE v.callback_id=c.id AND v.state IN ('unverified','outcome_mismatch'))`);
+      clauses.push(`EXISTS (SELECT 1 FROM ops_call_verifications v WHERE v.callback_id=c.id AND v.state IN ('unverified','outcome_mismatch','mapping_required'))`);
     } else if (verification === 'not_tracked') {
       clauses.push(`NOT EXISTS (SELECT 1 FROM ops_call_verifications v WHERE v.callback_id=c.id)`);
     } else {
