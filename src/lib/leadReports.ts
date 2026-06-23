@@ -272,6 +272,7 @@ export async function ensureLeadReportTables() {
       total_leads INTEGER NOT NULL DEFAULT 0,
       called_leads INTEGER NOT NULL DEFAULT 0,
       not_called_leads INTEGER NOT NULL DEFAULT 0,
+      pending_verification_leads INTEGER NOT NULL DEFAULT 0,
       duplicate_leads INTEGER NOT NULL DEFAULT 0,
       total_attempts INTEGER NOT NULL DEFAULT 0,
       answered_attempts INTEGER NOT NULL DEFAULT 0,
@@ -280,8 +281,21 @@ export async function ensureLeadReportTables() {
       conversion_unavailable_leads INTEGER NOT NULL DEFAULT 0,
       average_delay_seconds INTEGER,
       total_talking_seconds INTEGER NOT NULL DEFAULT 0,
+      latest_call_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+  await queryOpsDb(`ALTER TABLE ops_lead_report_batches ADD COLUMN IF NOT EXISTS pending_verification_leads INTEGER NOT NULL DEFAULT 0`);
+  await queryOpsDb(`ALTER TABLE ops_lead_report_batches ADD COLUMN IF NOT EXISTS latest_call_at TIMESTAMPTZ`);
+  await queryOpsDb(`
+    UPDATE ops_lead_report_batches b
+    SET latest_call_at=latest.max_call_time
+    FROM (
+      SELECT batch_id,MAX(call_time) AS max_call_time
+      FROM ops_lead_report_call_rows
+      GROUP BY batch_id
+    ) latest
+    WHERE b.id=latest.batch_id AND b.latest_call_at IS NULL
   `);
   await queryOpsDb(`
     CREATE TABLE IF NOT EXISTS ops_lead_report_call_rows (
@@ -341,6 +355,30 @@ export async function ensureLeadReportTables() {
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_ops_lead_report_results_batch ON ops_lead_report_results(batch_id,id)`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_ops_lead_report_results_filters ON ops_lead_report_results(batch_id,call_status,conversion_status,is_duplicate)`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_ops_lead_report_call_rows_batch ON ops_lead_report_call_rows(batch_id,call_time)`);
+  await queryOpsDb(`
+    UPDATE ops_lead_report_results r
+    SET call_status='pending_verification'
+    FROM ops_lead_report_batches b
+    WHERE r.batch_id=b.id
+      AND r.call_status='not_called'
+      AND r.attempt_count=0
+      AND r.match_key IS NOT NULL
+      AND b.latest_call_at IS NOT NULL
+      AND r.lead_created_at > b.latest_call_at
+  `);
+  await queryOpsDb(`
+    UPDATE ops_lead_report_batches b
+    SET pending_verification_leads=counts.pending,
+        not_called_leads=counts.not_called
+    FROM (
+      SELECT batch_id,
+             COUNT(*) FILTER (WHERE call_status='pending_verification')::int AS pending,
+             COUNT(*) FILTER (WHERE attempt_count=0 AND call_status<>'pending_verification')::int AS not_called
+      FROM ops_lead_report_results
+      GROUP BY batch_id
+    ) counts
+    WHERE b.id=counts.batch_id
+  `);
 }
 
 async function fetchLeadsForReport(startDate: string, endDate: string) {
@@ -369,6 +407,10 @@ export async function importLeadReportCsv(input: { csv: string; fileName: string
     duplicateCounts.set(key, (duplicateCounts.get(key) || 0) + 1);
   }
   const callsByPhone = callMatchesByPhone(parsed.rows);
+  const latestCallAt = parsed.rows.reduce<Date | null>((latest, row) => {
+    if (!latest || row.callTime.getTime() > latest.getTime()) return row.callTime;
+    return latest;
+  }, null);
   const conversionCache = new Map<string, ConversionSnapshot>();
   const conversionInputs = [...new Map(leads.map(lead => [
     `${normalizeSearch(lead.email)}:${lead.created_at.toISOString()}`,
@@ -384,8 +426,8 @@ export async function importLeadReportCsv(input: { csv: string; fileName: string
   const result = await withOpsDbTransaction(async client => {
     const batchResult = await client.query(`
       INSERT INTO ops_lead_report_batches
-        (file_hash,file_name,uploaded_by,report_start_date,report_end_date,total_call_rows,imported_call_rows,ignored_call_rows,rejected_call_rows)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        (file_hash,file_name,uploaded_by,report_start_date,report_end_date,total_call_rows,imported_call_rows,ignored_call_rows,rejected_call_rows,latest_call_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       RETURNING *
     `, [
       fileHash,
@@ -397,6 +439,7 @@ export async function importLeadReportCsv(input: { csv: string; fileName: string
       parsed.rows.length,
       parsed.ignoredRows,
       parsed.rejected.length,
+      latestCallAt,
     ]);
     const batch = batchResult.rows[0];
 
@@ -428,6 +471,13 @@ export async function importLeadReportCsv(input: { csv: string; fileName: string
       const matchKey = phoneMatchKey(lead.mobile_number || '');
       const calls = matchKey ? (callsByPhone.get(matchKey) || []) : [];
       const callSummary = summarizeCalls(calls, lead.created_at);
+      const callStatus = !matchKey
+        ? 'no_phone'
+        : calls.length
+          ? 'called'
+          : latestCallAt && lead.created_at.getTime() > latestCallAt.getTime()
+            ? 'pending_verification'
+            : 'not_called';
       const dupKey = duplicateKey(lead);
       const dupCount = duplicateCounts.get(dupKey) || 1;
       const conversion = conversionCache.get(`${normalizeSearch(lead.email)}:${lead.created_at.toISOString()}`)
@@ -462,7 +512,7 @@ export async function importLeadReportCsv(input: { csv: string; fileName: string
         dupCount,
         dupCount > 1,
         matchKey,
-        !matchKey ? 'no_phone' : calls.length ? 'called' : 'not_called',
+        callStatus,
         callSummary.attempts,
         callSummary.answered,
         callSummary.unanswered,
@@ -478,14 +528,15 @@ export async function importLeadReportCsv(input: { csv: string; fileName: string
         JSON.stringify(conversion.shopify),
         JSON.stringify(conversion.chargebee),
       ]);
-      summaries.push({ ...callSummary, duplicate: dupCount > 1, conversionStatus });
+      summaries.push({ ...callSummary, duplicate: dupCount > 1, conversionStatus, callStatus });
     }
 
     const delays = summaries.map(item => item.delaySeconds).filter((value): value is number => typeof value === 'number');
     const metrics = {
       totalLeads: leads.length,
       calledLeads: summaries.filter(item => item.attempts > 0).length,
-      notCalledLeads: summaries.filter(item => item.attempts === 0).length,
+      notCalledLeads: summaries.filter(item => item.attempts === 0 && item.callStatus !== 'pending_verification').length,
+      pendingVerificationLeads: summaries.filter(item => item.callStatus === 'pending_verification').length,
       duplicateLeads: summaries.filter(item => item.duplicate).length,
       totalAttempts: summaries.reduce((sum, item) => sum + item.attempts, 0),
       answeredAttempts: summaries.reduce((sum, item) => sum + item.answered, 0),
@@ -498,9 +549,9 @@ export async function importLeadReportCsv(input: { csv: string; fileName: string
 
     const updated = await client.query(`
       UPDATE ops_lead_report_batches
-      SET total_leads=$2,called_leads=$3,not_called_leads=$4,duplicate_leads=$5,total_attempts=$6,
-          answered_attempts=$7,unanswered_attempts=$8,converted_leads=$9,conversion_unavailable_leads=$10,
-          average_delay_seconds=$11,total_talking_seconds=$12
+      SET total_leads=$2,called_leads=$3,not_called_leads=$4,pending_verification_leads=$5,duplicate_leads=$6,total_attempts=$7,
+          answered_attempts=$8,unanswered_attempts=$9,converted_leads=$10,conversion_unavailable_leads=$11,
+          average_delay_seconds=$12,total_talking_seconds=$13
       WHERE id=$1
       RETURNING *
     `, [
@@ -508,6 +559,7 @@ export async function importLeadReportCsv(input: { csv: string; fileName: string
       metrics.totalLeads,
       metrics.calledLeads,
       metrics.notCalledLeads,
+      metrics.pendingVerificationLeads,
       metrics.duplicateLeads,
       metrics.totalAttempts,
       metrics.answeredAttempts,
@@ -553,6 +605,7 @@ export async function getLeadReportDetail(reportId: number, params: URLSearchPar
   const called = params.get('called') || 'all';
   if (called === 'called') filters.push(`attempt_count > 0`);
   if (called === 'not_called') filters.push(`attempt_count = 0`);
+  if (called === 'pending_verification') filters.push(`call_status = 'pending_verification'`);
   if (called === 'no_phone') filters.push(`call_status = 'no_phone'`);
   const outcome = params.get('outcome') || 'all';
   if (outcome === 'answered') filters.push(`answered_count > 0`);
@@ -579,7 +632,8 @@ export async function getLeadReportDetail(reportId: number, params: URLSearchPar
     queryOpsDb(`
       SELECT COUNT(*)::int AS total,
              COUNT(*) FILTER (WHERE attempt_count > 0)::int AS called,
-             COUNT(*) FILTER (WHERE attempt_count = 0)::int AS not_called,
+             COUNT(*) FILTER (WHERE attempt_count = 0 AND call_status<>'pending_verification')::int AS not_called,
+             COUNT(*) FILTER (WHERE call_status='pending_verification')::int AS pending_verification,
              COUNT(*) FILTER (WHERE is_duplicate)::int AS duplicates,
              COUNT(*) FILTER (WHERE conversion_status='converted')::int AS converted,
              COUNT(*) FILTER (WHERE conversion_status='existing')::int AS existing,

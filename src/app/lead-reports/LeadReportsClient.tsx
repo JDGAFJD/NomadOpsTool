@@ -20,6 +20,7 @@ type Batch = {
   total_leads: number;
   called_leads: number;
   not_called_leads: number;
+  pending_verification_leads: number;
   duplicate_leads: number;
   total_attempts: number;
   answered_attempts: number;
@@ -28,6 +29,7 @@ type Batch = {
   conversion_unavailable_leads: number;
   average_delay_seconds: number | null;
   total_talking_seconds: number;
+  latest_call_at: string | null;
   created_at: string;
 };
 
@@ -73,7 +75,7 @@ type ConversionState = {
 type Detail = {
   batch: Batch;
   summary: {
-    total: number; called: number; not_called: number; duplicates: number; converted: number; existing: number;
+    total: number; called: number; not_called: number; pending_verification: number; duplicates: number; converted: number; existing: number;
     attempts: number; answered: number; unanswered: number; talking_seconds: number;
   };
   agents: Array<{ extension: string; name: string }>;
@@ -194,7 +196,8 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
     return [
       ['Leads', batch?.total_leads || 0, UsersRound, 'Leads created during the uploaded CSV date range.'],
       ['Called', batch?.called_leads || 0, PhoneCall, 'Unique leads with at least one matching outbound 3CX call by final seven phone digits.'],
-      ['Not called', batch?.not_called_leads || 0, Clock3, 'Unique leads with no matching outbound call in this report.'],
+      ['Pending verification', batch?.pending_verification_leads || 0, Clock3, 'Leads created after the newest call in this uploaded report, so they are waiting for the next updated 3CX report before they can be judged.'],
+      ['Not called', batch?.not_called_leads || 0, Clock3, 'Leads with no matching outbound call in this report after excluding pending-verification leads.'],
       ['Duplicates', batch?.duplicate_leads || 0, UsersRound, 'Lead duplicate rows only, based on full phone, then email, then name plus zip.'],
       ['Attempts', batch?.total_attempts || 0, FileSpreadsheet, 'Total matched call attempts across all leads.'],
       ['Answered', batch?.answered_attempts || 0, CheckCircle2, 'Matched calls where 3CX status is Answered.'],
@@ -293,6 +296,7 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
           <div>
             <strong>How phone matching works</strong>
             <p>Both the lead phone and the 3CX destination number are normalized by removing every non-digit character, then the system compares only the final 7 digits. Dashes, spaces, parentheses, and a leading +1 do not affect matching.</p>
+            <p>Pending verification means the lead was created after this report&apos;s newest call time{detail?.batch.latest_call_at ? ` (${formatDate(detail.batch.latest_call_at)})` : ''}, so upload the next updated 3CX report to verify it.</p>
             <code>(305) 341-3919 → 3413919</code>
             <code>+1-305-341-3919 → 3413919</code>
           </div>
@@ -307,7 +311,7 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
           <div className="lead-report-filters">
             <label><Search size={15}/><input value={filters.search} onChange={event => updateFilter('search', event.target.value)} placeholder="Search name, email, phone, zip, ticket..." /></label>
             <select value={filters.called} onChange={event => updateFilter('called', event.target.value)}>
-              <option value="all">All call states</option><option value="called">Called</option><option value="not_called">Not called</option><option value="no_phone">No phone</option>
+              <option value="all">All call states</option><option value="called">Called</option><option value="pending_verification">Pending verification</option><option value="not_called">Not called</option><option value="no_phone">No phone</option>
             </select>
             <select value={filters.outcome} onChange={event => updateFilter('outcome', event.target.value)}>
               <option value="all">All outcomes</option><option value="answered">Answered</option><option value="unanswered">Only unanswered</option>
@@ -327,7 +331,7 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
 
           <div className="lead-report-table">
             {detail?.rows.map(row => (
-              <article key={row.id} data-called={row.attempt_count > 0}>
+              <article key={row.id} data-called={row.attempt_count > 0} data-status={row.call_status}>
                 <div className="lead-report-lead">
                   <strong>{row.lead_name || row.lead_email || 'Unknown lead'}</strong>
                   <span>{row.lead_email || 'No email'} · {row.lead_phone || 'No phone'} · ZIP {row.lead_zip || 'N/A'}</span>
@@ -335,8 +339,9 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
                   {row.is_duplicate && <em title="Duplicate lead rows only, not duplicate calls.">Duplicate lead group: {row.duplicate_count}</em>}
                 </div>
                 <div className="lead-report-call">
-                  <strong>{row.attempt_count ? `${row.attempt_count} attempt${row.attempt_count === 1 ? '' : 's'}` : row.call_status === 'no_phone' ? 'No phone to match' : 'Not called'}</strong>
+                  <strong>{row.attempt_count ? `${row.attempt_count} attempt${row.attempt_count === 1 ? '' : 's'}` : row.call_status === 'pending_verification' ? 'Pending verification' : row.call_status === 'no_phone' ? 'No phone to match' : 'Not called'}</strong>
                   <span>{row.first_call_at ? `First call ${formatDate(row.first_call_at)}` : 'No matched first call'}</span>
+                  {row.call_status === 'pending_verification' && <small className="lead-report-warning">Waiting for the next updated call report.</small>}
                   <small className={row.delay_seconds !== null && row.delay_seconds < 0 ? 'lead-report-warning' : ''}>Delay: {formatSeconds(row.delay_seconds)}</small>
                   <small>Talk: {formatSeconds(row.total_talking_seconds)} · Total: {formatSeconds(row.total_call_seconds)}</small>
                 </div>
