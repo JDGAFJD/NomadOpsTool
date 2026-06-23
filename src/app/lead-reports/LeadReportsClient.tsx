@@ -143,8 +143,10 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
   const router = useRouter();
   const { theme, toggle } = useTheme();
   const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingList, setLoadingList] = useState(true);
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [batches, setBatches] = useState<Batch[]>([]);
   const [totals, setTotals] = useState<Record<string, number>>({});
@@ -154,8 +156,9 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
   const [page, setPage] = useState(1);
   const [resultNotice, setResultNotice] = useState('');
 
-  const loadList = useCallback(async (preferredId?: number) => {
-    setLoading(true);
+  const loadList = useCallback(async (preferredId?: number, options?: { refreshing?: boolean }) => {
+    setLoadingList(true);
+    if (options?.refreshing) setRefreshing(true);
     setError('');
     try {
       const response = await fetch('/api/ops/lead-reports', { cache: 'no-store' });
@@ -168,7 +171,8 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
     } catch (err: any) {
       setError(err.message || 'Could not load lead reports.');
     } finally {
-      setLoading(false);
+      setLoadingList(false);
+      if (options?.refreshing) setRefreshing(false);
     }
   }, [selectedId]);
 
@@ -177,6 +181,7 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
       setDetail(null);
       return;
     }
+    setLoadingDetail(true);
     const params = new URLSearchParams({ ...filters, page: String(page) });
     try {
       const response = await fetch(`/api/ops/lead-reports/${selectedId}?${params}`, { cache: 'no-store' });
@@ -185,6 +190,8 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
       setDetail(data);
     } catch (err: any) {
       setError(err.message || 'Could not load report detail.');
+    } finally {
+      setLoadingDetail(false);
     }
   }, [filters, page, selectedId]);
 
@@ -238,6 +245,18 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
   };
 
   const selectedBatch = batches.find(batch => batch.id === selectedId) || null;
+  const firstLoad = loadingList && !batches.length && !detail;
+  const busy = uploading || refreshing || loadingList || loadingDetail;
+
+  const refreshAll = async () => {
+    setRefreshing(true);
+    try {
+      await loadList(undefined, { refreshing: true });
+      await loadDetail();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   return (
     <div className="ops-app-shell call-report-shell lead-report-shell">
@@ -249,12 +268,13 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
         </div>
         <div className="call-report-header-actions">
           <span>{userEmail}</span>
-          <button title="Refresh" className="ops-icon-button" onClick={() => { void loadList(); void loadDetail(); }}><RefreshCw size={17}/></button>
+          <button title="Refresh" className="ops-icon-button" disabled={busy} onClick={() => { void refreshAll(); }}>{refreshing ? <Loader2 className="animate-spin" size={17}/> : <RefreshCw size={17}/>}</button>
           <button title="Toggle theme" className="ops-icon-button" onClick={toggle}>{theme === 'dark' ? <Sun size={17}/> : <Moon size={17}/>}</button>
         </div>
       </header>
 
       <main className="call-report-main">
+        {firstLoad && <section className="lead-report-page-loader"><Loader2 className="animate-spin" size={24}/><strong>Loading lead reports...</strong><span>Pulling saved reports and latest metrics.</span></section>}
         {error && <div className="collections-error">{error}</div>}
         {resultNotice && <div className="collections-success">{resultNotice}</div>}
 
@@ -264,6 +284,7 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
             <p>Scores Slack address lookup leads against outbound calls using the last seven digits of the customer phone number.</p>
             <input type="file" accept=".csv,text/csv" onChange={event => setFile(event.target.files?.[0] || null)}/>
             <button className="ops-primary-button" disabled={!file || uploading}>{uploading ? <Loader2 className="animate-spin" size={16}/> : <FileSpreadsheet size={16}/>} {uploading ? 'Processing...' : 'Upload and analyze'}</button>
+            {uploading && <div className="lead-report-inline-loader"><Loader2 className="animate-spin" size={14}/> Processing CSV and checking conversions...</div>}
           </form>
 
           <section className="call-report-result">
@@ -272,18 +293,20 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
               <span>{totals.reports || 0} reports saved</span>
             </div>
             <div className="lead-report-history-list">
+              {loadingList && <div className="lead-report-inline-loader"><Loader2 className="animate-spin" size={14}/> Loading saved reports...</div>}
               {batches.map(batch => (
-                <button key={batch.id} type="button" data-active={selectedId === batch.id} onClick={() => { setSelectedId(batch.id); setPage(1); }}>
+                <button key={batch.id} type="button" data-active={selectedId === batch.id} disabled={loadingDetail || uploading} onClick={() => { setSelectedId(batch.id); setPage(1); }}>
                   <strong>{dateRange(batch)}</strong>
                   <span>{batch.file_name} · {batch.total_leads} leads · {batch.called_leads} called · {batch.converted_leads} converted</span>
                 </button>
               ))}
-              {!batches.length && <p>{loading ? 'Loading reports...' : 'No lead reports uploaded yet.'}</p>}
+              {!batches.length && !loadingList && <p>No lead reports uploaded yet.</p>}
             </div>
           </section>
         </section>
 
-        <section className="call-report-metrics lead-report-metrics">
+        <section className={`call-report-metrics lead-report-metrics ${loadingDetail ? 'lead-report-busy' : ''}`}>
+          {loadingDetail && <div className="lead-report-overlay-loader"><Loader2 className="animate-spin" size={16}/> Updating metrics...</div>}
           {metricCards.map(([label, value, Icon, help]) => (
             <article key={label} data-state={label === 'Converted' ? 'verified' : label === 'Not called' ? 'pending' : undefined}>
               <div><span>{label} <MetricTooltip text={String(help)}/></span><strong>{value}</strong></div><Icon size={20}/>
@@ -305,7 +328,7 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
         <section className="call-report-section">
           <div className="call-report-section-head">
             <div><small>Lead detail</small><h2>Calls, duplicates, and conversions</h2></div>
-            <span>{detail ? `Showing ${detail.rows.length} of ${detail.pagination.totalRecords}` : 'Upload or select a report'}</span>
+            <span>{loadingDetail ? <><Loader2 className="animate-spin" size={13}/> Updating report...</> : detail ? `Showing ${detail.rows.length} of ${detail.pagination.totalRecords}` : 'Upload or select a report'}</span>
           </div>
 
           <div className="lead-report-filters">
@@ -329,7 +352,8 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
             <button type="button" className="ops-secondary-button" onClick={() => { setFilters(emptyFilters); setPage(1); }}><Filter size={15}/> Reset</button>
           </div>
 
-          <div className="lead-report-table">
+          <div className={`lead-report-table ${loadingDetail ? 'lead-report-busy' : ''}`}>
+            {loadingDetail && <div className="lead-report-overlay-loader"><Loader2 className="animate-spin" size={16}/> Updating lead rows...</div>}
             {detail?.rows.map(row => (
               <article key={row.id} data-called={row.attempt_count > 0} data-status={row.call_status}>
                 <div className="lead-report-lead">
@@ -364,8 +388,8 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
           {detail && <nav className="collections-pagination lead-report-pagination">
             <div><strong>Page {detail.pagination.page} of {detail.pagination.totalPages}</strong><span>Showing up to {detail.pagination.pageSize} leads per page</span></div>
             <div>
-              <button className="ops-secondary-button" disabled={page <= 1} onClick={() => setPage(prev => Math.max(1, prev - 1))}>Previous</button>
-              <button className="ops-secondary-button" disabled={page >= detail.pagination.totalPages} onClick={() => setPage(prev => prev + 1)}>Next</button>
+              <button className="ops-secondary-button" disabled={loadingDetail || page <= 1} onClick={() => setPage(prev => Math.max(1, prev - 1))}>Previous</button>
+              <button className="ops-secondary-button" disabled={loadingDetail || page >= detail.pagination.totalPages} onClick={() => setPage(prev => prev + 1)}>Next</button>
             </div>
           </nav>}
         </section>
