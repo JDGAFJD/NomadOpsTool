@@ -6,7 +6,11 @@ import { Inbox, Settings, Ticket } from 'lucide-react';
 
 export default function AppLayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isOps = pathname?.startsWith('/ops') || pathname?.startsWith('/callbacks') || pathname?.startsWith('/collections');
+  const isOps = pathname?.startsWith('/ops')
+    || pathname?.startsWith('/callbacks')
+    || pathname?.startsWith('/collections')
+    || pathname?.startsWith('/call-verification')
+    || pathname?.startsWith('/lead-reports');
   const isPayNow = pathname === '/pay-now';
 
   if (isOps || isPayNow) {

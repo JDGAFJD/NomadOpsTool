@@ -118,10 +118,23 @@ function conversionLabel(row: LeadResult) {
   return 'Not converted';
 }
 
-function conversionDetail(value: ConversionState) {
-  if (!value?.label) return 'No details';
-  const refs = value.references?.length ? ` (${value.references.join(', ')})` : '';
-  return `${value.label}${refs}`;
+function MetricTooltip({ text }: { text: string }) {
+  return (
+    <span className="lead-report-tooltip">
+      <button type="button" aria-label={text}><Info size={11}/></button>
+      <span role="tooltip">{text}</span>
+    </span>
+  );
+}
+
+function ConversionChip({ label, detail }: { label: string; detail: ConversionState }) {
+  return (
+    <span className="lead-report-conversion-chip" data-state={detail?.state || 'not_found'}>
+      <strong>{label}</strong>
+      <small>{detail?.label || 'No details'}</small>
+      {Boolean(detail?.references?.length) && <em>{detail.references?.join(', ')}</em>}
+    </span>
+  );
 }
 
 export default function LeadReportsClient({ userEmail }: { userEmail: string }) {
@@ -269,10 +282,20 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
 
         <section className="call-report-metrics lead-report-metrics">
           {metricCards.map(([label, value, Icon, help]) => (
-            <article key={label} title={String(help)} data-state={label === 'Converted' ? 'verified' : label === 'Not called' ? 'pending' : undefined}>
-              <div><span>{label} <Info size={11}/></span><strong>{value}</strong></div><Icon size={20}/>
+            <article key={label} data-state={label === 'Converted' ? 'verified' : label === 'Not called' ? 'pending' : undefined}>
+              <div><span>{label} <MetricTooltip text={String(help)}/></span><strong>{value}</strong></div><Icon size={20}/>
             </article>
           ))}
+        </section>
+
+        <section className="lead-report-match-panel">
+          <Info size={18}/>
+          <div>
+            <strong>How phone matching works</strong>
+            <p>Both the lead phone and the 3CX destination number are normalized by removing every non-digit character, then the system compares only the final 7 digits. Dashes, spaces, parentheses, and a leading +1 do not affect matching.</p>
+            <code>(305) 341-3919 → 3413919</code>
+            <code>+1-305-341-3919 → 3413919</code>
+          </div>
         </section>
 
         <section className="call-report-section">
@@ -322,10 +345,10 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
                   <span>{row.agents?.map(agent => `${agent.name || agent.extension} (${agent.attempts})`).join(', ') || 'No agent'}</span>
                   <small>Answered {row.answered_count} · Unanswered {row.unanswered_count}</small>
                 </div>
-                <div className="lead-report-conversion" title={`${conversionDetail(row.shopify_conversion)}\n${conversionDetail(row.chargebee_conversion)}`}>
+                <div className="lead-report-conversion">
                   <strong>{conversionLabel(row)}</strong>
-                  <span>Shopify: {row.shopify_conversion?.label || 'No details'}</span>
-                  <span>Chargebee: {row.chargebee_conversion?.label || 'No details'}</span>
+                  <ConversionChip label="Shopify" detail={row.shopify_conversion}/>
+                  <ConversionChip label="Chargebee" detail={row.chargebee_conversion}/>
                 </div>
               </article>
             ))}
