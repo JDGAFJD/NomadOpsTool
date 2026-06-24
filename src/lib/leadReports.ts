@@ -9,6 +9,7 @@ import { CommerceService } from '@/lib/services/CommerceService';
 
 const CENTRAL_ZONE = 'America/Chicago';
 const PAGE_SIZE = 100;
+const DYNAMIC_PENDING_ID_OFFSET = 9_000_000_000;
 
 type LeadRow = {
   id: number;
@@ -50,6 +51,11 @@ function normalizeFullPhone(value: string | null | undefined) {
 
 function normalizeSearch(value: string | null | undefined) {
   return String(value || '').trim().toLowerCase();
+}
+
+function phoneMatchKeySql(expression: string) {
+  const digits = `REGEXP_REPLACE(COALESCE(${expression},''),'\\D','','g')`;
+  return `(CASE WHEN LENGTH(${digits}) >= 7 THEN RIGHT(${digits},7) ELSE '' END)`;
 }
 
 function duplicateKey(lead: LeadRow) {
@@ -627,8 +633,15 @@ export async function getLeadReportDetail(reportId: number, params: URLSearchPar
   const page = Math.max(1, Number(params.get('page') || 1) || 1);
   const offset = (page - 1) * PAGE_SIZE;
   const where = filters.join(' AND ');
+  const includeDynamicPending = Boolean(batch.rows[0].latest_call_at)
+    && ['all', 'pending_verification'].includes(called)
+    && outcome === 'all'
+    && agent === 'all'
+    && duplicate !== 'yes'
+    && conversion === 'all';
+  const dynamicSearch = search ? `%${search}%` : null;
 
-  const [summary, agents, rows, total] = await Promise.all([
+  const [summary, agents, savedRows, savedTotal, dynamicPending] = await Promise.all([
     queryOpsDb(`
       SELECT COUNT(*)::int AS total,
              COUNT(*) FILTER (WHERE attempt_count > 0)::int AS called,
@@ -654,17 +667,86 @@ export async function getLeadReportDetail(reportId: number, params: URLSearchPar
       FROM ops_lead_report_results
       WHERE ${where}
       ORDER BY lead_created_at ASC,id ASC
-      LIMIT ${PAGE_SIZE} OFFSET ${offset}
+      LIMIT ${includeDynamicPending ? 10000 : PAGE_SIZE + 1} OFFSET ${includeDynamicPending ? 0 : offset}
     `, values),
     queryOpsDb(`SELECT COUNT(*)::int AS total FROM ops_lead_report_results WHERE ${where}`, values),
+    includeDynamicPending
+      ? queryOpsDb(`
+        SELECT
+          (l.id + $2::bigint) AS id,
+          l.id AS lead_id,
+          l.name AS lead_name,
+          l.email AS lead_email,
+          l.mobile_number AS lead_phone,
+          l.zip_code AS lead_zip,
+          l.use_location,
+          l.uses,
+          l.created_at AS lead_created_at,
+          l.freescout_ticket_id,
+          l.freescout_ticket_url,
+          NULL::text AS duplicate_key,
+          1::int AS duplicate_count,
+          FALSE AS is_duplicate,
+          ${phoneMatchKeySql('l.mobile_number')} AS match_key,
+          'pending_verification'::text AS call_status,
+          0::int AS attempt_count,
+          0::int AS answered_count,
+          0::int AS unanswered_count,
+          NULL::timestamptz AS first_call_at,
+          NULL::int AS delay_seconds,
+          0::int AS total_ringing_seconds,
+          0::int AS total_talking_seconds,
+          0::int AS total_call_seconds,
+          '[]'::jsonb AS agents,
+          '{}'::jsonb AS outcomes,
+          '[]'::jsonb AS calls,
+          'pending_verification'::text AS conversion_status,
+          '{"label":"Not checked until next report upload","state":"pending_verification"}'::jsonb AS shopify_conversion,
+          '{"label":"Not checked until next report upload","state":"pending_verification"}'::jsonb AS chargebee_conversion,
+          l.created_at AS created_at,
+          TRUE AS dynamic_pending
+        FROM ops_customer_leads l
+        WHERE l.created_at > $3::timestamptz
+          AND ${phoneMatchKeySql('l.mobile_number')} <> ''
+          AND NOT EXISTS (
+            SELECT 1
+            FROM ops_lead_report_results r
+            WHERE r.batch_id=$1 AND r.lead_id=l.id
+          )
+          AND ($4::text IS NULL OR (
+            l.name ILIKE $4 OR l.email ILIKE $4 OR l.mobile_number ILIKE $4 OR l.zip_code ILIKE $4 OR l.freescout_ticket_id ILIKE $4
+          ))
+        ORDER BY l.created_at ASC,l.id ASC
+      `, [reportId, DYNAMIC_PENDING_ID_OFFSET, batch.rows[0].latest_call_at, dynamicSearch])
+      : Promise.resolve({ rows: [] }),
   ]);
 
-  const totalRecords = total.rows[0]?.total || 0;
+  const dynamicRows = dynamicPending.rows || [];
+  const dynamicPendingCount = dynamicRows.length;
+  const savedRowsList = savedRows.rows || [];
+  const savedTotalRecords = savedTotal.rows[0]?.total || 0;
+  const allRows = includeDynamicPending
+    ? [...savedRowsList, ...dynamicRows]
+      .sort((a, b) => new Date(a.lead_created_at).getTime() - new Date(b.lead_created_at).getTime() || Number(a.id) - Number(b.id))
+      .slice(offset, offset + PAGE_SIZE)
+    : savedRowsList.slice(0, PAGE_SIZE);
+  const totalRecords = savedTotalRecords + (includeDynamicPending ? dynamicPendingCount : 0);
+  const summaryRow = {
+    ...summary.rows[0],
+    total: (summary.rows[0]?.total || 0) + dynamicPendingCount,
+    pending_verification: (summary.rows[0]?.pending_verification || 0) + dynamicPendingCount,
+  };
+  const batchRow = {
+    ...batch.rows[0],
+    total_leads: (batch.rows[0].total_leads || 0) + dynamicPendingCount,
+    pending_verification_leads: (batch.rows[0].pending_verification_leads || 0) + dynamicPendingCount,
+    dynamic_pending_leads: dynamicPendingCount,
+  };
   return {
-    batch: batch.rows[0],
-    summary: summary.rows[0],
+    batch: batchRow,
+    summary: summaryRow,
     agents: agents.rows,
-    rows: rows.rows,
+    rows: allRows,
     pagination: {
       page,
       pageSize: PAGE_SIZE,
