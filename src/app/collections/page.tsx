@@ -354,6 +354,34 @@ export default function CollectionsPage() {
     finally { setWorking(false); }
   }
 
+  async function checkPayment() {
+    if (!selected) return;
+    setWorking(true); setError(''); setAdminNotice('');
+    try {
+      const res = await fetch(`/api/ops/collections/${selected.id}/check-payment`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not check Chargebee payment.');
+      setLiveInvoices(data.invoices || []);
+      setExpandedInvoice(true);
+      if (data.resultType === 'collected') {
+        setAdminNotice('Payment confirmed in Chargebee. The collection case was marked collected.');
+      } else if (data.resultType === 'paid_after_admin_closure') {
+        setAdminNotice('Payment confirmed in Chargebee. The case was already administratively closed, so only invoice history was updated.');
+      } else if (data.resultType === 'partial_payment') {
+        setAdminNotice(`Partial payment found in Chargebee. Balance updated to ${money(data.totalAmountDue || 0, selected.currency_code)}.`);
+      } else if (data.resultType === 'incomplete_check') {
+        setAdminNotice('Chargebee updated some invoices, but one or more attached invoices could not be confirmed. Review the invoice list and try again.');
+      } else {
+        setAdminNotice(`No paid invoice found in Chargebee. Balance remains ${money(data.totalAmountDue || selected.total_amount_due, selected.currency_code)}.`);
+      }
+      await load();
+    } catch (e: any) {
+      setError(e.message || 'Could not check Chargebee payment.');
+    } finally {
+      setWorking(false);
+    }
+  }
+
   const toggleSelected = (id: number) => {
     setSelectedIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
   };
@@ -640,6 +668,7 @@ export default function CollectionsPage() {
                 {selected.chargebeeUrl&&<a href={selected.chargebeeUrl} target="_blank" rel="noreferrer" className="ops-secondary-button">Chargebee Profile <ExternalLink size={14}/></a>}
                 {selected.freeScoutUrl&&<a href={selected.freeScoutUrl} target="_blank" rel="noreferrer" className="ops-secondary-button">FreeScout Ticket #{selected.latest_freescout_conversation_id} <ExternalLink size={14}/></a>}
                 <button onClick={()=>void loadInvoices()} disabled={working} className="ops-secondary-button">Load Invoices <RefreshCw size={14}/></button>
+                <button onClick={()=>void checkPayment()} disabled={working} className="ops-primary-button">{working?<Loader2 className="animate-spin" size={14}/>:<CheckCircle2 size={14}/>}Check Payment</button>
               </div>
               <section><button className="collections-section-toggle" onClick={()=>setExpandedInvoice(!expandedInvoice)}><span>Invoices ({(liveInvoices||selected.invoices||[]).length})</span>{expandedInvoice?<ChevronUp size={16}/>:<ChevronDown size={16}/>}</button>
                 {expandedInvoice&&<div className="collections-invoices">{(liveInvoices||selected.invoices||[]).map((invoice:any)=><div key={invoice.id||invoice.invoice_id}><strong>{invoice.invoice_id||invoice.id}</strong><span>{successfulView?`Paid ${when(invoice.paid_at||null)}`:(invoice.status||invoice.invoice_status||'Unknown')}</span><span>{money(successfulView?(invoice.amount_paid??0):(invoice.amount_due??0),invoice.currency_code||selected.currency_code)}</span></div>)}</div>}

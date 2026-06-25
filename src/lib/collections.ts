@@ -457,6 +457,153 @@ async function handlePaymentSucceeded(payload: ChargebeeWebhookPayload) {
   return current.collection_case_id;
 }
 
+export async function checkCollectionCasePayment(caseId: number, actorEmail: string) {
+  await ensureCollectionsTables();
+  const caseResult = await queryOpsDb('SELECT * FROM ops_collection_cases WHERE id = $1 LIMIT 1', [caseId]);
+  const caseRow = caseResult.rows[0];
+  if (!caseRow) {
+    return { ok: false as const, status: 404, error: 'Case not found.' };
+  }
+
+  const invoiceResult = await queryOpsDb(
+    `SELECT * FROM ops_collection_invoices WHERE case_id = $1 ORDER BY failure_date DESC, created_at DESC`,
+    [caseId]
+  );
+  const storedInvoices = invoiceResult.rows;
+  if (storedInvoices.length === 0) {
+    await addCollectionEvent(caseId, actorEmail, 'manual_payment_check_no_invoices', {
+      message: 'No stored failed invoices are attached to this collection case.',
+    });
+    return { ok: false as const, status: 400, error: 'No failed invoices are attached to this collection case.' };
+  }
+
+  const service = new ChargebeeService();
+  const syncedInvoices = [];
+  const missingInvoices = [];
+  for (const stored of storedInvoices) {
+    const liveInvoice = await service.getInvoice(stored.invoice_id);
+    if (!liveInvoice) {
+      missingInvoices.push(stored.invoice_id);
+      continue;
+    }
+    const payload: ChargebeeWebhookPayload = {
+      id: `manual:${caseId}:${stored.invoice_id}:${Date.now()}`,
+      event_type: 'manual_payment_check',
+      occurred_at: Math.floor(Date.now() / 1000),
+      content: { invoice: liveInvoice },
+    };
+    const details = invoiceDetails(payload);
+    const paidAt = details.amountDue === 0
+      ? epoch(details.invoice.paid_at) || epoch(details.invoice.updated_at) || new Date()
+      : null;
+    await queryOpsDb(
+      `UPDATE ops_collection_invoices SET
+         amount_due = $1,
+         amount_paid = $2,
+         invoice_status = $3,
+         paid_at = CASE WHEN $4::timestamptz IS NOT NULL THEN $4::timestamptz ELSE paid_at END,
+         payload = $5::jsonb,
+         updated_at = NOW()
+       WHERE id = $6`,
+      [
+        details.amountDue,
+        details.amountPaid,
+        text(details.invoice.status) || (details.amountDue === 0 ? 'paid' : stored.invoice_status),
+        paidAt,
+        JSON.stringify(details.invoice),
+        stored.id,
+      ]
+    );
+    syncedInvoices.push({
+      invoiceId: stored.invoice_id,
+      amountDue: details.amountDue,
+      amountPaid: details.amountPaid,
+      status: text(details.invoice.status) || null,
+      paid: details.amountDue === 0,
+    });
+  }
+
+  if (syncedInvoices.length === 0) {
+    await addCollectionEvent(caseId, actorEmail, 'manual_payment_check_failed', {
+      missingInvoices,
+      message: 'Chargebee did not return any attached invoices.',
+    });
+    return {
+      ok: false as const,
+      status: 502,
+      error: 'Chargebee did not return any of the invoices attached to this case.',
+    };
+  }
+
+  let updatedCase = await recalculateCaseBalance(caseId);
+  const totalAmountDue = Number(updatedCase?.total_amount_due || 0);
+  const allTrackedInvoicesSynced = missingInvoices.length === 0;
+  let resultType: 'collected' | 'paid_after_admin_closure' | 'partial_payment' | 'unpaid' | 'incomplete_check' = 'unpaid';
+
+  if (totalAmountDue === 0 && !COLLECTIONS_ADMIN_TERMINAL_STATUSES.includes(updatedCase.status)) {
+    const collected = await queryOpsDb(
+      `UPDATE ops_collection_cases SET
+         status = 'collected',
+         close_reason = 'Chargebee manual payment check confirmed invoice paid',
+         collected_by = COALESCE(assigned_to, collected_by, $2),
+         collected_at = NOW(),
+         next_attempt_at = NULL,
+         awaiting_amount = NULL,
+         updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [caseId, actorEmail]
+    );
+    updatedCase = collected.rows[0] || updatedCase;
+    resultType = 'collected';
+    await addCollectionEvent(caseId, actorEmail, 'manual_payment_check_case_collected', {
+      invoices: syncedInvoices,
+      missingInvoices,
+      totalAmountDue,
+    });
+  } else if (totalAmountDue === 0) {
+    resultType = 'paid_after_admin_closure';
+    await addCollectionEvent(caseId, actorEmail, 'manual_payment_check_paid_after_admin_closure', {
+      invoices: syncedInvoices,
+      missingInvoices,
+      caseStatus: updatedCase.status,
+    });
+  } else if (!allTrackedInvoicesSynced) {
+    resultType = 'incomplete_check';
+    await addCollectionEvent(caseId, actorEmail, 'manual_payment_check_incomplete', {
+      invoices: syncedInvoices,
+      missingInvoices,
+      totalAmountDue,
+    });
+  } else if (syncedInvoices.some(invoice => invoice.amountPaid > 0)) {
+    resultType = 'partial_payment';
+    await addCollectionEvent(caseId, actorEmail, 'manual_payment_check_partial_payment', {
+      invoices: syncedInvoices,
+      totalAmountDue,
+    });
+  } else {
+    await addCollectionEvent(caseId, actorEmail, 'manual_payment_check_no_payment', {
+      invoices: syncedInvoices,
+      totalAmountDue,
+    });
+  }
+
+  const refreshedInvoices = await queryOpsDb(
+    `SELECT * FROM ops_collection_invoices WHERE case_id = $1 ORDER BY failure_date DESC, created_at DESC`,
+    [caseId]
+  );
+
+  return {
+    ok: true as const,
+    resultType,
+    case: updatedCase,
+    invoices: refreshedInvoices.rows,
+    syncedInvoices,
+    missingInvoices,
+    totalAmountDue: Number(updatedCase?.total_amount_due || 0),
+  };
+}
+
 async function handleSubscriptionState(payload: ChargebeeWebhookPayload, state: 'paused' | 'resumed' | 'canceled') {
   const details = invoiceDetails(payload);
   if (!details.subscriptionId) return null;
