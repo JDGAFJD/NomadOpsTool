@@ -209,11 +209,6 @@ export async function getCollectionReport(filters: CollectionReportFilters) {
         COUNT(*) FILTER (WHERE status IN ('assigned','follow_up_pending','awaiting_payment_confirmation','paused') AND assigned_to IS NOT NULL)::int AS assigned,
         COUNT(*) FILTER (WHERE status IN ('assigned','follow_up_pending','awaiting_payment_confirmation')
           AND next_attempt_at IS NOT NULL AND next_attempt_at <= NOW())::int AS due,
-        COUNT(*) FILTER (WHERE status IN ('unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused')
-          AND COALESCE(
-            (SELECT MAX(a.created_at) FROM ops_collection_attempts a WHERE a.case_id=ops_collection_cases.id),
-            created_at
-          ) < NOW() - INTERVAL '48 hours')::int AS sla_breached,
         COUNT(*) FILTER (WHERE status IN ('unassigned','assigned','follow_up_pending','awaiting_payment_confirmation') AND current_attempt=0)::int AS attempt_1,
         COUNT(*) FILTER (WHERE status IN ('unassigned','assigned','follow_up_pending','awaiting_payment_confirmation') AND current_attempt=1)::int AS attempt_2,
         COUNT(*) FILTER (WHERE status IN ('unassigned','assigned','follow_up_pending','awaiting_payment_confirmation') AND current_attempt=2)::int AS attempt_3,
@@ -223,11 +218,7 @@ export async function getCollectionReport(filters: CollectionReportFilters) {
     queryOpsDb(`
       SELECT assigned_to AS agent_email, COUNT(*)::int AS assigned,
         COUNT(*) FILTER (WHERE status IN ('assigned','follow_up_pending','awaiting_payment_confirmation')
-          AND next_attempt_at IS NOT NULL AND next_attempt_at <= NOW())::int AS due,
-        COUNT(*) FILTER (WHERE COALESCE(
-          (SELECT MAX(a.created_at) FROM ops_collection_attempts a WHERE a.case_id=ops_collection_cases.id),
-          created_at
-        ) < NOW() - INTERVAL '48 hours')::int AS sla_breached
+          AND next_attempt_at IS NOT NULL AND next_attempt_at <= NOW())::int AS due
       FROM ops_collection_cases
       WHERE assigned_to IS NOT NULL
         AND status IN ('assigned','follow_up_pending','awaiting_payment_confirmation','paused')
@@ -305,11 +296,7 @@ export async function getCollectionReport(filters: CollectionReportFilters) {
     queryOpsDb(`
       SELECT assigned_to AS agent_email, COUNT(*)::int AS assigned,
         COUNT(*) FILTER (WHERE status IN ('assigned','follow_up_pending','awaiting_payment_confirmation')
-          AND next_attempt_at IS NOT NULL AND next_attempt_at <= NOW())::int AS due,
-        COUNT(*) FILTER (WHERE COALESCE(
-          (SELECT MAX(a.created_at) FROM ops_collection_attempts a WHERE a.case_id=ops_collection_cases.id),
-          created_at
-        ) < NOW() - INTERVAL '48 hours')::int AS sla_breached
+          AND next_attempt_at IS NOT NULL AND next_attempt_at <= NOW())::int AS due
       FROM ops_collection_cases
       WHERE assigned_to IS NOT NULL
         AND status IN ('assigned','follow_up_pending','awaiting_payment_confirmation','paused')
@@ -355,7 +342,6 @@ export async function getCollectionReport(filters: CollectionReportFilters) {
       agentEmail: String(row.agent_email || row.agentEmail),
       assigned: Number(row.assigned || 0),
       due: Number(row.due || 0),
-      slaBreached: Number(row.sla_breached || 0),
       attempts: Number(row.attempts || 0),
       completed: Number(row.completed || 0),
       leftVoicemail: Number(row.left_voicemail || 0),
@@ -379,7 +365,6 @@ export async function getCollectionReport(filters: CollectionReportFilters) {
       assigned: Number(live.assigned || 0),
       unassigned: Number(live.unassigned || 0),
       due: Number(live.due || 0),
-      slaBreached: Number(live.sla_breached || 0),
       oldestCreatedAt: oldestCreatedAt?.toISOString() || null,
       oldestAgeSeconds: oldestCreatedAt ? Math.max(0, Math.floor((Date.now() - oldestCreatedAt.getTime()) / 1000)) : 0,
       byAttempt: [
@@ -391,7 +376,6 @@ export async function getCollectionReport(filters: CollectionReportFilters) {
         agentEmail: row.agent_email,
         assigned: Number(row.assigned),
         due: Number(row.due),
-        slaBreached: Number(row.sla_breached),
       })),
     },
     totals: {
@@ -485,7 +469,7 @@ export async function generateCollectionReportSummary(snapshot: ReturnType<typeo
       messages: [
         {
           role: 'system',
-          content: `You are an operations analyst for a collections team. Write a concise management report using only the supplied aggregate data and sanitized notes. Cover workload and SLA risks, agent activity and attributed collections, outcome patterns, payment barriers, feedback themes, and concrete operational actions. Do not identify customers or invent causes. Use short headings and bullet points.`,
+          content: `You are an operations analyst for a collections team. Write a concise management report using only the supplied aggregate data and sanitized notes. Cover workload, due follow-up risks, agent activity and attributed collections, outcome patterns, payment barriers, feedback themes, and concrete operational actions. Do not identify customers or invent causes. Use short headings and bullet points.`,
         },
         {
           role: 'user',

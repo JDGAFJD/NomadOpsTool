@@ -64,15 +64,14 @@ function filters(request: NextRequest, params: unknown[]) {
   return clauses.length ? ` AND ${clauses.join(' AND ')}` : '';
 }
 
-const SLA_ANCHOR = `COALESCE(
-  (SELECT MAX(sla_attempt.created_at) FROM ops_collection_attempts sla_attempt WHERE sla_attempt.case_id=c.id),
+const AGE_ANCHOR = `COALESCE(
+  (SELECT MAX(age_attempt.created_at) FROM ops_collection_attempts age_attempt WHERE age_attempt.case_id=c.id),
   c.created_at
 )`;
 
 const SELECT = `SELECT c.*, NOW() >= c.next_attempt_at AS due_now,
-  ${SLA_ANCHOR} AS sla_anchor_at,
-  GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() - ${SLA_ANCHOR}))))::bigint AS age_seconds,
-  NOW() > ${SLA_ANCHOR} + INTERVAL '48 hours' AS sla_breached,
+  ${AGE_ANCHOR} AS age_anchor_at,
+  GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() - ${AGE_ANCHOR}))))::bigint AS age_seconds,
   COALESCE((SELECT json_agg(i ORDER BY i.failure_date DESC) FROM ops_collection_invoices i WHERE i.case_id=c.id), '[]'::json) AS invoices,
   COALESCE((
     SELECT json_agg(attempt_row ORDER BY attempt_row.created_at DESC)
@@ -265,7 +264,7 @@ async function collectedQueue(request: NextRequest, session: any, pageCandidate:
        SELECT p.*,(p.amount_paid::numeric/pc.agent_count) AS credited_amount
        FROM participants p JOIN participant_counts pc ON pc.invoice_row_id=p.invoice_row_id
      )
-     SELECT c.*,false AS due_now,0::bigint AS age_seconds,false AS sla_breached,NULL::timestamptz AS sla_anchor_at,
+     SELECT c.*,false AS due_now,0::bigint AS age_seconds,NULL::timestamptz AS age_anchor_at,
        (SELECT COALESCE(SUM(p.amount_paid),0)::bigint FROM paid_invoices p WHERE p.case_id=c.id) AS total_collected_amount,
        (SELECT COALESCE(ROUND(SUM(cr.credited_amount)),0)::bigint FROM credits cr
          WHERE cr.case_id=c.id AND LOWER(cr.agent_email)=LOWER($${viewerEmailParam})) AS viewer_credit_amount,
@@ -412,8 +411,7 @@ export async function GET(request: NextRequest) {
       `${SELECT}
        FROM ops_collection_cases c
        WHERE ${viewWhere} ${clause}
-       ORDER BY (NOW() > ${SLA_ANCHOR} + INTERVAL '48 hours') DESC,
-         ${SLA_ANCHOR} ${sort === 'newest' ? 'DESC' : 'ASC'},
+       ORDER BY ${AGE_ANCHOR} ${sort === 'newest' ? 'DESC' : 'ASC'},
          c.id ${sort === 'newest' ? 'DESC' : 'ASC'}
        LIMIT $${recordParams.length - 1} OFFSET $${recordParams.length}`,
       recordParams

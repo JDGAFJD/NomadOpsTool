@@ -19,17 +19,17 @@ type Filters = {
 type Report = {
   filters: Filters;
   workload: {
-    open: number; assigned: number; unassigned: number; due: number; slaBreached: number;
+    open: number; assigned: number; unassigned: number; due: number;
     oldestCreatedAt: string | null; oldestAgeSeconds: number;
     byAttempt: { attempt: number; value: number }[];
-    byAgent: { agentEmail: string; assigned: number; due: number; slaBreached: number }[];
+    byAgent: { agentEmail: string; assigned: number; due: number }[];
   };
   totals: {
     attempts: number; completed: number; leftVoicemail: number; noAnswer: number;
     attributedAmount: number; attributedInvoices: number; unattributedAmount: number; unattributedInvoices: number;
   };
   agents: {
-    agentEmail: string; assigned: number; due: number; slaBreached: number; attempts: number;
+    agentEmail: string; assigned: number; due: number; attempts: number;
     completed: number; leftVoicemail: number; noAnswer: number; paidInvoices: number;
     creditedAmount: number; avgSecondsToPayment: number | null;
   }[];
@@ -171,8 +171,7 @@ export default function CollectionsReportsClient({
     ['Unassigned', report.workload.unassigned, Inbox, 'neutral'],
     ['Assigned', report.workload.assigned, UserCheck, 'neutral'],
     ['Due now', report.workload.due, CalendarClock, 'warning'],
-    ['48h SLA breached', report.workload.slaBreached, AlertTriangle, 'danger'],
-    ['Oldest active', duration(report.workload.oldestAgeSeconds), Clock3, report.workload.oldestAgeSeconds > 172800 ? 'danger' : 'neutral'],
+    ['Oldest active', duration(report.workload.oldestAgeSeconds), Clock3, 'neutral'],
     ['Credited collections', money(report.totals.attributedAmount), CircleDollarSign, 'success'],
     ['Attempts', report.totals.attempts, CheckCircle2, 'neutral'],
   ] as const : [];
@@ -221,7 +220,7 @@ export default function CollectionsReportsClient({
               </div>
               <div className="collection-report-table-wrap">
                 <h3>Current assignment by agent</h3>
-                <table><thead><tr><th>Agent</th><th>Assigned</th><th>Due</th><th>SLA</th></tr></thead><tbody>{report.workload.byAgent.map(row => <tr key={row.agentEmail}><td>{row.agentEmail}</td><td>{row.assigned}</td><td>{row.due}</td><td className={row.slaBreached ? 'is-danger' : ''}>{row.slaBreached}</td></tr>)}</tbody></table>
+                <table><thead><tr><th>Agent</th><th>Assigned</th><th>Due</th></tr></thead><tbody>{report.workload.byAgent.map(row => <tr key={row.agentEmail}><td>{row.agentEmail}</td><td>{row.assigned}</td><td>{row.due}</td></tr>)}</tbody></table>
               </div>
             </div>
           </section>
@@ -241,7 +240,7 @@ export default function CollectionsReportsClient({
           <section className="collection-report-section">
             <div className="collection-report-section-head"><div><small>Performance</small><h2>Agent scorecard</h2></div></div>
             <div className="collection-report-table-wrap is-scrollable">
-              <table><thead><tr><th>Agent</th><th>Assigned now</th><th>Due</th><th>SLA</th><th>Attempts</th><th>Completed</th><th>Voicemail</th><th>No answer</th><th>Paid invoices</th><th>Credited</th><th>Avg. to payment</th></tr></thead><tbody>{report.agents.map(row => <tr key={row.agentEmail}><td><strong>{row.agentEmail}</strong></td><td>{row.assigned}</td><td>{row.due}</td><td className={row.slaBreached ? 'is-danger' : ''}>{row.slaBreached}</td><td>{row.attempts}</td><td>{row.completed}{row.attempts ? ` (${Math.round(row.completed/row.attempts*100)}%)` : ''}</td><td>{row.leftVoicemail}</td><td>{row.noAnswer}</td><td>{row.paidInvoices}</td><td className="is-money">{money(row.creditedAmount)}</td><td>{duration(row.avgSecondsToPayment)}</td></tr>)}</tbody></table>
+              <table><thead><tr><th>Agent</th><th>Assigned now</th><th>Due</th><th>Attempts</th><th>Completed</th><th>Voicemail</th><th>No answer</th><th>Paid invoices</th><th>Credited</th><th>Avg. to payment</th></tr></thead><tbody>{report.agents.map(row => <tr key={row.agentEmail}><td><strong>{row.agentEmail}</strong></td><td>{row.assigned}</td><td>{row.due}</td><td>{row.attempts}</td><td>{row.completed}{row.attempts ? ` (${Math.round(row.completed/row.attempts*100)}%)` : ''}</td><td>{row.leftVoicemail}</td><td>{row.noAnswer}</td><td>{row.paidInvoices}</td><td className="is-money">{money(row.creditedAmount)}</td><td>{duration(row.avgSecondsToPayment)}</td></tr>)}</tbody></table>
             </div>
           </section>
 
