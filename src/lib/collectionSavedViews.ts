@@ -2,7 +2,7 @@ export const COLLECTION_VIEWS = ['unassigned', 'mine', 'all', 'due', 'closed', '
 export const COLLECTION_SORTS = ['oldest', 'newest'] as const;
 export const COLLECTION_SUCCESS_SCOPES = ['mine', 'all'] as const;
 export const COLLECTION_SUCCESS_VERIFICATIONS = ['all', 'verified', 'not_verified', 'needs_explanation'] as const;
-const COLLECTION_STATUSES = ['all','unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused','collected','exhausted','canceled','completed_by_admin','closed_by_admin'] as const;
+const COLLECTION_STATUSES = ['all','unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused','collected','exhausted','canceled','no_valid_contact','completed_by_admin','closed_by_admin'] as const;
 const COLLECTION_ATTEMPTS = ['all','0','1','2','3'] as const;
 const COLLECTION_VERIFICATIONS = ['all','pending','verified','unverified','outcome_mismatch','mapping_required','needs_review','not_tracked'] as const;
 

@@ -354,7 +354,7 @@ async function handlePaymentFailed(payload: ChargebeeWebhookPayload) {
     );
     caseRow = inserted.rows[0];
     created = true;
-  } else if (['collected', 'exhausted', ...COLLECTIONS_ADMIN_TERMINAL_STATUSES].includes(caseRow.status)) {
+  } else if (['collected', 'exhausted', 'no_valid_contact', ...COLLECTIONS_ADMIN_TERMINAL_STATUSES].includes(caseRow.status)) {
     const reopened = await queryOpsDb(
       `UPDATE ops_collection_cases SET
         status = 'unassigned', assigned_to = NULL, assigned_at = NULL, current_attempt = 0,
@@ -401,7 +401,7 @@ async function handlePaymentFailed(payload: ChargebeeWebhookPayload) {
     amountDue: details.amountDue,
     currencyCode: details.currencyCode,
   }, payload.id);
-  if (created || ['collected', 'exhausted', ...COLLECTIONS_ADMIN_TERMINAL_STATUSES].includes(existing?.status)) {
+  if (created || ['collected', 'exhausted', 'no_valid_contact', ...COLLECTIONS_ADMIN_TERMINAL_STATUSES].includes(existing?.status)) {
     await notifyNewCase(caseRow, details.invoiceId);
   }
   return caseRow.id;

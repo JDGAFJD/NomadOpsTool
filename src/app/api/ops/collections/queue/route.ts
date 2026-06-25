@@ -112,7 +112,7 @@ function viewQuery(view: CollectionView, session: any, params: unknown[]) {
     return `c.assigned_to=$${params.length} AND c.status IN ('assigned','follow_up_pending','awaiting_payment_confirmation') AND c.next_attempt_at<=NOW()`;
   }
   if (view === 'closed') {
-    return `c.status IN ('exhausted','canceled','completed_by_admin','closed_by_admin')`;
+    return `c.status IN ('exhausted','canceled','no_valid_contact','completed_by_admin','closed_by_admin')`;
   }
   return `c.status='collected'`;
 }

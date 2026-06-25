@@ -62,6 +62,45 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       return NextResponse.json({ success: true, case: result.rows[0] });
     }
 
+    if (action === 'no_valid_contact') {
+      const closed = await withOpsDbTransaction(async client => {
+        const result = await client.query('SELECT * FROM ops_collection_cases WHERE id=$1 FOR UPDATE', [id]);
+        const row = result.rows[0];
+        if (!row) throw new RequestError('Case not found.', 404);
+        if (row.assigned_to && row.assigned_to !== session.email && session.role !== 'admin') {
+          throw new RequestError('Only the case owner or an administrator can close this case.', 403);
+        }
+        if (!['unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused'].includes(row.status)) {
+          throw new RequestError(`This case is already ${row.status}.`, 409);
+        }
+        if (String(row.customer_phone || '').replace(/\D/g, '').length >= 7) {
+          throw new RequestError('This case has a valid phone number. Use the normal call attempt flow.', 400);
+        }
+        const updated = await client.query(
+          `UPDATE ops_collection_cases SET
+             status='no_valid_contact',
+             assigned_to=COALESCE(assigned_to,$2),
+             assigned_at=COALESCE(assigned_at,NOW()),
+             next_attempt_at=NULL,
+             close_reason='No valid contact number found in Chargebee or Shopify',
+             updated_at=NOW()
+           WHERE id=$1
+           RETURNING *`,
+          [id, session.email]
+        );
+        await client.query(
+          `INSERT INTO ops_collection_events (case_id,actor_email,event_type,details)
+           VALUES ($1,$2,'closed_no_valid_contact',$3::jsonb)`,
+          [id, session.email, JSON.stringify({
+            message: 'Closed because no valid customer phone number was available after Shopify lookup.',
+          })]
+        );
+        return updated.rows[0];
+      });
+      await logActivity(session.email, 'collection_no_valid_contact', String(id), request);
+      return NextResponse.json({ success: true, case: closed });
+    }
+
     if (!['completed', ...MISSED_ACTIONS].includes(action)) {
       return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });
     }

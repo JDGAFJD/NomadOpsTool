@@ -44,7 +44,7 @@ type CollectionCase = {
 type SavedView = { id: number; name: string; config: Record<string, string>; created_at: string; updated_at: string };
 type ExplanationTarget = { verificationId: number; attemptId: number; customer: string };
 
-const STATUS_OPTIONS = ['all','unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused','collected','exhausted','canceled','completed_by_admin','closed_by_admin'];
+const STATUS_OPTIONS = ['all','unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused','collected','exhausted','canceled','no_valid_contact','completed_by_admin','closed_by_admin'];
 const ACTIVE_STATUSES = ['unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused'];
 const REASONS = [
   ['insufficient_funds','Insufficient funds'], ['expired_replaced_card','Expired or replaced card'],
@@ -140,6 +140,7 @@ export default function CollectionsPage() {
   const [explanationCategory, setExplanationCategory] = useState('');
   const [explanationNotes, setExplanationNotes] = useState('');
   const [explanationWorking, setExplanationWorking] = useState(false);
+  const [shopifyPhoneNoResult, setShopifyPhoneNoResult] = useState(false);
   const selectedIdRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
   const requestControllerRef = useRef<AbortController | null>(null);
@@ -150,6 +151,7 @@ export default function CollectionsPage() {
     setSelected(record);
     setLiveInvoices(null);
     setExpandedInvoice(false);
+    setShopifyPhoneNoResult(false);
   }, []);
 
   const load = useCallback(async (): Promise<CollectionCase[]> => {
@@ -377,6 +379,49 @@ export default function CollectionsPage() {
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not check Chargebee payment.');
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function searchShopifyPhone() {
+    if (!selected) return;
+    setWorking(true); setError(''); setAdminNotice(''); setShopifyPhoneNoResult(false);
+    try {
+      const res = await fetch(`/api/ops/collections/${selected.id}/shopify-phone`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not search Shopify for a phone number.');
+      if (data.found && data.phone) {
+        setSelected(current => current ? { ...current, customer_phone: data.phone } : current);
+        setAdminNotice(`Shopify returned ${data.phone} from ${data.source || 'the latest order'}. The case phone number was updated.`);
+        await load();
+      } else {
+        setShopifyPhoneNoResult(true);
+        setAdminNotice(data.message || 'Shopify did not return a valid phone number. You can close this case as no valid contact.');
+      }
+    } catch (e: any) {
+      setError(e.message || 'Could not search Shopify for a phone number.');
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function closeNoValidContact() {
+    if (!selected) return;
+    setWorking(true); setError(''); setAdminNotice('');
+    try {
+      const res = await fetch(`/api/ops/collections/${selected.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'no_valid_contact' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not close this case.');
+      setAdminNotice('Collection case closed because no valid contact number was available.');
+      selectCase(null);
+      await load();
+    } catch (e: any) {
+      setError(e.message || 'Could not close this case.');
     } finally {
       setWorking(false);
     }
@@ -664,6 +709,15 @@ export default function CollectionsPage() {
                 <div><small>Plan</small><strong>{selected.plan_id || 'Unknown'}</strong></div>
                 {successfulView?<><div><small>Latest payment</small><strong>{when(selected.latest_paid_at||null)}</strong></div><div><small>{successScope==='mine'?'Your credited amount':'Credited agents'}</small><strong>{successScope==='mine'?money(selected.viewer_credit_amount||0,selected.currency_code):String(selected.agent_credits?.length||0)}</strong></div></>:<><div><small>Next attempt</small><strong>{when(selected.next_attempt_at)}</strong></div><div className="collection-detail-age"><small>Age</small><strong>{ageLabel(selected.age_seconds)}</strong><em>{selected.attempts?.length ? 'Since last attempt' : 'Since case creation'}</em></div></>}
               </div>
+              {!successfulView&&!selected.customer_phone&&ACTIVE_STATUSES.includes(selected.status)&&<section className="collections-note">
+                <strong>No phone number on this case.</strong>
+                <p>Search Shopify for the customer’s latest order phone before closing this collection case.</p>
+                <div className="collections-actions">
+                  <button type="button" onClick={()=>void searchShopifyPhone()} disabled={working||!selected.customer_email} className="ops-secondary-button">{working?<Loader2 className="animate-spin" size={14}/>:<Search size={14}/>}Search Shopify</button>
+                  {(shopifyPhoneNoResult||!selected.customer_email)&&<button type="button" onClick={()=>void closeNoValidContact()} disabled={working} className="ops-primary-button"><X size={14}/>Close: No Valid Contact</button>}
+                </div>
+                {!selected.customer_email&&<small>Customer email is missing, so Shopify cannot be searched.</small>}
+              </section>}
               <div className="collections-actions">
                 {selected.chargebeeUrl&&<a href={selected.chargebeeUrl} target="_blank" rel="noreferrer" className="ops-secondary-button">Chargebee Profile <ExternalLink size={14}/></a>}
                 {selected.freeScoutUrl&&<a href={selected.freeScoutUrl} target="_blank" rel="noreferrer" className="ops-secondary-button">FreeScout Ticket #{selected.latest_freescout_conversation_id} <ExternalLink size={14}/></a>}

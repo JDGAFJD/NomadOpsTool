@@ -90,7 +90,7 @@ export class CommerceService {
   }
 
   isConfigured(): boolean {
-    return Boolean(this.shopifyToken && this.ssAuth !== 'Basic Ogo=');
+    return Boolean(this.shopifyToken);
   }
 
   async getCustomerOrders(email: string): Promise<UnifiedOrder[]> {
@@ -116,7 +116,8 @@ export class CommerceService {
     );
 
     const unifiedOrders: UnifiedOrder[] = [];
-    const processLimit = Math.min(shopifyOrders.length, 20);
+    const hasShipStation = this.ssAuth !== 'Basic Ogo=';
+    const processLimit = hasShipStation ? Math.min(shopifyOrders.length, 20) : 0;
 
     for (let i = 0; i < shopifyOrders.length; i++) {
       const o = shopifyOrders[i];
