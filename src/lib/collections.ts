@@ -111,6 +111,26 @@ export async function ensureCollectionsTables() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await queryOpsDb(`
+    CREATE TABLE IF NOT EXISTS ops_collection_missed_attempt_requests (
+      id BIGSERIAL PRIMARY KEY,
+      case_id BIGINT NOT NULL REFERENCES ops_collection_cases(id) ON DELETE CASCADE,
+      invoice_id TEXT,
+      submitting_agent_email TEXT NOT NULL,
+      requested_attempt_at TIMESTAMPTZ NOT NULL,
+      outcome TEXT NOT NULL,
+      called_phone TEXT NOT NULL,
+      notes TEXT NOT NULL,
+      late_entry_reason TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      approved_attempt_id BIGINT REFERENCES ops_collection_attempts(id) ON DELETE SET NULL,
+      reviewed_by TEXT,
+      admin_note TEXT,
+      reviewed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
   await queryOpsDb(`ALTER TABLE ops_collection_attempts ADD COLUMN IF NOT EXISTS client_request_key TEXT`);
   await queryOpsDb(`ALTER TABLE ops_collection_attempts ADD COLUMN IF NOT EXISTS email_delivery_status TEXT`);
   await queryOpsDb(`ALTER TABLE ops_collection_attempts ADD COLUMN IF NOT EXISTS email_delivery_error TEXT`);
@@ -178,6 +198,9 @@ export async function ensureCollectionsTables() {
   await queryOpsDb(`CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_saved_views_owner_name ON ops_collection_saved_views(owner_email,LOWER(name))`);
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_collection_saved_views_owner_updated ON ops_collection_saved_views(owner_email,updated_at DESC)`);
   await queryOpsDb(`CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_webhook_event ON ops_collection_events(source_webhook_id, event_type) WHERE source_webhook_id IS NOT NULL`);
+  await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_collection_missed_attempt_case ON ops_collection_missed_attempt_requests(case_id,created_at DESC)`);
+  await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_collection_missed_attempt_status ON ops_collection_missed_attempt_requests(status,created_at DESC)`);
+  await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_collection_missed_attempt_agent ON ops_collection_missed_attempt_requests(submitting_agent_email,created_at DESC)`);
   await queryOpsDb(`ALTER TABLE ops_chargebee_webhook_events ADD COLUMN IF NOT EXISTS processing_attempts INTEGER NOT NULL DEFAULT 0`);
   await queryOpsDb(`ALTER TABLE ops_chargebee_webhook_events ADD COLUMN IF NOT EXISTS processing_error TEXT`);
   await queryOpsDb(`ALTER TABLE ops_chargebee_webhook_events ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ`);

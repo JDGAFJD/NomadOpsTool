@@ -886,6 +886,22 @@ button {
 .collection-credit-list > div { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 7px; }
 .collection-credit-list span { color: var(--ops-text-muted); font-size: 11px; }
 .collection-credit-list b { color: #059669; }
+.missed-attempt-section { display: grid; gap: 10px; }
+.missed-attempt-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.missed-attempt-head h3 { margin: 0 0 4px; }
+.missed-attempt-head p { margin: 0; color: var(--ops-text-muted); font-size: 12px; line-height: 1.45; }
+.missed-attempt-list { display: grid; gap: 8px; }
+.missed-attempt-card { display: grid; gap: 7px; padding: 10px; border: 1px solid var(--border); border-left: 3px solid var(--ops-text-muted); border-radius: 7px; background: var(--surface-200); }
+.missed-attempt-card.is-pending { border-left-color: #f59e0b; }
+.missed-attempt-card.is-approved { border-left-color: #10b981; }
+.missed-attempt-card.is-rejected { border-left-color: #ef4444; }
+.missed-attempt-card > div:first-child { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.missed-attempt-card span,.missed-attempt-card small { color: var(--ops-text-muted); font-size: 11px; }
+.missed-attempt-card p { margin: 0; color: var(--ops-text); font-size: 13px; line-height: 1.45; }
+.missed-attempt-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.missed-attempt-review-summary { display: grid; gap: 5px; padding: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-200); }
+.missed-attempt-review-summary span { color: var(--ops-text-muted); font-size: 12px; }
+.missed-attempt-review-summary p { margin: 0; font-size: 13px; line-height: 1.45; }
 .verification-explanations { display: grid; gap: 7px; margin-top: 9px; }
 .verification-explanations article { padding: 9px; border: 1px solid rgba(15,118,110,.25); border-radius: 7px; background: rgba(15,118,110,.06); }
 .verification-explanations article strong { font-size: 11px; }
@@ -1450,6 +1466,8 @@ button {
   .collection-credit-list > div { grid-template-columns: minmax(0,1fr) auto; }
   .collection-credit-list span { grid-column: 1; }
   .collection-credit-list b { grid-column: 2; grid-row: 1/3; }
+  .missed-attempt-head,.missed-attempt-card > div:first-child { flex-direction: column; align-items: flex-start; }
+  .missed-attempt-head .ops-secondary-button { width: 100%; justify-content: center; }
   .collection-email-tray { right: 10px; bottom: 10px; width: calc(100vw - 20px); }
   .admin-queue-toolbar { align-items: stretch; flex-direction: column; }
   .admin-queue-toolbar > div:first-child { min-width: 0; }

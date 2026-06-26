@@ -94,6 +94,10 @@ const SELECT = `SELECT c.*, NOW() >= c.next_attempt_at AS due_now,
     JOIN ops_call_verifications v ON v.collection_attempt_id=a.id
     WHERE a.case_id=c.id ORDER BY a.created_at DESC LIMIT 1
   ) AS verification,
+  COALESCE((
+    SELECT json_agg(m ORDER BY m.created_at DESC)
+    FROM ops_collection_missed_attempt_requests m WHERE m.case_id=c.id
+  ), '[]'::json) AS missed_attempt_requests,
   COALESCE((SELECT json_agg(e ORDER BY e.created_at DESC) FROM ops_collection_events e WHERE e.case_id=c.id), '[]'::json) AS events`;
 
 function viewQuery(view: CollectionView, session: any, params: unknown[]) {
@@ -301,6 +305,10 @@ async function collectedQueue(request: NextRequest, session: any, pageCandidate:
          ) attempt_row
        ),'[]'::json) AS attempts,
        NULL::json AS verification,
+       COALESCE((
+         SELECT json_agg(m ORDER BY m.created_at DESC)
+         FROM ops_collection_missed_attempt_requests m WHERE m.case_id=c.id
+       ),'[]'::json) AS missed_attempt_requests,
        COALESCE((SELECT json_agg(e ORDER BY e.created_at DESC) FROM ops_collection_events e WHERE e.case_id=c.id),'[]'::json) AS events
      FROM ops_collection_cases c
      WHERE ${where}

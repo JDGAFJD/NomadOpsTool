@@ -40,9 +40,22 @@ type CollectionCase = {
   verification?: CallVerificationRecord | null;
   total_collected_amount?: number; viewer_credit_amount?: number; latest_paid_at?: string | null;
   agent_credits?: Array<{ agent_email: string; credited_amount: number; paid_invoices: number }>;
+  missed_attempt_requests?: MissedAttemptRequest[];
 };
 type SavedView = { id: number; name: string; config: Record<string, string>; created_at: string; updated_at: string };
 type ExplanationTarget = { verificationId: number; attemptId: number; customer: string };
+type MissedAttemptRequest = {
+  id: number; case_id: number; invoice_id: string | null; submitting_agent_email: string;
+  requested_attempt_at: string; outcome: string; called_phone: string; notes: string;
+  late_entry_reason: string; status: 'pending'|'approved'|'rejected';
+  approved_attempt_id: number | null; reviewed_by: string | null; admin_note: string | null;
+  reviewed_at: string | null; created_at: string; updated_at: string;
+};
+type MissedAttemptDialog = {
+  requestedAttemptAt: string; outcome: 'completed'|'left_voicemail'|'no_answer';
+  calledPhone: string; invoiceId: string; notes: string; lateEntryReason: string;
+};
+type MissedAttemptReviewDialog = { request: MissedAttemptRequest; action: 'approve'|'reject'; adminNote: string };
 
 const STATUS_OPTIONS = ['all','unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused','collected','exhausted','canceled','no_valid_contact','completed_by_admin','closed_by_admin'];
 const ACTIVE_STATUSES = ['unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused'];
@@ -141,6 +154,10 @@ export default function CollectionsPage() {
   const [explanationNotes, setExplanationNotes] = useState('');
   const [explanationWorking, setExplanationWorking] = useState(false);
   const [shopifyPhoneNoResult, setShopifyPhoneNoResult] = useState(false);
+  const [missedAttemptDialog, setMissedAttemptDialog] = useState<MissedAttemptDialog | null>(null);
+  const [missedAttemptReview, setMissedAttemptReview] = useState<MissedAttemptReviewDialog | null>(null);
+  const [missedAttemptWorking, setMissedAttemptWorking] = useState(false);
+  const [missedAttemptError, setMissedAttemptError] = useState('');
   const selectedIdRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
   const requestControllerRef = useRef<AbortController | null>(null);
@@ -152,6 +169,9 @@ export default function CollectionsPage() {
     setLiveInvoices(null);
     setExpandedInvoice(false);
     setShopifyPhoneNoResult(false);
+    setMissedAttemptDialog(null);
+    setMissedAttemptReview(null);
+    setMissedAttemptError('');
   }, []);
 
   const load = useCallback(async (): Promise<CollectionCase[]> => {
@@ -586,8 +606,76 @@ export default function CollectionsPage() {
     }
   }
 
+  function openMissedAttemptDialog() {
+    if (!selected) return;
+    const now = new Date();
+    const localValue = new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+    const firstPaidInvoice = (selected.invoices || []).find((invoice: any) => invoice.paid_at && Number(invoice.amount_paid || 0) > 0);
+    setMissedAttemptError('');
+    setMissedAttemptDialog({
+      requestedAttemptAt: localValue,
+      outcome: 'completed',
+      calledPhone: selected.customer_phone || '',
+      invoiceId: firstPaidInvoice?.invoice_id || '',
+      notes: '',
+      lateEntryReason: '',
+    });
+  }
+
+  async function submitMissedAttempt() {
+    if (!selected || !missedAttemptDialog) return;
+    setMissedAttemptWorking(true);
+    setMissedAttemptError('');
+    try {
+      const requestedAttemptAt = new Date(missedAttemptDialog.requestedAttemptAt);
+      const response = await fetch(`/api/ops/collections/${selected.id}/missed-attempts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...missedAttemptDialog,
+          requestedAttemptAt: requestedAttemptAt.toISOString(),
+          invoiceId: missedAttemptDialog.invoiceId || null,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'The missed attempt request could not be submitted.');
+      setMissedAttemptDialog(null);
+      setAdminNotice('Missed attempt submitted for admin review. It will not count for credit until approved.');
+      await load();
+    } catch (e: any) {
+      setMissedAttemptError(e.message || 'The missed attempt request could not be submitted.');
+    } finally {
+      setMissedAttemptWorking(false);
+    }
+  }
+
+  async function submitMissedAttemptReview() {
+    if (!missedAttemptReview) return;
+    setMissedAttemptWorking(true);
+    setMissedAttemptError('');
+    try {
+      const response = await fetch(`/api/ops/collections/missed-attempts/${missedAttemptReview.request.id}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: missedAttemptReview.action, adminNote: missedAttemptReview.adminNote }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'The missed attempt request could not be reviewed.');
+      setMissedAttemptReview(null);
+      setAdminNotice(missedAttemptReview.action === 'approve'
+        ? 'Missed attempt approved. Successful collection credit will refresh from the approved call timestamp.'
+        : 'Missed attempt request rejected.');
+      await load();
+    } catch (e: any) {
+      setMissedAttemptError(e.message || 'The missed attempt request could not be reviewed.');
+    } finally {
+      setMissedAttemptWorking(false);
+    }
+  }
+
   const selectedSavedView = savedViews.find(saved => String(saved.id) === savedViewId);
   const explanationWordCount = explanationNotes.trim().split(/\s+/).filter(Boolean).length;
+  const missedAttemptWordCount = missedAttemptDialog?.lateEntryReason.trim().split(/\s+/).filter(Boolean).length || 0;
   const successfulView = view === 'collected';
 
   return (
@@ -728,6 +816,26 @@ export default function CollectionsPage() {
                 {expandedInvoice&&<div className="collections-invoices">{(liveInvoices||selected.invoices||[]).map((invoice:any)=><div key={invoice.id||invoice.invoice_id}><strong>{invoice.invoice_id||invoice.id}</strong><span>{successfulView?`Paid ${when(invoice.paid_at||null)}`:(invoice.status||invoice.invoice_status||'Unknown')}</span><span>{money(successfulView?(invoice.amount_paid??0):(invoice.amount_due??0),invoice.currency_code||selected.currency_code)}</span></div>)}</div>}
               </section>
               {successfulView&&isAdmin&&selected.agent_credits?.length?<section><h3>Credited agents</h3><div className="collection-credit-list">{selected.agent_credits.map(credit=><div key={credit.agent_email}><strong>{credit.agent_email}</strong><span>{credit.paid_invoices} paid invoice{credit.paid_invoices===1?'':'s'}</span><b>{money(credit.credited_amount,selected.currency_code)}</b></div>)}</div></section>:null}
+              {successfulView&&<section className="missed-attempt-section">
+                <div className="missed-attempt-head">
+                  <div><h3>Missed attempt corrections</h3><p>Missed attempts are audited. Approved attempts only count when the call time is before Chargebee payment confirmation.</p></div>
+                  <button type="button" className="ops-secondary-button" disabled={missedAttemptWorking} onClick={()=>openMissedAttemptDialog()}><Clock3 size={14}/>Submit Missed Attempt</button>
+                </div>
+                {selected.missed_attempt_requests?.length ? <div className="missed-attempt-list">
+                  {selected.missed_attempt_requests.map(request=><article key={request.id} className={`missed-attempt-card is-${request.status}`}>
+                    <div><strong>{humanize(request.outcome)} · {when(request.requested_attempt_at)}</strong><span>{request.submitting_agent_email} · {humanize(request.status)}</span></div>
+                    <p>{request.notes}</p>
+                    <small>Late-entry reason: {request.late_entry_reason}</small>
+                    {request.admin_note&&<small>Admin note: {request.admin_note}</small>}
+                    {request.status==='pending'&&isAdmin&&<div className="missed-attempt-actions">
+                      <button type="button" className="ops-primary-button" onClick={()=>{setMissedAttemptError('');setMissedAttemptReview({request,action:'approve',adminNote:''});}}><CheckCircle2 size={14}/>Approve</button>
+                      <button type="button" className="ops-secondary-button" onClick={()=>{setMissedAttemptError('');setMissedAttemptReview({request,action:'reject',adminNote:''});}}><X size={14}/>Reject</button>
+                    </div>}
+                    {request.status==='approved'&&request.approved_attempt_id&&<small>Approved attempt #{request.approved_attempt_id}{request.reviewed_by?` by ${request.reviewed_by}`:''}</small>}
+                    {request.status==='rejected'&&request.reviewed_by&&<small>Rejected by {request.reviewed_by} · {when(request.reviewed_at)}</small>}
+                  </article>)}
+                </div> : <p className="collections-muted">No missed attempt corrections have been submitted for this case.</p>}
+              </section>}
               <section><h3>{successfulView?'Credited call attempts':'Attempt history'}</h3>{selected.attempts?.length?<div className="collections-timeline">{selected.attempts.map((a:any)=><div key={a.id}><strong>Attempt {a.attempt_number}: {humanize(a.outcome)}</strong><span>{a.agent_email} · {when(a.created_at)}{a.email_delivery_status?` · Email ${humanize(a.email_delivery_status)}`:''}</span><p>{a.notes}</p>{a.freeScoutUrl&&<a className="collection-attempt-ticket" href={a.freeScoutUrl} target="_blank" rel="noreferrer">FreeScout Ticket #{a.freescout_conversation_id} <ExternalLink size={12}/></a>}{a.email_delivery_error&&<small className="collection-email-error">{a.email_delivery_error}</small>}{callVerificationEnabled&&<CallVerificationDetails verification={a.verification} isAdmin={isAdmin} working={verificationWorking===a.verification?.id} onRecheck={recheckVerification}/>}
                 {a.verification?.explanations?.length>0&&<div className="verification-explanations">{a.verification.explanations.map((explanation:any)=><article key={explanation.id}><strong>{humanize(explanation.category)}</strong><span>{explanation.author_email} · {when(explanation.created_at)} · State: {humanize(explanation.verification_state)}</span><p>{explanation.notes}</p></article>)}</div>}
                 {successfulView&&a.verification&&a.verification.state!=='verified'&&a.agent_email.toLowerCase()===agentEmail.toLowerCase()&&<button className="ops-secondary-button verification-explain-button" onClick={()=>{setExplanationTarget({verificationId:a.verification.id,attemptId:a.id,customer:selected.customer_name||selected.customer_email||`Case #${selected.id}`});setExplanationCategory('');setExplanationNotes('');}}>Explain why this call was not verified</button>}
@@ -771,6 +879,34 @@ export default function CollectionsPage() {
         <label><span>Explanation</span><textarea value={explanationNotes} onChange={event=>setExplanationNotes(event.target.value)} placeholder="Explain why you believe the call was made even though the available 3CX evidence did not verify it."/></label>
         <small className={explanationWordCount<15?'verification-word-count is-short':'verification-word-count'}>{explanationWordCount}/15 words minimum</small>
         <div className="collections-modal-actions"><button disabled={explanationWorking} onClick={()=>setExplanationTarget(null)} className="ops-secondary-button">Cancel</button><button disabled={explanationWorking||!explanationCategory||explanationWordCount<15} onClick={()=>void submitVerificationExplanation()} className="ops-primary-button">{explanationWorking?'Saving...':'Save explanation'}</button></div>
+      </div></div>}
+      {missedAttemptDialog&&selected&&<div className="collections-modal-backdrop"><div className="collections-modal">
+        <div className="collections-modal-head"><div><small>Audited credit correction</small><h2>Submit Missed Attempt</h2></div><button disabled={missedAttemptWorking} onClick={()=>setMissedAttemptDialog(null)} className="ops-icon-button"><X size={17}/></button></div>
+        <div className="collections-info">This request needs admin approval before it can count toward collection credit. Approval only succeeds when the call time is before Chargebee payment confirmation.</div>
+        {missedAttemptError&&<div className="collections-modal-error" role="alert">{missedAttemptError}</div>}
+        <label><span>Actual call date and time</span><input type="datetime-local" value={missedAttemptDialog.requestedAttemptAt} onChange={event=>setMissedAttemptDialog(current=>current?{...current,requestedAttemptAt:event.target.value}:current)}/></label>
+        <label><span>Paid invoice</span><select value={missedAttemptDialog.invoiceId} onChange={event=>setMissedAttemptDialog(current=>current?{...current,invoiceId:event.target.value}:current)}>
+          <option value="">Auto-match eligible paid invoice</option>
+          {(selected.invoices||[]).filter((invoice:any)=>invoice.paid_at&&Number(invoice.amount_paid||0)>0).map((invoice:any)=><option key={invoice.invoice_id||invoice.id} value={invoice.invoice_id||invoice.id}>{invoice.invoice_id||invoice.id} · Paid {when(invoice.paid_at||null)}</option>)}
+        </select></label>
+        <label><span>Outcome</span><select value={missedAttemptDialog.outcome} onChange={event=>setMissedAttemptDialog(current=>current?{...current,outcome:event.target.value as MissedAttemptDialog['outcome']}:current)}>
+          <option value="completed">Completed</option>
+          <option value="left_voicemail">Left Voicemail</option>
+          <option value="no_answer">No Answer</option>
+        </select></label>
+        <label><span>Called phone number</span><input value={missedAttemptDialog.calledPhone} onChange={event=>setMissedAttemptDialog(current=>current?{...current,calledPhone:event.target.value}:current)} placeholder="Number the agent called"/></label>
+        <label><span>Attempt notes</span><textarea value={missedAttemptDialog.notes} onChange={event=>setMissedAttemptDialog(current=>current?{...current,notes:event.target.value}:current)} placeholder="Document what happened on the call."/></label>
+        <label><span>Why was this entered late?</span><textarea value={missedAttemptDialog.lateEntryReason} onChange={event=>setMissedAttemptDialog(current=>current?{...current,lateEntryReason:event.target.value}:current)} placeholder="Explain why the payment was collected before the attempt could be saved in NomadOps."/></label>
+        <small className={missedAttemptWordCount<15?'verification-word-count is-short':'verification-word-count'}>{missedAttemptWordCount}/15 words minimum</small>
+        <div className="collections-modal-actions"><button disabled={missedAttemptWorking} onClick={()=>setMissedAttemptDialog(null)} className="ops-secondary-button">Cancel</button><button disabled={missedAttemptWorking||!missedAttemptDialog.requestedAttemptAt||missedAttemptDialog.calledPhone.replace(/\D/g,'').length<7||!missedAttemptDialog.notes.trim()||missedAttemptWordCount<15} onClick={()=>void submitMissedAttempt()} className="ops-primary-button">{missedAttemptWorking?'Submitting...':'Submit for Review'}</button></div>
+      </div></div>}
+      {missedAttemptReview&&<div className="collections-modal-backdrop"><div className="collections-modal">
+        <div className="collections-modal-head"><div><small>Admin review</small><h2>{missedAttemptReview.action==='approve'?'Approve Missed Attempt':'Reject Missed Attempt'}</h2></div><button disabled={missedAttemptWorking} onClick={()=>setMissedAttemptReview(null)} className="ops-icon-button"><X size={17}/></button></div>
+        <div className="collections-info">{missedAttemptReview.action==='approve'?'Approval creates a real collection attempt at the requested call time. It will only be credited if it is before Chargebee payment confirmation.':'Rejected requests remain visible in audit history and do not affect collection credit.'}</div>
+        {missedAttemptError&&<div className="collections-modal-error" role="alert">{missedAttemptError}</div>}
+        <div className="missed-attempt-review-summary"><strong>{missedAttemptReview.request.submitting_agent_email}</strong><span>{humanize(missedAttemptReview.request.outcome)} · {when(missedAttemptReview.request.requested_attempt_at)}</span><p>{missedAttemptReview.request.notes}</p></div>
+        <label><span>Admin note</span><textarea value={missedAttemptReview.adminNote} onChange={event=>setMissedAttemptReview(current=>current?{...current,adminNote:event.target.value}:current)} placeholder="Explain why this request is approved or rejected."/></label>
+        <div className="collections-modal-actions"><button disabled={missedAttemptWorking} onClick={()=>setMissedAttemptReview(null)} className="ops-secondary-button">Cancel</button><button disabled={missedAttemptWorking||!missedAttemptReview.adminNote.trim()} onClick={()=>void submitMissedAttemptReview()} className="ops-primary-button">{missedAttemptWorking?'Saving...':missedAttemptReview.action==='approve'?'Approve Request':'Reject Request'}</button></div>
       </div></div>}
       {emailJobs.length>0&&<aside className={`collection-email-tray ${jobsCollapsed?'is-collapsed':''}`}>
         <button className="collection-email-tray-head" onClick={()=>setJobsCollapsed(value=>!value)} aria-expanded={!jobsCollapsed}>
