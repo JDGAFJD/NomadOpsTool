@@ -10,6 +10,7 @@ import { CommerceService } from '@/lib/services/CommerceService';
 const CENTRAL_ZONE = 'America/Chicago';
 const PAGE_SIZE = 100;
 const DYNAMIC_PENDING_ID_OFFSET = 9_000_000_000;
+const INLINE_CONVERSION_LEAD_LIMIT = 100;
 
 type LeadRow = {
   id: number;
@@ -214,6 +215,23 @@ async function getConversionSnapshot(email: string | null, leadCreatedAt: Date):
     converted: shopify.state === 'converted_after_lead' || chargebeeState.state === 'converted_after_lead',
     unavailable: shopify.state === 'unavailable' || chargebeeState.state === 'unavailable',
   };
+}
+
+function skippedConversionSnapshot(email: string | null): ConversionSnapshot {
+  if (!email) {
+    const missing = { state: 'not_found' as const, label: 'No email to check', count: 0, firstDate: null, latestDate: null, references: [] };
+    return { shopify: missing, chargebee: missing, converted: false, unavailable: false };
+  }
+  const skipped = {
+    state: 'unavailable' as const,
+    label: 'Conversion check skipped for this large upload',
+    count: 0,
+    firstDate: null,
+    latestDate: null,
+    references: [],
+    error: 'Upload was processed without Shopify/Chargebee enrichment to avoid a request timeout. Re-upload a smaller date range to include conversion checks.',
+  };
+  return { shopify: skipped, chargebee: skipped, converted: false, unavailable: true };
 }
 
 async function mapWithConcurrency<T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>) {
@@ -422,12 +440,21 @@ export async function importLeadReportCsv(input: { csv: string; fileName: string
     `${normalizeSearch(lead.email)}:${lead.created_at.toISOString()}`,
     lead,
   ])).values()];
-  await mapWithConcurrency(conversionInputs, 4, async lead => {
-    conversionCache.set(
-      `${normalizeSearch(lead.email)}:${lead.created_at.toISOString()}`,
-      await getConversionSnapshot(lead.email, lead.created_at)
-    );
-  });
+  if (conversionInputs.length <= INLINE_CONVERSION_LEAD_LIMIT) {
+    await mapWithConcurrency(conversionInputs, 4, async lead => {
+      conversionCache.set(
+        `${normalizeSearch(lead.email)}:${lead.created_at.toISOString()}`,
+        await getConversionSnapshot(lead.email, lead.created_at)
+      );
+    });
+  } else {
+    for (const lead of conversionInputs) {
+      conversionCache.set(
+        `${normalizeSearch(lead.email)}:${lead.created_at.toISOString()}`,
+        skippedConversionSnapshot(lead.email)
+      );
+    }
+  }
 
   const result = await withOpsDbTransaction(async client => {
     const batchResult = await client.query(`

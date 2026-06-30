@@ -139,6 +139,16 @@ function ConversionChip({ label, detail }: { label: string; detail: ConversionSt
   );
 }
 
+async function readJsonResponse(response: Response, fallback: string) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(response.ok ? fallback : `${fallback} (${response.status}): ${text.slice(0, 160)}`);
+  }
+}
+
 export default function LeadReportsClient({ userEmail }: { userEmail: string }) {
   const router = useRouter();
   const { theme, toggle } = useTheme();
@@ -162,7 +172,7 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
     setError('');
     try {
       const response = await fetch('/api/ops/lead-reports', { cache: 'no-store' });
-      const data = await response.json();
+      const data = await readJsonResponse(response, 'Could not load lead reports.');
       if (!response.ok) throw new Error(data.error || 'Could not load lead reports.');
       setBatches(data.batches || []);
       setTotals(data.totals || {});
@@ -185,7 +195,7 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
     const params = new URLSearchParams({ ...filters, page: String(page) });
     try {
       const response = await fetch(`/api/ops/lead-reports/${selectedId}?${params}`, { cache: 'no-store' });
-      const data = await response.json();
+      const data = await readJsonResponse(response, 'Could not load report detail.');
       if (!response.ok) throw new Error(data.error || 'Could not load report detail.');
       setDetail(data);
     } catch (err: any) {
@@ -225,7 +235,7 @@ export default function LeadReportsClient({ userEmail }: { userEmail: string }) 
       const form = new FormData();
       form.append('file', file);
       const response = await fetch('/api/ops/lead-reports', { method: 'POST', body: form });
-      const data = await response.json();
+      const data = await readJsonResponse(response, 'The lead report could not be uploaded.');
       if (!response.ok) throw new Error(data.error || 'The lead report could not be uploaded.');
       setFile(null);
       setFilters(emptyFilters);
