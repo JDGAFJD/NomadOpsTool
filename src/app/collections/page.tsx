@@ -268,7 +268,7 @@ export default function CollectionsPage() {
   const tabs = [
     ['unassigned','Unassigned',Inbox,counts.unassigned || 0],
     ['mine','My Cases',UserCheck,counts.mine || 0],
-    ...(isAdmin ? [['all','All Active',UserCheck,counts.active || 0] as const] : []),
+    ['all','All Active',UserCheck,counts.active || 0],
     ['due','Due Follow-ups',CalendarClock,counts.due || 0],
     ['closed','Closed',FileText,''],
     ['collected','Successful Collections',CircleDollarSign,view==='collected'&&successScope==='all'&&isAdmin ? counts.collected_all || 0 : counts.collected || 0],

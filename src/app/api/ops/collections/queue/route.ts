@@ -338,9 +338,6 @@ export async function GET(request: NextRequest) {
     const view: CollectionView = VIEWS.includes(requestedView as CollectionView)
       ? requestedView as CollectionView
       : 'unassigned';
-    if (view === 'all' && session.role !== 'admin') {
-      return NextResponse.json({ error: 'Administrator access is required for All Active cases.' }, { status: 403 });
-    }
     const requestedPage = Number(request.nextUrl.searchParams.get('page'));
     const pageCandidate = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
     const sort = request.nextUrl.searchParams.get('sort') === 'newest' ? 'newest' : 'oldest';

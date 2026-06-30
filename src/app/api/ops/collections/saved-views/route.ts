@@ -35,7 +35,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'You can save up to 25 Collections views.' }, { status: 409 });
     }
     const config = sanitizeCollectionSavedViewConfig(body.config);
-    if (config.view === 'all' && session.role !== 'admin') config.view = 'mine';
     if (config.successScope === 'all' && session.role !== 'admin') config.successScope = 'mine';
     const result = await queryOpsDb(
       `INSERT INTO ops_collection_saved_views (owner_email,name,config)
