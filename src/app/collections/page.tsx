@@ -18,7 +18,7 @@ import {
 import type { AdminQueueAction } from '@/lib/adminQueueActions';
 import { CallVerificationDetails, VerificationBadge, type CallVerificationRecord } from '@/components/CallVerificationStatus';
 
-type View = 'unassigned' | 'mine' | 'all' | 'due' | 'closed' | 'collected';
+type View = 'unassigned' | 'mine' | 'all' | 'due' | 'closed' | 'collected' | 'missed_attempts';
 type Pagination = { page: number; pageSize: number; totalRecords: number; totalPages: number };
 type EmailJob = {
   id: number; case_id: number; attempt_id: number; status: 'queued'|'sending'|'failed';
@@ -50,6 +50,8 @@ type MissedAttemptRequest = {
   late_entry_reason: string; status: 'pending'|'approved'|'rejected';
   approved_attempt_id: number | null; reviewed_by: string | null; admin_note: string | null;
   reviewed_at: string | null; created_at: string; updated_at: string;
+  customer_name?: string | null; customer_email?: string | null; subscription_id?: string | null;
+  currency_code?: string | null; paid_invoices?: any[];
 };
 type MissedAttemptDialog = {
   requestedAttemptAt: string; outcome: 'completed'|'left_voicemail'|'no_answer';
@@ -158,7 +160,13 @@ export default function CollectionsPage() {
   const [missedAttemptReview, setMissedAttemptReview] = useState<MissedAttemptReviewDialog | null>(null);
   const [missedAttemptWorking, setMissedAttemptWorking] = useState(false);
   const [missedAttemptError, setMissedAttemptError] = useState('');
+  const [missedAttemptRequests, setMissedAttemptRequests] = useState<MissedAttemptRequest[]>([]);
+  const [selectedMissedAttempt, setSelectedMissedAttempt] = useState<MissedAttemptRequest | null>(null);
+  const [missedAttemptStatus, setMissedAttemptStatus] = useState('pending');
+  const [missedAttemptAgents, setMissedAttemptAgents] = useState<string[]>([]);
+  const [missedAttemptCounts, setMissedAttemptCounts] = useState<any>({});
   const selectedIdRef = useRef<number | null>(null);
+  const selectedMissedAttemptIdRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
   const requestControllerRef = useRef<AbortController | null>(null);
   const seenSentCaseIdsRef = useRef<Set<number>>(new Set());
@@ -174,6 +182,15 @@ export default function CollectionsPage() {
     setMissedAttemptError('');
   }, []);
 
+  const selectMissedAttempt = useCallback((record: MissedAttemptRequest | null) => {
+    selectedMissedAttemptIdRef.current = record?.id ?? null;
+    setSelectedMissedAttempt(record);
+    setSelected(null);
+    selectedIdRef.current = null;
+    setMissedAttemptReview(null);
+    setMissedAttemptError('');
+  }, []);
+
   const load = useCallback(async (): Promise<CollectionCase[]> => {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
@@ -182,6 +199,33 @@ export default function CollectionsPage() {
     requestControllerRef.current = controller;
     setLoading(true); setError('');
     try {
+      if (view === 'missed_attempts') {
+        const params = new URLSearchParams({ status: missedAttemptStatus, page: String(page) });
+        if (search.trim()) params.set('search', search.trim());
+        if (owner !== 'all') params.set('agent', owner);
+        if (fromDate) params.set('from', fromDate);
+        if (toDate) params.set('to', toDate);
+        const res = await fetch(`/api/ops/collections/missed-attempts?${params}`, { cache: 'no-store', signal: controller.signal });
+        const data = await res.json();
+        if (requestId !== requestIdRef.current) return [];
+        if (!res.ok) throw new Error(data.error || 'Could not load missed attempt requests.');
+        setAgentEmail(data.agentEmail); setViewerRole(data.viewerRole || '');
+        setMissedAttemptRequests(data.requests || []);
+        setMissedAttemptCounts(data.counts || {});
+        setMissedAttemptAgents(data.agents || []);
+        setPagination(data.pagination || { page: 1, pageSize: 50, totalRecords: 0, totalPages: 1 });
+        setRecords([]);
+        setSelected(null);
+        selectedIdRef.current = null;
+        if (data.pagination?.page && data.pagination.page !== page) setPage(data.pagination.page);
+        const selectedRequestId = selectedMissedAttemptIdRef.current;
+        if (selectedRequestId !== null) {
+          const updatedSelection = (data.requests || []).find((item: MissedAttemptRequest) => item.id === selectedRequestId) || null;
+          selectedMissedAttemptIdRef.current = updatedSelection?.id ?? null;
+          setSelectedMissedAttempt(updatedSelection);
+        }
+        return [];
+      }
       const params = new URLSearchParams({ view, page: String(page), sort });
       if (search.trim()) params.set('search', search.trim());
       if (status !== 'all') params.set('status', status);
@@ -208,6 +252,7 @@ export default function CollectionsPage() {
       const nextRecords = data.records || [];
       const nextPagination = data.pagination || { page: 1, pageSize: 50, totalRecords: 0, totalPages: 1 };
       setRecords(nextRecords);
+      setMissedAttemptRequests([]);
       setPagination(nextPagination);
       if (nextPagination.page !== page) setPage(nextPagination.page);
       const selectedId = selectedIdRef.current;
@@ -223,7 +268,7 @@ export default function CollectionsPage() {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate, verificationFilter, successScope, successVerification, callVerificationEnabled]);
+  }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate, verificationFilter, successScope, successVerification, callVerificationEnabled, missedAttemptStatus]);
 
   const loadSavedViews = useCallback(async () => {
     try {
@@ -265,11 +310,14 @@ export default function CollectionsPage() {
   useEffect(() => { void loadSavedViews(); }, [loadSavedViews]);
 
   const isAdmin = viewerRole === 'admin';
+  const successfulView = view === 'collected';
+  const missedAttemptView = view === 'missed_attempts';
   const tabs = [
     ['unassigned','Unassigned',Inbox,counts.unassigned || 0],
     ['mine','My Cases',UserCheck,counts.mine || 0],
     ['all','All Active',UserCheck,counts.active || 0],
     ['due','Due Follow-ups',CalendarClock,counts.due || 0],
+    ['missed_attempts','Missed Attempts',FileCheck2,missedAttemptCounts.pending || ''],
     ['closed','Closed',FileText,''],
     ['collected','Successful Collections',CircleDollarSign,view==='collected'&&successScope==='all'&&isAdmin ? counts.collected_all || 0 : counts.collected || 0],
   ] as const;
@@ -281,7 +329,7 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     setSelectedIds([]);
-  }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate, verificationFilter, successScope, successVerification]);
+  }, [view, page, sort, search, status, owner, attempt, minAmount, maxAmount, fromDate, toDate, verificationFilter, successScope, successVerification, missedAttemptStatus]);
 
   async function mutate(action: string, body: any = {}, target: CollectionCase | null = selected) {
     if (!target) return;
@@ -509,6 +557,7 @@ export default function CollectionsPage() {
       sort,
       attempt,
       verification: verificationFilter,
+      missedAttemptStatus,
       minAmount,
       maxAmount,
       from: fromDate,
@@ -527,6 +576,7 @@ export default function CollectionsPage() {
     setSort(config.sort === 'newest' ? 'newest' : 'oldest');
     setAttempt(config.attempt || 'all');
     setVerificationFilter(config.verification || 'all');
+    setMissedAttemptStatus(config.missedAttemptStatus || 'pending');
     setMinAmount(config.minAmount || '');
     setMaxAmount(config.maxAmount || '');
     setFromDate(config.from || '');
@@ -535,6 +585,7 @@ export default function CollectionsPage() {
     setPage(1);
     setSelectedIds([]);
     selectCase(null);
+    selectMissedAttempt(null);
   }
 
   async function submitSavedViewDialog() {
@@ -676,7 +727,6 @@ export default function CollectionsPage() {
   const selectedSavedView = savedViews.find(saved => String(saved.id) === savedViewId);
   const explanationWordCount = explanationNotes.trim().split(/\s+/).filter(Boolean).length;
   const missedAttemptWordCount = missedAttemptDialog?.lateEntryReason.trim().split(/\s+/).filter(Boolean).length || 0;
-  const successfulView = view === 'collected';
 
   return (
     <div className="ops-app-shell collections-shell">
@@ -698,7 +748,7 @@ export default function CollectionsPage() {
 
       <main className="collections-main">
         <div className="collections-tabs">
-          {tabs.map(([id,label,Icon,count]) => <button key={id} onClick={() => { setView(id); setPage(1); selectCase(null); }} className="ops-tab" data-active={view===id}><Icon size={15}/>{label}{count !== '' && <span>{count}</span>}</button>)}
+          {tabs.map(([id,label,Icon,count]) => <button key={id} onClick={() => { setView(id); setPage(1); selectCase(null); selectMissedAttempt(null); }} className="ops-tab" data-active={view===id}><Icon size={15}/>{label}{count !== '' && <span>{count}</span>}</button>)}
         </div>
 
         <section className="collections-saved-views">
@@ -718,8 +768,13 @@ export default function CollectionsPage() {
 
         <section className="collections-filters">
           <label className="collections-search"><Search size={16}/><input value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} placeholder="Search customer, case, invoice, or subscription"/></label>
-          <select value={status} onChange={e=>{setStatus(e.target.value);setPage(1);}}>{STATUS_OPTIONS.map(v=><option key={v} value={v}>{v==='all'?'All statuses':humanize(v)}</option>)}</select>
-          {(!successfulView||isAdmin)&&<select value={owner} onChange={e=>{setOwner(e.target.value);setPage(1);}}><option value="all">{successfulView?'All credited agents':'All owners'}</option>{owners.map(v=><option key={v} value={v}>{v}</option>)}</select>}
+          {missedAttemptView
+            ? <select value={missedAttemptStatus} onChange={e=>{setMissedAttemptStatus(e.target.value);setPage(1);}}><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="all">All statuses</option></select>
+            : <select value={status} onChange={e=>{setStatus(e.target.value);setPage(1);}}>{STATUS_OPTIONS.map(v=><option key={v} value={v}>{v==='all'?'All statuses':humanize(v)}</option>)}</select>}
+          {missedAttemptView
+            ? <select value={owner} onChange={e=>{setOwner(e.target.value);setPage(1);}}><option value="all">All submitting agents</option>{missedAttemptAgents.map(v=><option key={v} value={v}>{v}</option>)}</select>
+            : (!successfulView||isAdmin)&&<select value={owner} onChange={e=>{setOwner(e.target.value);setPage(1);}}><option value="all">{successfulView?'All credited agents':'All owners'}</option>{owners.map(v=><option key={v} value={v}>{v}</option>)}</select>}
+          {!missedAttemptView&&<>
           {successfulView&&isAdmin&&<select value={successScope} onChange={e=>{setSuccessScope(e.target.value as 'mine'|'all');setOwner('all');setPage(1);}}>
             <option value="mine">My credited collections</option>
             <option value="all">All successful collections</option>
@@ -747,23 +802,34 @@ export default function CollectionsPage() {
           </select>}
           <input type="number" min="0" value={minAmount} onChange={e=>{setMinAmount(e.target.value);setPage(1);}} placeholder="Min $"/>
           <input type="number" min="0" value={maxAmount} onChange={e=>{setMaxAmount(e.target.value);setPage(1);}} placeholder="Max $"/>
+          </>}
           <input aria-label="Created from" type="date" value={fromDate} onChange={e=>{setFromDate(e.target.value);setPage(1);}}/>
           <input aria-label="Created through" type="date" value={toDate} onChange={e=>{setToDate(e.target.value);setPage(1);}}/>
-          <button onClick={()=>{setSearch('');setStatus('all');setOwner('all');setAttempt('all');setVerificationFilter('all');setSuccessVerification('all');setMinAmount('');setMaxAmount('');setFromDate('');setToDate('');setPage(1);}} className="ops-secondary-button">Reset</button>
+          <button onClick={()=>{setSearch('');setStatus('all');setMissedAttemptStatus('pending');setOwner('all');setAttempt('all');setVerificationFilter('all');setSuccessVerification('all');setMinAmount('');setMaxAmount('');setFromDate('');setToDate('');setPage(1);}} className="ops-secondary-button">Reset</button>
         </section>
 
         {error && <div className="collections-error">{error}</div>}
         {adminNotice && <div className="admin-queue-notice">{adminNotice}</div>}
-        {isAdmin && <AdminQueueToolbar count={selectedIds.length} onClear={() => setSelectedIds([])} onAction={action => openAdminAction(action, selectedIds)} />}
-        {!isAdmin && selectedIds.length>0&&<section className="admin-queue-toolbar collections-claim-toolbar" aria-label="Bulk claim collection cases">
+        {isAdmin && !missedAttemptView && <AdminQueueToolbar count={selectedIds.length} onClear={() => setSelectedIds([])} onAction={action => openAdminAction(action, selectedIds)} />}
+        {!isAdmin && !missedAttemptView && selectedIds.length>0&&<section className="admin-queue-toolbar collections-claim-toolbar" aria-label="Bulk claim collection cases">
           <div><strong>{selectedIds.length} selected</strong><span>Assign these unassigned cases to yourself.</span></div>
           <button type="button" className="ops-primary-button" disabled={working} onClick={()=>void claimSelectedCases()}><UserCheck size={15}/>{working?'Claiming...':'Claim selected'}</button>
           <button type="button" className="ops-secondary-button" disabled={working} onClick={()=>setSelectedIds([])}>Clear</button>
         </section>}
-        <div className={`collections-workspace ${selected ? 'is-open' : ''}`}>
+        <div className={`collections-workspace ${selected || selectedMissedAttempt ? 'is-open' : ''}`}>
           <section className="collections-list">
-            {selectableRecords.length > 0 && <label className="admin-select-all"><input type="checkbox" checked={allVisibleSelected} onChange={()=>setSelectedIds(allVisibleSelected ? [] : selectableRecords.map(item=>item.id))}/>Select all {selectableRecords.length} visible collection cases</label>}
-            {loading && records.length===0 ? <div className="collections-empty"><Loader2 className="animate-spin"/></div> :
+            {!missedAttemptView && selectableRecords.length > 0 && <label className="admin-select-all"><input type="checkbox" checked={allVisibleSelected} onChange={()=>setSelectedIds(allVisibleSelected ? [] : selectableRecords.map(item=>item.id))}/>Select all {selectableRecords.length} visible collection cases</label>}
+            {missedAttemptView ? (
+              loading && missedAttemptRequests.length===0 ? <div className="collections-empty"><Loader2 className="animate-spin"/></div> :
+              missedAttemptRequests.length===0 ? <div className="collections-empty">{missedAttemptStatus==='pending'?'No missed attempt requests need review.':'No missed attempt requests match this view.'}</div> :
+              missedAttemptRequests.map(request => <article key={request.id} className={`collection-row missed-attempt-row is-${request.status} ${selectedMissedAttempt?.id===request.id?'is-selected':''}`} onClick={()=>selectMissedAttempt(request)}>
+                <div className="collection-row-main">
+                  <div className="collection-row-heading"><strong>{request.customer_name || request.customer_email || `Case #${request.case_id}`}</strong><span>{humanize(request.status)}</span><em>Case #{request.case_id}</em></div>
+                  <div className="collection-row-meta"><span>{request.subscription_id || 'Invoice-only case'}</span><span>{request.submitting_agent_email}</span><span><Clock3 size={12}/>{when(request.requested_attempt_at)}</span><span>{humanize(request.outcome)}</span><span>{request.called_phone}</span></div>
+                </div>
+                <div className="collection-row-amount"><strong>{request.paid_invoices?.length || 0}</strong><small>paid invoice{request.paid_invoices?.length===1?'':'s'}</small></div>
+              </article>)
+            ) : loading && records.length===0 ? <div className="collections-empty"><Loader2 className="animate-spin"/></div> :
              records.length===0 ? <div className="collections-empty">No collection cases in this view.</div> :
              records.map(item => <article key={item.id} className={`collection-row ${!successfulView&&item.due_now?'is-due':''} ${successfulView?'is-successful':''} ${selected?.id===item.id?'is-selected':''} ${selectableRecords.some(record=>record.id===item.id)?'has-admin-select':''}`} onClick={()=>selectCase(item)}>
                {selectableRecords.some(record=>record.id===item.id)&&<input className="admin-row-checkbox" type="checkbox" checked={selectedIds.includes(item.id)} onClick={e=>e.stopPropagation()} onChange={()=>toggleSelected(item.id)} aria-label={`Select collection case ${item.id}`}/>}
@@ -779,11 +845,45 @@ export default function CollectionsPage() {
                 <span>{pagination.totalRecords === 0 ? 'Showing 0 records' : `Showing ${(pagination.page - 1) * pagination.pageSize + 1}-${Math.min(pagination.page * pagination.pageSize, pagination.totalRecords)} of ${pagination.totalRecords}`}</span>
               </div>
               <div>
-                <button type="button" className="ops-secondary-button" disabled={pagination.page <= 1 || loading} onClick={()=>{selectCase(null);setPage(current=>Math.max(1,current-1));}}><ChevronLeft size={15}/>Previous</button>
-                <button type="button" className="ops-secondary-button" disabled={pagination.page >= pagination.totalPages || loading} onClick={()=>{selectCase(null);setPage(current=>Math.min(pagination.totalPages,current+1));}}>Next<ChevronRight size={15}/></button>
+                <button type="button" className="ops-secondary-button" disabled={pagination.page <= 1 || loading} onClick={()=>{selectCase(null);selectMissedAttempt(null);setPage(current=>Math.max(1,current-1));}}><ChevronLeft size={15}/>Previous</button>
+                <button type="button" className="ops-secondary-button" disabled={pagination.page >= pagination.totalPages || loading} onClick={()=>{selectCase(null);selectMissedAttempt(null);setPage(current=>Math.min(pagination.totalPages,current+1));}}>Next<ChevronRight size={15}/></button>
               </div>
             </nav>
           </section>
+
+          {selectedMissedAttempt && <aside className="collections-detail">
+            <div className="collections-detail-head"><div><small>Missed Attempt Request #{selectedMissedAttempt.id}</small><h2>{selectedMissedAttempt.customer_name || selectedMissedAttempt.customer_email || `Case #${selectedMissedAttempt.case_id}`}</h2></div><button onClick={()=>selectMissedAttempt(null)} className="ops-icon-button"><X size={17}/></button></div>
+            <div className="collections-detail-body">
+              <div className="collections-balance"><span>Review status</span><strong>{humanize(selectedMissedAttempt.status)}</strong><em>Collections case #{selectedMissedAttempt.case_id}</em></div>
+              <div className="collections-grid">
+                <div><small>Submitting agent</small><strong>{selectedMissedAttempt.submitting_agent_email}</strong></div>
+                <div><small>Requested call time</small><strong>{when(selectedMissedAttempt.requested_attempt_at)}</strong></div>
+                <div><small>Outcome</small><strong>{humanize(selectedMissedAttempt.outcome)}</strong></div>
+                <div><small>Called phone</small><strong>{selectedMissedAttempt.called_phone}</strong></div>
+                <div><small>Subscription</small><strong>{selectedMissedAttempt.subscription_id || 'Invoice only'}</strong></div>
+                <div><small>Submitted</small><strong>{when(selectedMissedAttempt.created_at)}</strong></div>
+              </div>
+              <div className="collections-actions">
+                <button type="button" className="ops-secondary-button" onClick={()=>{setView('collected');setSearch(String(selectedMissedAttempt.case_id));setMissedAttemptStatus('pending');setPage(1);selectMissedAttempt(null);}}>Open Related Case</button>
+              </div>
+              <section className="missed-attempt-section">
+                <h3>Request details</h3>
+                <article className={`missed-attempt-card is-${selectedMissedAttempt.status}`}>
+                  <div><strong>Attempt notes</strong><span>{selectedMissedAttempt.submitting_agent_email}</span></div>
+                  <p>{selectedMissedAttempt.notes}</p>
+                  <small>Late-entry reason: {selectedMissedAttempt.late_entry_reason}</small>
+                </article>
+              </section>
+              <section><h3>Paid invoice context</h3>{selectedMissedAttempt.paid_invoices?.length ? <div className="collections-invoices">{selectedMissedAttempt.paid_invoices.map((invoice:any)=><div key={invoice.id||invoice.invoice_id}><strong>{invoice.invoice_id||invoice.id}</strong><span>Paid {when(invoice.paid_at||null)}</span><span>{money(invoice.amount_paid||0,invoice.currency_code||selectedMissedAttempt.currency_code||'USD')}</span></div>)}</div> : <p className="collections-muted">No paid invoice context was returned for this request.</p>}</section>
+              {(selectedMissedAttempt.reviewed_by || selectedMissedAttempt.admin_note) && <section className="collections-note">
+                <strong>{selectedMissedAttempt.status==='approved'?'Approved':selectedMissedAttempt.status==='rejected'?'Rejected':'Reviewed'} by {selectedMissedAttempt.reviewed_by || 'admin'}</strong>
+                <p>{selectedMissedAttempt.admin_note}</p>
+                <small>{when(selectedMissedAttempt.reviewed_at)}</small>
+                {selectedMissedAttempt.approved_attempt_id&&<small>Approved attempt #{selectedMissedAttempt.approved_attempt_id}</small>}
+              </section>}
+              {selectedMissedAttempt.status==='pending'&&isAdmin&&<section className="admin-record-controls"><div><strong>Administrator review</strong><span>Approval creates a real collection attempt if the call time is before Chargebee payment confirmation.</span></div><div className="missed-attempt-actions"><button type="button" className="ops-primary-button" onClick={()=>{setMissedAttemptError('');setMissedAttemptReview({request:selectedMissedAttempt,action:'approve',adminNote:''});}}><CheckCircle2 size={14}/>Approve</button><button type="button" className="ops-secondary-button" onClick={()=>{setMissedAttemptError('');setMissedAttemptReview({request:selectedMissedAttempt,action:'reject',adminNote:''});}}><X size={14}/>Reject</button></div></section>}
+            </div>
+          </aside>}
 
           {selected && <aside className="collections-detail">
             <div className="collections-detail-head"><div><small>Collections Case #{selected.id}</small><h2>{selected.customer_name || selected.customer_email || 'Customer'}</h2></div><button onClick={()=>selectCase(null)} className="ops-icon-button"><X size={17}/></button></div>

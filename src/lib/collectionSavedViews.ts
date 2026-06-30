@@ -1,10 +1,11 @@
-export const COLLECTION_VIEWS = ['unassigned', 'mine', 'all', 'due', 'closed', 'collected'] as const;
+export const COLLECTION_VIEWS = ['unassigned', 'mine', 'all', 'due', 'closed', 'collected', 'missed_attempts'] as const;
 export const COLLECTION_SORTS = ['oldest', 'newest'] as const;
 export const COLLECTION_SUCCESS_SCOPES = ['mine', 'all'] as const;
 export const COLLECTION_SUCCESS_VERIFICATIONS = ['all', 'verified', 'not_verified', 'needs_explanation'] as const;
 const COLLECTION_STATUSES = ['all','unassigned','assigned','follow_up_pending','awaiting_payment_confirmation','paused','collected','exhausted','canceled','no_valid_contact','completed_by_admin','closed_by_admin'] as const;
 const COLLECTION_ATTEMPTS = ['all','0','1','2','3'] as const;
 const COLLECTION_VERIFICATIONS = ['all','pending','verified','unverified','outcome_mismatch','mapping_required','needs_review','not_tracked'] as const;
+const MISSED_ATTEMPT_STATUSES = ['pending','approved','rejected','all'] as const;
 
 export type CollectionSavedViewConfig = {
   view: typeof COLLECTION_VIEWS[number];
@@ -16,6 +17,7 @@ export type CollectionSavedViewConfig = {
   sort: typeof COLLECTION_SORTS[number];
   attempt: string;
   verification: string;
+  missedAttemptStatus: string;
   minAmount: string;
   maxAmount: string;
   from: string;
@@ -52,6 +54,7 @@ export function sanitizeCollectionSavedViewConfig(value: unknown): CollectionSav
     sort: oneOf(config.sort, COLLECTION_SORTS, 'oldest'),
     attempt: oneOf(config.attempt, COLLECTION_ATTEMPTS, 'all'),
     verification: oneOf(config.verification, COLLECTION_VERIFICATIONS, 'all'),
+    missedAttemptStatus: oneOf(config.missedAttemptStatus, MISSED_ATTEMPT_STATUSES, 'pending'),
     minAmount: amountText(config.minAmount),
     maxAmount: amountText(config.maxAmount),
     from: dateText(config.from),

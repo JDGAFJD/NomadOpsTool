@@ -842,6 +842,9 @@ button {
 .collection-row.has-admin-select { grid-template-columns: auto minmax(0,1fr) auto; }
 .collection-row.is-due { border-left: 4px solid #d97706; }
 .collection-row.is-successful { border-left: 4px solid #059669; }
+.collection-row.missed-attempt-row.is-pending { border-left: 4px solid #f59e0b; }
+.collection-row.missed-attempt-row.is-approved { border-left: 4px solid #10b981; }
+.collection-row.missed-attempt-row.is-rejected { border-left: 4px solid #ef4444; }
 .collection-row.is-selected { border-color: var(--primary); }
 .collection-row-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .collection-row-heading span,.collection-row-heading em { padding: 3px 7px; border-radius: 5px; background: var(--surface-200); color: var(--ops-text-muted); font-size: 11px; font-style: normal; font-weight: 800; }
