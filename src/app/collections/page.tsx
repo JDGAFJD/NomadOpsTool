@@ -78,6 +78,7 @@ const EXPLANATION_REASONS = [
   ['import_system_issue','Import or system issue'],
   ['other','Other'],
 ];
+const MISSED_ATTEMPT_WINDOW_MINUTES = 30;
 
 function humanize(value: string) {
   return value.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -96,6 +97,16 @@ function ageLabel(value: number | string) {
   if (hours < 24) return `${hours}h ${minutes % 60}m`;
   const days = Math.floor(hours / 24);
   return `${days}d ${hours % 24}h`;
+}
+function isRecentMissedAttemptInvoice(invoice: any) {
+  const paidAt = new Date(String(invoice?.paid_at || '')).getTime();
+  return Boolean(
+    invoice?.paid_at &&
+    Number(invoice?.amount_due || 0) === 0 &&
+    Number(invoice?.amount_paid || 0) > 0 &&
+    Number.isFinite(paidAt) &&
+    paidAt >= Date.now() - MISSED_ATTEMPT_WINDOW_MINUTES * 60 * 1000
+  );
 }
 
 export default function CollectionsPage() {
@@ -319,7 +330,7 @@ export default function CollectionsPage() {
     ['mine','My Cases',UserCheck,counts.mine || 0],
     ['all','All Active',UserCheck,counts.active || 0],
     ['due','Due Follow-ups',CalendarClock,counts.due || 0],
-    ['missed_attempt_candidates','Log Missed Attempt',Clock3,counts.collected_all || ''],
+    ['missed_attempt_candidates','Log Missed Attempt',Clock3,counts.missed_attempt_candidates || ''],
     ['missed_attempts','Missed Attempts',FileCheck2,missedAttemptCounts.pending || ''],
     ['closed','Closed',FileText,''],
     ['collected','Successful Collections',CircleDollarSign,view==='collected'&&successScope==='all'&&isAdmin ? counts.collected_all || 0 : counts.collected || 0],
@@ -664,7 +675,7 @@ export default function CollectionsPage() {
     if (!selected) return;
     const now = new Date();
     const localValue = new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-    const firstPaidInvoice = (selected.invoices || []).find((invoice: any) => invoice.paid_at && Number(invoice.amount_paid || 0) > 0);
+    const firstPaidInvoice = (selected.invoices || []).find(isRecentMissedAttemptInvoice);
     setMissedAttemptError('');
     setMissedAttemptDialog({
       requestedAttemptAt: localValue,
@@ -730,6 +741,7 @@ export default function CollectionsPage() {
   const selectedSavedView = savedViews.find(saved => String(saved.id) === savedViewId);
   const explanationWordCount = explanationNotes.trim().split(/\s+/).filter(Boolean).length;
   const missedAttemptWordCount = missedAttemptDialog?.lateEntryReason.trim().split(/\s+/).filter(Boolean).length || 0;
+  const selectedCanSubmitMissedAttempt = Boolean(paidCaseView && selected?.invoices?.some(isRecentMissedAttemptInvoice));
 
   return (
     <div className="ops-app-shell collections-shell">
@@ -921,8 +933,10 @@ export default function CollectionsPage() {
               {successfulView&&isAdmin&&selected.agent_credits?.length?<section><h3>Credited agents</h3><div className="collection-credit-list">{selected.agent_credits.map(credit=><div key={credit.agent_email}><strong>{credit.agent_email}</strong><span>{credit.paid_invoices} paid invoice{credit.paid_invoices===1?'':'s'}</span><b>{money(credit.credited_amount,selected.currency_code)}</b></div>)}</div></section>:null}
               {paidCaseView&&<section className="missed-attempt-section">
                 <div className="missed-attempt-head">
-                  <div><h3>Missed attempt corrections</h3><p>Missed attempts are audited. Approved attempts only count when the call time is before Chargebee payment confirmation.</p></div>
-                  <button type="button" className="ops-secondary-button" disabled={missedAttemptWorking} onClick={()=>openMissedAttemptDialog()}><Clock3 size={14}/>Submit Missed Attempt</button>
+                  <div><h3>Missed attempt corrections</h3><p>Missed attempts are audited. Approved attempts only count when the call time is before Chargebee payment confirmation and the request is submitted within 30 minutes of that confirmation.</p></div>
+                  {selectedCanSubmitMissedAttempt
+                    ? <button type="button" className="ops-secondary-button" disabled={missedAttemptWorking} onClick={()=>openMissedAttemptDialog()}><Clock3 size={14}/>Submit Missed Attempt</button>
+                    : <span className="collections-muted">Correction window closed</span>}
                 </div>
                 {selected.missed_attempt_requests?.length ? <div className="missed-attempt-list">
                   {selected.missed_attempt_requests.map(request=><article key={request.id} className={`missed-attempt-card is-${request.status}`}>
@@ -985,12 +999,12 @@ export default function CollectionsPage() {
       </div></div>}
       {missedAttemptDialog&&selected&&<div className="collections-modal-backdrop"><div className="collections-modal">
         <div className="collections-modal-head"><div><small>Audited credit correction</small><h2>Submit Missed Attempt</h2></div><button disabled={missedAttemptWorking} onClick={()=>setMissedAttemptDialog(null)} className="ops-icon-button"><X size={17}/></button></div>
-        <div className="collections-info">This request needs admin approval before it can count toward collection credit. Approval only succeeds when the call time is before Chargebee payment confirmation.</div>
+        <div className="collections-info">This request needs admin approval before it can count toward collection credit. It is only available for 30 minutes after Chargebee payment confirmation, and approval only succeeds when the call time is before that payment confirmation.</div>
         {missedAttemptError&&<div className="collections-modal-error" role="alert">{missedAttemptError}</div>}
         <label><span>Actual call date and time</span><input type="datetime-local" value={missedAttemptDialog.requestedAttemptAt} onChange={event=>setMissedAttemptDialog(current=>current?{...current,requestedAttemptAt:event.target.value}:current)}/></label>
         <label><span>Paid invoice</span><select value={missedAttemptDialog.invoiceId} onChange={event=>setMissedAttemptDialog(current=>current?{...current,invoiceId:event.target.value}:current)}>
           <option value="">Auto-match eligible paid invoice</option>
-          {(selected.invoices||[]).filter((invoice:any)=>invoice.paid_at&&Number(invoice.amount_paid||0)>0).map((invoice:any)=><option key={invoice.invoice_id||invoice.id} value={invoice.invoice_id||invoice.id}>{invoice.invoice_id||invoice.id} · Paid {when(invoice.paid_at||null)}</option>)}
+          {(selected.invoices||[]).filter(isRecentMissedAttemptInvoice).map((invoice:any)=><option key={invoice.invoice_id||invoice.id} value={invoice.invoice_id||invoice.id}>{invoice.invoice_id||invoice.id} · Paid {when(invoice.paid_at||null)}</option>)}
         </select></label>
         <label><span>Outcome</span><select value={missedAttemptDialog.outcome} onChange={event=>setMissedAttemptDialog(current=>current?{...current,outcome:event.target.value as MissedAttemptDialog['outcome']}:current)}>
           <option value="completed">Completed</option>

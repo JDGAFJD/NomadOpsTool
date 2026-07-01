@@ -12,6 +12,7 @@ const PAGE_SIZE = 50;
 const VIEWS = ['unassigned', 'mine', 'all', 'due', 'closed', 'collected', 'missed_attempt_candidates'] as const;
 type CollectionView = typeof VIEWS[number];
 const NON_VERIFIED_STATES = ['pending', 'mapping_required', 'unverified', 'outcome_mismatch'];
+const MISSED_ATTEMPT_WINDOW_MINUTES = 30;
 
 function filters(request: NextRequest, params: unknown[]) {
   const clauses: string[] = [];
@@ -236,8 +237,15 @@ async function collectedQueue(request: NextRequest, session: any, pageCandidate:
   const successScope: 'mine'|'all' = forceAll || (requestedScope === 'all' && session.role === 'admin') ? 'all' : 'mine';
   const params: unknown[] = [];
   const { where, attemptAgent } = collectedFilters(request, params, session, successScope);
+  const finalWhere = forceAll
+    ? `${where} AND EXISTS (
+        SELECT 1 FROM ops_collection_invoices recent_paid_invoice
+        WHERE ${paidInvoiceExists('recent_paid_invoice')}
+          AND recent_paid_invoice.paid_at >= NOW() - INTERVAL '${MISSED_ATTEMPT_WINDOW_MINUTES} minutes'
+      )`
+    : where;
   const total = await queryOpsDb(
-    `SELECT COUNT(*)::int AS total FROM ops_collection_cases c WHERE ${where}`,
+    `SELECT COUNT(*)::int AS total FROM ops_collection_cases c WHERE ${finalWhere}`,
     params
   );
   const totalRecords = Number(total.rows[0]?.total || 0);
@@ -311,7 +319,7 @@ async function collectedQueue(request: NextRequest, session: any, pageCandidate:
        ),'[]'::json) AS missed_attempt_requests,
        COALESCE((SELECT json_agg(e ORDER BY e.created_at DESC) FROM ops_collection_events e WHERE e.case_id=c.id),'[]'::json) AS events
      FROM ops_collection_cases c
-     WHERE ${where}
+     WHERE ${finalWhere}
      ORDER BY latest_paid_at ${sort === 'newest' ? 'DESC' : 'ASC'},c.id ${sort === 'newest' ? 'DESC' : 'ASC'}
      LIMIT $${limitParam} OFFSET $${offsetParam}`,
     recordsParams
@@ -354,7 +362,10 @@ export async function GET(request: NextRequest) {
               AND a.created_at>=COALESCE(i.failure_date,i.created_at) AND a.created_at<=i.paid_at
             WHERE i.paid_at IS NOT NULL AND i.amount_due=0 AND i.amount_paid>0 AND LOWER(a.agent_email)=LOWER($1)) collected,
           (SELECT COUNT(DISTINCT i.case_id) FROM ops_collection_invoices i
-            WHERE i.paid_at IS NOT NULL AND i.amount_due=0 AND i.amount_paid>0) collected_all
+            WHERE i.paid_at IS NOT NULL AND i.amount_due=0 AND i.amount_paid>0) collected_all,
+          (SELECT COUNT(DISTINCT i.case_id) FROM ops_collection_invoices i
+            WHERE i.paid_at IS NOT NULL AND i.amount_due=0 AND i.amount_paid>0
+              AND i.paid_at >= NOW() - INTERVAL '${MISSED_ATTEMPT_WINDOW_MINUTES} minutes') missed_attempt_candidates
           FROM ops_collection_cases`, [session.email]),
         queryOpsDb(`SELECT DISTINCT agent_email AS assigned_to FROM ops_collection_attempts ORDER BY agent_email`),
         session.role === 'admin'
@@ -400,7 +411,10 @@ export async function GET(request: NextRequest) {
             AND a.created_at>=COALESCE(i.failure_date,i.created_at) AND a.created_at<=i.paid_at
           WHERE i.paid_at IS NOT NULL AND i.amount_due=0 AND i.amount_paid>0 AND LOWER(a.agent_email)=LOWER($1)) collected,
         (SELECT COUNT(DISTINCT i.case_id) FROM ops_collection_invoices i
-          WHERE i.paid_at IS NOT NULL AND i.amount_due=0 AND i.amount_paid>0) collected_all
+          WHERE i.paid_at IS NOT NULL AND i.amount_due=0 AND i.amount_paid>0) collected_all,
+        (SELECT COUNT(DISTINCT i.case_id) FROM ops_collection_invoices i
+          WHERE i.paid_at IS NOT NULL AND i.amount_due=0 AND i.amount_paid>0
+            AND i.paid_at >= NOW() - INTERVAL '${MISSED_ATTEMPT_WINDOW_MINUTES} minutes') missed_attempt_candidates
         FROM ops_collection_cases`, [session.email]),
       queryOpsDb(`SELECT DISTINCT assigned_to FROM ops_collection_cases WHERE assigned_to IS NOT NULL ORDER BY assigned_to`),
       session.role === 'admin'

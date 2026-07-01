@@ -8,9 +8,15 @@ import { logActivity, queryOpsDb, withOpsDbTransaction } from '@/lib/opsDb';
 export const dynamic = 'force-dynamic';
 
 const OUTCOMES = new Set(['completed', 'left_voicemail', 'no_answer']);
+const MISSED_ATTEMPT_WINDOW_MINUTES = 30;
 
 function wordCount(value: string) {
   return value.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function isWithinMissedAttemptWindow(value: unknown) {
+  const paidAt = new Date(String(value || '')).getTime();
+  return Number.isFinite(paidAt) && paidAt >= Date.now() - MISSED_ATTEMPT_WINDOW_MINUTES * 60 * 1000;
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -69,8 +75,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         (error as any).status = 400;
         throw error;
       }
-      if (invoiceId && !paidInvoices.some((invoice: any) => String(invoice.invoice_id) === invoiceId)) {
-        const error = new Error('The selected invoice is not a paid invoice on this collection case.');
+      const recentPaidInvoices = paidInvoices.filter((invoice: any) => isWithinMissedAttemptWindow(invoice.paid_at));
+      if (!recentPaidInvoices.length) {
+        const error = new Error(`Missed attempt corrections are only available for ${MISSED_ATTEMPT_WINDOW_MINUTES} minutes after Chargebee payment confirmation.`);
+        (error as any).status = 400;
+        throw error;
+      }
+      if (invoiceId && !recentPaidInvoices.some((invoice: any) => String(invoice.invoice_id) === invoiceId)) {
+        const error = new Error(`The selected invoice is not inside the ${MISSED_ATTEMPT_WINDOW_MINUTES}-minute missed attempt correction window.`);
         (error as any).status = 400;
         throw error;
       }
