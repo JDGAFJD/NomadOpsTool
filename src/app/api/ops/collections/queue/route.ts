@@ -9,7 +9,7 @@ import { isCallVerificationEnabled } from '@/lib/features';
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 50;
-const VIEWS = ['unassigned', 'mine', 'all', 'due', 'closed', 'collected'] as const;
+const VIEWS = ['unassigned', 'mine', 'all', 'due', 'closed', 'collected', 'missed_attempt_candidates'] as const;
 type CollectionView = typeof VIEWS[number];
 const NON_VERIFIED_STATES = ['pending', 'mapping_required', 'unverified', 'outcome_mismatch'];
 
@@ -231,9 +231,9 @@ function collectedFilters(request: NextRequest, params: unknown[], session: any,
   return { where: clauses.join(' AND '), attemptAgent };
 }
 
-async function collectedQueue(request: NextRequest, session: any, pageCandidate: number, sort: 'oldest'|'newest') {
+async function collectedQueue(request: NextRequest, session: any, pageCandidate: number, sort: 'oldest'|'newest', forceAll = false) {
   const requestedScope = request.nextUrl.searchParams.get('successScope') === 'all' ? 'all' : 'mine';
-  const successScope: 'mine'|'all' = requestedScope === 'all' && session.role === 'admin' ? 'all' : 'mine';
+  const successScope: 'mine'|'all' = forceAll || (requestedScope === 'all' && session.role === 'admin') ? 'all' : 'mine';
   const params: unknown[] = [];
   const { where, attemptAgent } = collectedFilters(request, params, session, successScope);
   const total = await queryOpsDb(
@@ -341,8 +341,8 @@ export async function GET(request: NextRequest) {
     const requestedPage = Number(request.nextUrl.searchParams.get('page'));
     const pageCandidate = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
     const sort = request.nextUrl.searchParams.get('sort') === 'newest' ? 'newest' : 'oldest';
-    if (view === 'collected') {
-      const collected = await collectedQueue(request, session, pageCandidate, sort);
+    if (view === 'collected' || view === 'missed_attempt_candidates') {
+      const collected = await collectedQueue(request, session, pageCandidate, sort, view === 'missed_attempt_candidates');
       const [counts, owners, users] = await Promise.all([
         queryOpsDb(`SELECT
           COUNT(*) FILTER(WHERE status='unassigned') unassigned,

@@ -1,4 +1,4 @@
-export const COLLECTION_VIEWS = ['unassigned', 'mine', 'all', 'due', 'closed', 'collected', 'missed_attempts'] as const;
+export const COLLECTION_VIEWS = ['unassigned', 'mine', 'all', 'due', 'closed', 'collected', 'missed_attempts', 'missed_attempt_candidates'] as const;
 export const COLLECTION_SORTS = ['oldest', 'newest'] as const;
 export const COLLECTION_SUCCESS_SCOPES = ['mine', 'all'] as const;
 export const COLLECTION_SUCCESS_VERIFICATIONS = ['all', 'verified', 'not_verified', 'needs_explanation'] as const;

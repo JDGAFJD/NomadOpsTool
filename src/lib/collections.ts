@@ -503,7 +503,12 @@ export async function checkCollectionCasePayment(caseId: number, actorEmail: str
   const service = new ChargebeeService();
   const syncedInvoices = [];
   const missingInvoices = [];
+  const eventPlaceholderInvoices = [];
   for (const stored of storedInvoices) {
+    if (String(stored.invoice_id || '').startsWith('event:')) {
+      eventPlaceholderInvoices.push(stored);
+      continue;
+    }
     const liveInvoice = await service.getInvoice(stored.invoice_id);
     if (!liveInvoice) {
       missingInvoices.push(stored.invoice_id);
@@ -544,6 +549,50 @@ export async function checkCollectionCasePayment(caseId: number, actorEmail: str
       status: text(details.invoice.status) || null,
       paid: details.amountDue === 0,
     });
+  }
+
+  if (eventPlaceholderInvoices.length > 0) {
+    const liveInvoices = caseRow.customer_id
+      ? await service.getInvoices(caseRow.customer_id, caseRow.subscription_id || undefined)
+      : [];
+    const openLiveInvoices = liveInvoices.filter((invoice: any) =>
+      Number(invoice?.amount_due || 0) > 0 && !['paid', 'voided', 'write_off'].includes(String(invoice?.status || ''))
+    );
+
+    if (liveInvoices.length > 0 && openLiveInvoices.length === 0) {
+      const latestPaidAt = liveInvoices
+        .map((invoice: any) => epoch(invoice?.paid_at) || epoch(invoice?.updated_at) || epoch(invoice?.date))
+        .filter(Boolean)
+        .sort((a: Date, b: Date) => b.getTime() - a.getTime())[0] || new Date();
+      const reconciliationPayload = {
+        reconciled_from: 'subscription_invoice_list',
+        message: 'Chargebee returned no open invoices for this subscription, so event placeholder rows were cleared.',
+        live_invoice_ids: liveInvoices.map((invoice: any) => invoice?.id).filter(Boolean),
+      };
+
+      for (const stored of eventPlaceholderInvoices) {
+        await queryOpsDb(
+          `UPDATE ops_collection_invoices SET
+             amount_due = 0,
+             amount_paid = 0,
+             invoice_status = 'reconciled_paid',
+             paid_at = COALESCE(paid_at, $2),
+             payload = payload || $3::jsonb,
+             updated_at = NOW()
+           WHERE id = $1`,
+          [stored.id, latestPaidAt, JSON.stringify(reconciliationPayload)]
+        );
+        syncedInvoices.push({
+          invoiceId: stored.invoice_id,
+          amountDue: 0,
+          amountPaid: 0,
+          status: 'reconciled_paid',
+          paid: true,
+        });
+      }
+    } else {
+      missingInvoices.push(...eventPlaceholderInvoices.map(stored => stored.invoice_id));
+    }
   }
 
   if (syncedInvoices.length === 0) {
