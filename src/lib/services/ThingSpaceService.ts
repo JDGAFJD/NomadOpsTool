@@ -131,6 +131,40 @@ export class ThingSpaceService {
     };
   }
 
+  async listFilteredDevices(options: {
+    currentState: 'active' | 'suspend';
+    customField5: 'Contract Ended' | 'Contract Active';
+    servicePlan?: string;
+    limit: number;
+    accept?: (device: NormalizedThingSpaceDevice) => boolean;
+  }): Promise<NormalizedThingSpaceDevice[]> {
+    const matches: NormalizedThingSpaceDevice[] = [];
+    const seen = new Set<number>();
+    let largestDeviceIdSeen = 0;
+    for (let page = 0; page < 100 && matches.length < options.limit; page += 1) {
+      const body = buildFilteredDeviceListRequest(this.accountName, options, largestDeviceIdSeen);
+      const payload = await this.apiRequest('/api/m2m/v1/devices/actions/list', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      let maxSeen = largestDeviceIdSeen;
+      const pageDevices = (payload?.devices || []).map((raw: unknown) => this.normalizeDevice(raw))
+        .sort((a: NormalizedThingSpaceDevice, b: NormalizedThingSpaceDevice) => a.internalId - b.internalId);
+      for (const device of pageDevices) {
+        if (!Number.isFinite(device.internalId) || device.internalId <= 0) throw new Error('ThingSpace device is missing its internal ID');
+        if (seen.has(device.internalId)) throw new Error(`Duplicate ThingSpace internal device ID ${device.internalId}`);
+        seen.add(device.internalId);
+        maxSeen = Math.max(maxSeen, device.internalId);
+        if (!options.accept || options.accept(device)) matches.push(device);
+        if (matches.length >= options.limit) break;
+      }
+      if (matches.length >= options.limit || !payload?.hasMoreData) break;
+      if (maxSeen <= largestDeviceIdSeen) throw new Error('ThingSpace pagination cursor did not advance');
+      largestDeviceIdSeen = maxSeen;
+    }
+    return matches.sort((a, b) => a.internalId - b.internalId).slice(0, options.limit);
+  }
+
   async listAllDevices(): Promise<NormalizedThingSpaceDevice[]> {
     const devices: NormalizedThingSpaceDevice[] = [];
     const seen = new Set<number>();
@@ -372,4 +406,19 @@ export class ThingSpaceService {
     const data = await res.json();
     return { success: true, requestId: data.requestId };
   }
+}
+
+export function buildFilteredDeviceListRequest(
+  accountName: string,
+  options: { currentState: 'active' | 'suspend'; customField5: 'Contract Ended' | 'Contract Active'; servicePlan?: string },
+  largestDeviceIdSeen: number,
+) {
+  return {
+    accountName,
+    currentState: options.currentState,
+    ...(options.servicePlan === undefined ? {} : { servicePlan: options.servicePlan }),
+    customFields: [{ key: 'CustomField5', value: options.customField5 }],
+    largestDeviceIdSeen,
+    maxNumberOfDevices: 2000,
+  };
 }

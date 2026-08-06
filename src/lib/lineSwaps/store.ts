@@ -11,6 +11,12 @@ export type PreviewItemInput = {
   blockReason: string | null;
 };
 
+export type PreviewSourceMetadata = {
+  dataSource: 'ThingSpace live' | 'Sheet fallback';
+  sourceVerifiedAt: string;
+  sourceSnapshotAgeSeconds: number | null;
+};
+
 export type SwapItemRecord = {
   id: string; batch_id: string; position: number; status: SwapItemStatus; executable: boolean;
   block_reason: string | null; source_mdn: string; source_iccid: string; source_imei: string; source_plan: string;
@@ -29,12 +35,18 @@ export async function ensureLineSwapTables(): Promise<void> {
       operator_email TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'preview',
       workflow_run_id TEXT,
+      data_source TEXT NOT NULL DEFAULT 'ThingSpace live',
+      source_verified_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      source_snapshot_age_seconds INTEGER,
       confirmed_at TIMESTAMPTZ,
       expires_at TIMESTAMPTZ NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await queryOpsDb(`ALTER TABLE ops_line_swap_batches ADD COLUMN IF NOT EXISTS data_source TEXT NOT NULL DEFAULT 'ThingSpace live'`);
+  await queryOpsDb(`ALTER TABLE ops_line_swap_batches ADD COLUMN IF NOT EXISTS source_verified_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`);
+  await queryOpsDb(`ALTER TABLE ops_line_swap_batches ADD COLUMN IF NOT EXISTS source_snapshot_age_seconds INTEGER`);
   await queryOpsDb(`
     CREATE TABLE IF NOT EXISTS ops_line_swap_items (
       id UUID PRIMARY KEY,
@@ -91,14 +103,15 @@ export async function ensureLineSwapTables(): Promise<void> {
   await queryOpsDb(`CREATE INDEX IF NOT EXISTS idx_line_swap_batches_status ON ops_line_swap_batches(status, expires_at)`);
 }
 
-export async function createPreviewBatch(operatorEmail: string, requestedSize: number, items: PreviewItemInput[]): Promise<string> {
+export async function createPreviewBatch(operatorEmail: string, requestedSize: number, items: PreviewItemInput[], source: PreviewSourceMetadata): Promise<string> {
   await ensureLineSwapTables();
   const batchId = randomUUID();
   await withOpsDbTransaction(async client => {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext('ops_line_swap_preview'))`);
     await client.query(
-      `INSERT INTO ops_line_swap_batches (id, requested_size, operator_email, expires_at) VALUES ($1, $2, $3, NOW() + INTERVAL '30 minutes')`,
-      [batchId, requestedSize, operatorEmail],
+      `INSERT INTO ops_line_swap_batches (id, requested_size, operator_email, expires_at, data_source, source_verified_at, source_snapshot_age_seconds)
+       VALUES ($1, $2, $3, NOW() + INTERVAL '30 minutes', $4, $5, $6)`,
+      [batchId, requestedSize, operatorEmail, source.dataSource, source.sourceVerifiedAt, source.sourceSnapshotAgeSeconds],
     );
     for (let index = 0; index < items.length; index += 1) {
       const item = items[index];
@@ -133,7 +146,7 @@ export async function createPreviewBatch(operatorEmail: string, requestedSize: n
         ],
       );
     }
-    await client.query(`INSERT INTO ops_line_swap_events (batch_id, event_type, detail) VALUES ($1, 'preview_created', $2::jsonb)`, [batchId, JSON.stringify({ requestedSize, candidates: items.length })]);
+    await client.query(`INSERT INTO ops_line_swap_events (batch_id, event_type, detail) VALUES ($1, 'preview_created', $2::jsonb)`, [batchId, JSON.stringify({ requestedSize, candidates: items.length, ...source })]);
   });
   return batchId;
 }

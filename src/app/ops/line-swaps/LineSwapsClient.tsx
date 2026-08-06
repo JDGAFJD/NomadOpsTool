@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Loader2, Play, RefreshCw, ShieldCheck, XCircle } from 'lucide-react';
 
-type BatchRecord = { id: string; status: string };
+type BatchRecord = { id: string; status: string; data_source: string; source_verified_at: string; source_snapshot_age_seconds: number | null };
 type ItemRecord = {
   id: string; position: number; status: string; executable: boolean; block_reason: string | null; error_message: string | null;
   source_mdn: string; source_iccid: string; source_imei: string; source_plan: string;
@@ -121,7 +121,11 @@ export default function LineSwapsClient({ initialBatchId, role }: { initialBatch
           <Summary label="Completed" value={snapshot.counts.completed || 0} tone="good" />
           <Summary label="Failed / review" value={(snapshot.counts.failed || 0) + (snapshot.counts.quarantined || 0) + (snapshot.counts.completed_with_warning || 0)} tone="bad" />
         </section>
-        <div className="swap-batchbar"><span>Batch <code>{snapshot.batch.id}</code></span><Status status={snapshot.batch.status} /></div>
+        <div className="swap-batchbar">
+          <span>Batch <code>{snapshot.batch.id}</code></span>
+          <span>{snapshot.batch.data_source}{snapshot.batch.source_snapshot_age_seconds != null ? ` · ${formatAge(snapshot.batch.source_snapshot_age_seconds)} old` : ''} · verified {new Date(snapshot.batch.source_verified_at).toLocaleString()}</span>
+          <Status status={snapshot.batch.status} />
+        </div>
         <section className="swap-table-wrap">
           <table className="swap-table"><thead><tr><th>#</th><th>Source line</th><th>Chargebee</th><th>Parking hardware</th><th>Replacement line</th><th>Plan</th><th>Stage</th></tr></thead>
             <tbody>{snapshot.items.map(item => <tr key={item.id}>
@@ -145,3 +149,4 @@ function Status({ status }: { status: string }) {
   const good = status === 'completed'; const bad = ['failed', 'quarantined', 'completed_with_failures'].includes(status); const pending = ACTIVE_ITEM.has(status) || ACTIVE.has(status);
   return <span className={`swap-status ${good ? 'good' : bad ? 'bad' : pending ? 'pending' : ''}`}>{good ? <CheckCircle2 size={13} /> : bad ? <XCircle size={13} /> : pending ? <Loader2 className="spin" size={13} /> : null}{status.replaceAll('_', ' ')}</span>;
 }
+function formatAge(seconds: number) { return seconds < 60 ? 'under 1m' : `${Math.ceil(seconds / 60)}m`; }
