@@ -3,7 +3,7 @@ import { LineSwapSheetService } from '../services/LineSwapSheetService';
 import { ThingSpaceService } from '../services/ThingSpaceService';
 import { evaluateChargebeeEligibility, isDestinationCandidate, isSourceCandidate } from './rules';
 import { activeReservations, createPreviewBatch, getBatch, type PreviewItemInput } from './store';
-import { ACTIVE_LIKE_SUBSCRIPTION_STATUSES, type ChargebeeEligibility, type InventoryRow, type NormalizedThingSpaceDevice } from './types';
+import { type ChargebeeEligibility, type InventoryRow, type NormalizedThingSpaceDevice } from './types';
 import { queryOpsDb } from '../opsDb';
 
 export async function buildLineSwapPreview(operatorEmail: string, requestedSize: number) {
@@ -47,10 +47,10 @@ export async function buildLineSwapPreview(operatorEmail: string, requestedSize:
     destinationNeeds.set(source.plan, (destinationNeeds.get(source.plan) || 0) + 1);
     parkingCapacity -= 1;
   }
-  const destinationPools = new Map(await Promise.all([...destinationNeeds].map(async ([plan, needed]) => [
+  const destinationPools = new Map([...destinationNeeds].map(([plan, needed]) => [
     plan,
-    await findSafeDestinations(chargebee, suspended.filter(candidate => isDestinationCandidate(candidate, plan)), needed),
-  ] as const)));
+    suspended.filter(candidate => isDestinationCandidate(candidate, plan)).slice(0, needed),
+  ] as const));
 
   const usedInventoryRows = new Set<number>();
   const items: PreviewItemInput[] = [];
@@ -126,21 +126,4 @@ async function chargebeeEligibility(chargebee: ChargebeeService, iccid: string):
     invoices.set(subscription.id, latest ? [latest] : []);
   }));
   return evaluateChargebeeEligibility(subscriptions, invoices);
-}
-
-async function findSafeDestinations(chargebee: ChargebeeService, candidates: NormalizedThingSpaceDevice[], needed: number) {
-  const safe: NormalizedThingSpaceDevice[] = [];
-  const concurrency = 8;
-  const inspectionLimit = Math.min(candidates.length, Math.max(needed * 8, 32));
-  for (let offset = 0; offset < inspectionLimit && safe.length < needed; offset += concurrency) {
-    const window = candidates.slice(offset, Math.min(offset + concurrency, inspectionLimit));
-    const results = await Promise.all(window.map(async candidate => {
-      const subscriptions = await chargebee.findSubscriptionsByIccid(candidate.iccid);
-      const hasActiveLike = subscriptions.some(subscription => ACTIVE_LIKE_SUBSCRIPTION_STATUSES.has(String(subscription.status || '').toLowerCase()));
-      return hasActiveLike ? null : candidate;
-    }));
-    safe.push(...results.filter((candidate): candidate is NormalizedThingSpaceDevice => Boolean(candidate)));
-  }
-  console.info('[line-swaps:preview] destination scan completed', { plan: candidates[0]?.plan || '', inspected: inspectionLimit, safeCount: safe.length, needed });
-  return safe.slice(0, needed);
 }

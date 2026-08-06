@@ -55,7 +55,9 @@ export async function revalidateItem(itemId: string) {
   const subscriptions = await cb.findSubscriptionsByIccid(item.source_iccid);
   const invoices = new Map<string, Array<{ id?: string; status?: string; amount_due?: number; date?: number; created_at?: number }>>();
   await Promise.all(subscriptions.map(async subscription => {
-    if (subscription.id) invoices.set(subscription.id, await cb.getAllInvoicesForSubscription(subscription.id));
+    if (!subscription.id) return;
+    const latest = await cb.getLatestInvoiceForSubscription(subscription.id);
+    invoices.set(subscription.id, latest ? [latest] : []);
   }));
   const eligibility = evaluateChargebeeEligibility(subscriptions, invoices);
   if (!eligibility.eligible) throw new FatalError(`Chargebee gate changed: ${eligibility.reasonCode}`);
