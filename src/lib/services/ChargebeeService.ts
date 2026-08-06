@@ -104,7 +104,8 @@ export class ChargebeeService {
     const normalized = String(iccid).replace(/\D/g, '');
     const fields = ['cf_SIM_ID_ICCID', 'cf_iccid'];
     const matches = new Map<string, ChargebeeSubscriptionLookup>();
-    for (const field of fields) {
+    const fieldMatches = await Promise.all(fields.map(async field => {
+      const subscriptions: ChargebeeSubscriptionLookup[] = [];
       let offset = '';
       do {
         const query = [`${field}[is]=${encodeURIComponent(normalized)}`, 'limit=100'];
@@ -112,12 +113,20 @@ export class ChargebeeService {
         const data = await this.fetchApi(`/subscriptions?${query.join('&')}`);
         for (const item of data?.list || []) {
           const subscription = item.subscription as ChargebeeSubscriptionLookup | undefined;
-          if (subscription?.id) matches.set(subscription.id, subscription);
+          if (subscription?.id) subscriptions.push(subscription);
         }
         offset = String(data?.next_offset || '');
       } while (offset);
-    }
+      return subscriptions;
+    }));
+    for (const subscription of fieldMatches.flat()) if (subscription.id) matches.set(subscription.id, subscription);
     return [...matches.values()];
+  }
+
+  async getLatestInvoiceForSubscription(subscriptionId: string): Promise<any | null> {
+    if (!this.isConfigured() || !subscriptionId) return null;
+    const data = await this.fetchApi(`/invoices?subscription_id[is]=${encodeURIComponent(subscriptionId)}&limit=1&sort_by[desc]=date`);
+    return data?.list?.[0]?.invoice || null;
   }
 
   async getAllInvoicesForSubscription(subscriptionId: string): Promise<any[]> {

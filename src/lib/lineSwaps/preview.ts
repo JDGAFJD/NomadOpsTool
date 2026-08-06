@@ -121,7 +121,9 @@ async function chargebeeEligibility(chargebee: ChargebeeService, iccid: string):
   const subscriptions = await chargebee.findSubscriptionsByIccid(iccid);
   const invoices = new Map<string, Array<{ id?: string; status?: string; amount_due?: number; date?: number; created_at?: number }>>();
   await Promise.all(subscriptions.map(async subscription => {
-    if (subscription.id) invoices.set(subscription.id, await chargebee.getAllInvoicesForSubscription(subscription.id));
+    if (!subscription.id) return;
+    const latest = await chargebee.getLatestInvoiceForSubscription(subscription.id);
+    invoices.set(subscription.id, latest ? [latest] : []);
   }));
   return evaluateChargebeeEligibility(subscriptions, invoices);
 }
