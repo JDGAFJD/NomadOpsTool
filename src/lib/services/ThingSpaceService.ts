@@ -138,7 +138,7 @@ export class ThingSpaceService {
     for (let page = 0; page < 100; page += 1) {
       const payload = await this.apiRequest('/api/m2m/v1/devices/actions/list', {
         method: 'POST',
-        body: JSON.stringify({ accountName: this.accountName, largestDeviceIdSeen, maxNumberOfDevices: 500 }),
+        body: JSON.stringify({ accountName: this.accountName, largestDeviceIdSeen, maxNumberOfDevices: 2000 }),
       });
       let maxSeen = largestDeviceIdSeen;
       for (const raw of payload?.devices || []) {
