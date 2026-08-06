@@ -128,6 +128,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Contract-line swap orchestrator */
+.swap-shell{min-height:100vh;background:#070908;color:#eef7f2;padding:32px;font-family:Arial,sans-serif}.swap-header{max-width:1500px;margin:0 auto 24px;display:grid;grid-template-columns:auto 1fr auto;gap:24px;align-items:start}.swap-header h1{font-size:30px;letter-spacing:-.035em;margin:5px 0 6px}.swap-header p{margin:0;color:#8c9b93}.swap-kicker{font-size:11px;letter-spacing:.18em;color:#00b27a;font-weight:800}.swap-role,.swap-ghost,.swap-primary,.swap-danger{display:inline-flex;align-items:center;gap:8px;border-radius:10px;font-weight:700}.swap-role{padding:9px 12px;background:#102019;color:#79e0b9;border:1px solid #1b4b37}.swap-ghost{background:transparent;border:1px solid #26302b;color:#b9c6bf;padding:9px 12px;cursor:pointer}.swap-controls,.swap-summary,.swap-batchbar,.swap-table-wrap,.swap-empty,.swap-error{max-width:1500px;margin-left:auto;margin-right:auto}.swap-controls{display:flex;gap:12px;align-items:end;padding:18px;background:#0e1210;border:1px solid #202a25;border-radius:16px}.swap-controls label{display:flex;flex-direction:column;gap:7px;color:#91a198;font-size:12px;font-weight:700}.swap-controls input{width:110px;background:#080b09;color:#fff;border:1px solid #2a3831;border-radius:9px;padding:10px 12px;font-size:15px}.swap-primary,.swap-danger{border:0;padding:11px 16px;cursor:pointer}.swap-primary{background:#00b27a;color:#04120d}.swap-danger{background:#e8fff5;color:#06452f}.swap-primary:disabled,.swap-danger:disabled{opacity:.45;cursor:not-allowed}.swap-error{margin-top:14px;padding:13px 16px;border-radius:10px;background:#2a1414;border:1px solid #6e2929;color:#ffb7b7;display:flex;gap:9px}.swap-summary{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:18px}.swap-stat{background:#0e1210;border:1px solid #202a25;border-radius:13px;padding:14px}.swap-stat span{display:block;color:#829087;font-size:11px;text-transform:uppercase;letter-spacing:.08em}.swap-stat strong{display:block;margin-top:6px;font-size:25px}.swap-stat.good strong{color:#4cdb9e}.swap-stat.warn strong{color:#f4bf63}.swap-stat.bad strong{color:#ff7d7d}.swap-batchbar{margin-top:18px;display:flex;justify-content:space-between;align-items:center;color:#91a198;font-size:12px}.swap-batchbar code{color:#d8e5de}.swap-table-wrap{margin-top:10px;overflow:auto;border:1px solid #202a25;border-radius:16px;background:#0d110f}.swap-table{width:100%;border-collapse:collapse;min-width:1250px}.swap-table th{text-align:left;padding:13px 14px;color:#7e8e85;font-size:11px;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #202a25}.swap-table td{padding:14px;vertical-align:top;border-bottom:1px solid #171e1a;font-size:12px}.swap-id{display:grid;grid-template-columns:42px 1fr;gap:7px;margin-bottom:5px}.swap-id span{color:#77857d;font-size:10px}.swap-id code,.swap-table td>code{color:#d6e3dc;font-size:11px}.swap-table td small{display:block;color:#829087;margin-top:6px}.swap-table td strong{display:block;text-transform:capitalize}.plan-code{display:block;max-width:230px;white-space:normal;word-break:break-word}.swap-status{display:inline-flex;gap:6px;align-items:center;text-transform:capitalize;padding:5px 8px;border-radius:999px;background:#19201c;color:#aebbb4;font-size:10px;font-weight:800}.swap-status.good{background:#103224;color:#71e2b1}.swap-status.bad{background:#351818;color:#ff9292}.swap-status.pending{background:#302916;color:#ffd477}.reason{max-width:180px;color:#e4a9a9!important;word-break:break-word}.swap-empty{margin-top:18px;padding:70px 24px;text-align:center;border:1px dashed #2a3730;border-radius:18px;color:#7f8e86}.swap-empty h2{color:#dce8e1;margin:14px 0 8px}.swap-empty p{max-width:620px;margin:auto;line-height:1.6}.spin{animation:swap-spin 1s linear infinite}@keyframes swap-spin{to{transform:rotate(360deg)}}@media(max-width:900px){.swap-shell{padding:18px}.swap-header{grid-template-columns:1fr}.swap-summary{grid-template-columns:repeat(2,1fr)}.swap-controls{flex-wrap:wrap}}
+
 h1, h2, h3, h4, h5, h6 {
   font-family: 'Outfit', -apple-system, sans-serif;
   font-weight: 600;
@@ -750,6 +753,25 @@ button {
 .ops-login-card input:focus {
   border-color: var(--primary) !important;
   box-shadow: 0 0 0 4px rgba(15,118,110,0.14) !important;
+}
+
+.swap-release {
+  display: block;
+  margin-top: 8px;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: transparent;
+  color: #b45309;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.swap-release:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .ops-login-submit {

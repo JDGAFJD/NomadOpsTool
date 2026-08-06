@@ -241,6 +241,10 @@ export default function OpsDashboard() {
 
         <div className="ops-dashboard-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <nav className="ops-dashboard-quick-links" aria-label="Operations queues">
+            <button type="button" onClick={() => router.push('/ops/line-swaps')} title="Open contract-line swaps">
+              <RefreshCw size={15} />
+              <span>Line Swaps</span>
+            </button>
             <button type="button" onClick={() => router.push('/callbacks')} title="Open callback operations">
               <PhoneCall size={15} />
               <span>Callbacks</span>

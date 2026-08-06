@@ -7,19 +7,22 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:line-swaps": "tsx --test tests/line-swap-rules.test.ts",
     "freescout:close-bryan-pending": "node scripts/close-bryan-pending-tickets.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.9.0",
     "framer-motion": "^12.38.0",
+    "google-auth-library": "^11.0.0",
     "jose": "^6.2.2",
     "lucide-react": "^1.8.0",
     "next": "16.2.3",
     "pg": "^8.20.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "recharts": "^3.8.1"
+    "recharts": "^3.8.1",
+    "workflow": "^4.8.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -30,6 +33,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
+    "tsx": "^4.23.9",
     "typescript": "^5"
   }
 }

@@ -99,6 +99,41 @@ export class ChargebeeService {
     return { configured: true, matches: hydrated };
   }
 
+  async findSubscriptionsByIccid(iccid: string): Promise<ChargebeeSubscriptionLookup[]> {
+    if (!this.isConfigured() || !iccid) return [];
+    const normalized = String(iccid).replace(/\D/g, '');
+    const fields = ['cf_SIM_ID_ICCID', 'cf_iccid'];
+    const matches = new Map<string, ChargebeeSubscriptionLookup>();
+    for (const field of fields) {
+      let offset = '';
+      do {
+        const query = [`${field}[is]=${encodeURIComponent(normalized)}`, 'limit=100'];
+        if (offset) query.push(`offset=${encodeURIComponent(offset)}`);
+        const data = await this.fetchApi(`/subscriptions?${query.join('&')}`);
+        for (const item of data?.list || []) {
+          const subscription = item.subscription as ChargebeeSubscriptionLookup | undefined;
+          if (subscription?.id) matches.set(subscription.id, subscription);
+        }
+        offset = String(data?.next_offset || '');
+      } while (offset);
+    }
+    return [...matches.values()];
+  }
+
+  async getAllInvoicesForSubscription(subscriptionId: string): Promise<any[]> {
+    if (!this.isConfigured() || !subscriptionId) return [];
+    const invoices: any[] = [];
+    let offset = '';
+    do {
+      const query = [`subscription_id[is]=${encodeURIComponent(subscriptionId)}`, 'limit=100', 'sort_by[desc]=date'];
+      if (offset) query.push(`offset=${encodeURIComponent(offset)}`);
+      const data = await this.fetchApi(`/invoices?${query.join('&')}`);
+      invoices.push(...(data?.list || []).map((item: ChargebeeListItem<any>) => item.invoice).filter(Boolean));
+      offset = String(data?.next_offset || '');
+    } while (offset);
+    return invoices;
+  }
+
   async getSubscriptionWithCustomer(subscriptionId: string) {
     if (!this.isConfigured() || !subscriptionId) return { configured: false, match: null };
 

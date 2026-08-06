@@ -69,3 +69,20 @@ export async function postToSlack(blocks: any[], text: string, channel: string =
     return { ok: false, error: err.message };
   }
 }
+
+export async function postDirectToSlack(userId: string, blocks: unknown[], text: string) {
+  const token = getSetting('slack_bot_token');
+  if (!token) return { ok: false, error: 'Slack not configured' };
+  try {
+    const openResponse = await fetch('https://slack.com/api/conversations.open', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ users: userId }),
+    });
+    const opened = await openResponse.json() as { ok?: boolean; channel?: { id?: string }; error?: string };
+    if (!opened.ok || !opened.channel?.id) return { ok: false, error: opened.error || 'Unable to open Slack DM' };
+    return postToSlack(blocks, text, opened.channel.id);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Slack DM failed' };
+  }
+}

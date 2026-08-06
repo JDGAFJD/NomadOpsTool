@@ -45,3 +45,4 @@ next-env.d.ts
 # database
 .data/
 *.db
+/.swc
