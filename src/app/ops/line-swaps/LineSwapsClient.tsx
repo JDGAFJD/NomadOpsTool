@@ -49,13 +49,13 @@ export default function LineSwapsClient({ initialBatchId, role }: { initialBatch
     setBusy(true); setError('');
     try {
       const response = await fetch('/api/ops/line-swaps/preview', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batchSize }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batchSize }), signal: AbortSignal.timeout(110_000),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Preview failed');
       setSnapshot(data);
       router.replace(`/ops/line-swaps?batch=${data.batch.id}`);
-    } catch (err) { setError(err instanceof Error ? err.message : 'Preview failed'); }
+    } catch (err) { setError(err instanceof DOMException && err.name === 'TimeoutError' ? 'Preview timed out after 110 seconds. No carrier changes were made; try a smaller batch or retry.' : err instanceof Error ? err.message : 'Preview failed'); }
     finally { setBusy(false); }
   }
 
