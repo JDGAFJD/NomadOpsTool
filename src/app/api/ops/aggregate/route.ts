@@ -3,6 +3,7 @@ import { ChargebeeService } from '@/lib/services/ChargebeeService';
 import { CommerceService } from '@/lib/services/CommerceService';
 import { ThingSpaceService } from '@/lib/services/ThingSpaceService';
 import { FreeScoutService } from '@/lib/services/FreeScoutService';
+import { StripeExplorerService } from '@/lib/services/StripeExplorerService';
 import { verifyAuth } from '@/lib/auth';
 import { queryOpsDb, logActivity } from '@/lib/opsDb';
 
@@ -99,17 +100,9 @@ export async function GET(request: Request) {
 
     let stripeCustomers: any[] = [];
     try {
-      const targetUrl = `/v1/customers/search?query=email%3A%27${encodeURIComponent(email)}%27`;
-      const stripeRes = await fetch('https://app.lrlos.com/webhook/GetStripeDetails', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: targetUrl })
-      });
-      if (stripeRes.ok) {
-        const stripeData = await stripeRes.json();
-        if (Array.isArray(stripeData.data)) stripeCustomers = stripeData.data;
-        else if (Array.isArray(stripeData.customers)) stripeCustomers = stripeData.customers;
-        else if (Array.isArray(stripeData.items)) stripeCustomers = stripeData.items;
+      const stripe = new StripeExplorerService();
+      if (stripe.isConfigured()) {
+        stripeCustomers = await stripe.searchCustomersByEmail(email);
       }
     } catch (e: any) {
       console.log('Failed to fetch Stripe initial payload:', e.message);
