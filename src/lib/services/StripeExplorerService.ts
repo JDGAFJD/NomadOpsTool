@@ -36,7 +36,11 @@ function configuredStripeClients(): StripeClientEntry[] {
     });
   };
 
-  addKey('env', 'Configured Stripe key', process.env.STRIPE_SECRET_KEY);
+  for (const [name, value] of Object.entries(process.env)) {
+    if (/^STRIPE_SECRET_KEY(?:_[A-Z0-9]+)?$/.test(name)) {
+      addKey(name, name === 'STRIPE_SECRET_KEY' ? 'Configured Stripe key' : `Configured Stripe key ${name.replace('STRIPE_SECRET_KEY_', '')}`, value);
+    }
+  }
 
   for (const [name, value] of Object.entries(process.env)) {
     if (!/^N8N_VALIDATED_CREDENTIAL_STRIPEAPI_.*_B64URL$/.test(name) || !value) continue;
